@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-16T00:00:00Z",
+  "title": "Design System: Find Food móvil",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Verde principal"
+      },
+      "secondary": {
+        "role": "neutral",
+        "displayName": "Texto secundario"
+      },
+      "warning": {
+        "role": "semantic",
+        "displayName": "Advertencia"
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "Cancelación"
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Título de pantalla",
+        "purpose": "Encabezados compartidos de Screen."
+      }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": [],
+    "evidence": {
+      "sources": [
+        "PRODUCT.md",
+        "src/design/tokens.ts",
+        "src/components/findfood/ui.tsx",
+        "src/components/findfood/icon.tsx",
+        "src/screens",
+        "docs/pantallas.md",
+        "Mock Up Proyecto de grado.fig"
+      ],
+      "scope": "Frontend de 22 pantallas y 21 componentes de pantalla, con perfiles compartidos. Revisión de código, exportación y SSR; sin validación visual ni pruebas nativas.",
+      "tonalRamps": "No existen escalas tonales implementadas; no se sintetizan.",
+      "provenance": "Los colores semánticos auxiliares oscuros son ajustes de contraste, no todos extraídos literalmente.",
+      "snippetScope": "Traducciones estáticas de documentación; no incorporan estados de interacción inexistentes."
+    }
+  },
+  "components": [
+    {
+      "name": "Button primary",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acción visual deshabilitada; traducción del componente React Native.",
+      "html": "<button class=\"ds-button-primary\" disabled>Publicar donación</button>",
+      "css": ".ds-button-primary {min-height:52px;border-radius:10px;padding:13px 16px;background:#1F7A5A;color:#FFFFFF;border:none;font-family:Inter,sans-serif;font-weight:700;font-size:13px;line-height:20px;text-align:center;}"
+    },
+    {
+      "name": "Button outline",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Acción visual deshabilitada; traducción del componente React Native.",
+      "html": "<button class=\"ds-button-outline\" disabled>Rechazar</button>",
+      "css": ".ds-button-outline {min-height:52px;border-radius:10px;padding:13px 16px;background:#FFFFFF;color:#1F7A5A;border:1px solid #CAD7D1;font-family:Inter,sans-serif;font-weight:700;font-size:13px;line-height:20px;text-align:center;}"
+    },
+    {
+      "name": "Button danger",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Acción visual deshabilitada; traducción del componente React Native.",
+      "html": "<button class=\"ds-button-danger\" disabled>Cancelar donación</button>",
+      "css": ".ds-button-danger {min-height:52px;border-radius:10px;padding:13px 16px;background:#FFFFFF;color:#B44747;border:1px solid #E7CACA;font-family:Inter,sans-serif;font-weight:700;font-size:13px;line-height:20px;text-align:center;}"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Ejemplo de campo de solo lectura; la variante con controlador permite edición local sin envío.",
+      "html": "<label class=\"ds-field\">Producto<input value=\"Lácteos\" readonly /></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:9px;color:#17332A;font:700 11px/18px Inter,sans-serif}.ds-field input{min-height:48px;padding:0 14px;border:1px solid #CAD7D1;border-radius:10px;background:#FFFFFF;color:#66756F;font:400 13px Inter,sans-serif}"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Superficie agrupadora plana.",
+      "html": "<div class=\"ds-card\"><strong>DON-1024</strong><span>Frutas y verduras frescas</span></div>",
+      "css": ".ds-card{display:flex;flex-direction:column;gap:14px;padding:18px;background:#FFFFFF;border:1px solid #CAD7D1;border-radius:14px;color:#17332A;font:400 13px/20px Inter,sans-serif}.ds-card strong{font-weight:600}"
+    },
+    {
+      "name": "Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Estado estático en verde suave.",
+      "html": "<span class=\"ds-badge\">Disponible</span>",
+      "css": ".ds-badge{display:inline-block;padding:6px 12px;background:#E9F7F1;color:#1F7A5A;border-radius:20px;font:500 11px/16px Inter,sans-serif}"
+    },
+    {
+      "name": "BottomNav",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "Cuatro posiciones con rutas según rol; ambos perfiles están implementados. Ejemplo sin navegación en el panel.",
+      "html": "<nav class=\"ds-nav\"><span class=\"ds-selected\">Inicio</span><span>Rutas</span><span>Alertas</span><span>Perfil</span></nav>",
+      "css": ".ds-nav{display:flex;padding:8px 0;background:#FFFFFF;border-top:1px solid #CAD7D1;color:#66756F;font:400 10px/16px Inter,sans-serif}.ds-nav span{flex:1;min-height:54px;display:flex;align-items:center;justify-content:center}.ds-nav .ds-selected{color:#1F7A5A;font-weight:600}"
+    }
+  ],
+  "narrative": {
+    "overview": "La autoridad visual es el archivo «Mock Up Proyecto de grado.fig»: identidad verde, tipografía Inter, logotipo y textos originales. La implementación conserva la estructura de las 22 pantallas móviles (21 componentes de pantalla, con perfiles compartidos) con reflow flexible, áreas seguras y desplazamiento vertical. No incorpora una dirección de marca nueva.\n\nEste documento describe el código presente en `src/design/tokens.ts`, `src/components/findfood` y `src/screens`, junto con las restricciones de `PRODUCT.md`. La revisión de código y el export no acreditan fidelidad visual verificada ni pruebas nativas en dispositivos. El alcance es un frontend móvil sin backend, con datos simulados, navegación de demostración e interacción local en controles habilitados.",
+    "keyCharacteristics": [
+      "Inter en cuatro pesos y jerarquía compacta.",
+      "Verde principal, fondos claros y agrupaciones con bordes finos.",
+      "Contenido flexible dentro de un marco móvil centrado."
+    ],
+    "rules": [],
+    "dos": [
+      "**Do** conservar Inter, la identidad verde, los textos y el logotipo de referencia.",
+      "**Do** mantener áreas seguras, flex y desplazamiento vertical al extender una pantalla.",
+      "**Do** reutilizar las variantes implementadas de controles y superficies."
+    ],
+    "donts": [
+      "**Don't** presentar interacciones locales o datos simulados como operaciones de negocio reales.",
+      "**Don't** tratar colores auxiliares, fragmentos HTML o el mapa local como extracción literal de Figma.",
+      "**Don't** afirmar fidelidad visual verificada o validación nativa a partir de la revisión de código y el export."
+    ]
+  }
+}
