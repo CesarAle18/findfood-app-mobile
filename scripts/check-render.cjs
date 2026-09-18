@@ -71,6 +71,7 @@ fixtures = require("../src/data/mobile.ts").mobileData;
 const {
   initialDonationDraft,
   appendProduct,
+  removeProduct,
 } = require("../src/domain/donation-draft.ts");
 draft = initialDonationDraft;
 const warnings = [];
@@ -78,6 +79,7 @@ const originalError = console.error;
 console.error = (...args) => warnings.push(args.join(" "));
 try {
   const modules = [
+    "assigned-volunteer",
     "auth",
     "home",
     "donations",
@@ -123,6 +125,18 @@ try {
   );
   const expanded = appendProduct(appendProduct(initialDonationDraft));
   assert.equal(expanded.products.length, 3);
+  const removed = removeProduct(expanded, expanded.products[1].id);
+  assert.equal(removed.products.length, 2);
+  assert.deepEqual(removed.products, [expanded.products[0], expanded.products[2]]);
+  assert.equal(removeProduct(initialDonationDraft, 1).products.length, 1);
+  const { calendarDays } = require("../src/components/findfood/date-time-field.tsx");
+  assert.equal(calendarDays(2028, 1).filter(Boolean).length, 29);
+  assert.equal(calendarDays(2027, 1).filter(Boolean).length, 28);
+  assert.equal(calendarDays(2026, 8)[0], null);
+  const { WaitingScreen } = require("../src/screens/donations.tsx");
+  const waitingHtml = renderToStaticMarkup(React.createElement(WaitingScreen));
+  assert(waitingHtml.includes('href="/voluntario-asignado"'));
+  assert(waitingHtml.includes('href="/inicio-donante"'));
   assert.equal(initialDonationDraft.products.length, 1);
   assert.equal(new Set(expanded.products.map((p) => p.id)).size, 3);
   draft = {

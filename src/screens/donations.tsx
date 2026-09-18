@@ -1,6 +1,9 @@
-import { Icon } from "@/components/findfood/icon";
+import { useMobile } from "@/state/mobile-context";
+import { appendProduct, removeProduct, productOptions, type DraftProduct } from "@/domain/donation-draft";
+import { Pressable, View } from "react-native";
 import {
   Card,
+  SelectField,
   Copy,
   Field,
   NavButton,
@@ -8,13 +11,11 @@ import {
   Row,
   Screen,
   Section,
-  SelectField,
-  Stack
+  Stack,
 } from "@/components/findfood/ui";
+import { Icon } from "@/components/findfood/icon";
+import { DateTimeField } from "@/components/findfood/date-time-field";
 import { colors } from "@/design/tokens";
-import { appendProduct, type DraftProduct } from "@/domain/donation-draft";
-import { useMobile } from "@/state/mobile-context";
-import { Pressable, View } from "react-native";
 
 export function NewDonationScreen() {
   const { draft, setDraft } = useMobile();
@@ -29,11 +30,11 @@ export function NewDonationScreen() {
     <Screen title="Nueva donación" subtitle="Donante" back>
       {draft.products.map((product, index) => (
         <Section key={product.id} title={`Producto ${index + 1}`}>
-          <Field
+          <SelectField
             label="Producto"
             value={product.name}
-            onChangeText={(name) => update(product.id, { name })}
-            placeholder="Nombre del producto"
+            onChange={(name) => update(product.id, { name })}
+            options={productOptions}
           />
           <Row style={{ alignItems: "flex-end" }}>
             <Field
@@ -56,11 +57,10 @@ export function NewDonationScreen() {
               />
             </View>
           </Row>
-          <Field
+          <DateTimeField
             label="Fecha de vencimiento"
             value={product.expiresOn}
-            onChangeText={(expiresOn) => update(product.id, { expiresOn })}
-            placeholder="DD/MM/AAAA"
+            onChange={(expiresOn) => update(product.id, { expiresOn })}
           />
           <SelectField
             label="Cadena de frío"
@@ -71,6 +71,10 @@ export function NewDonationScreen() {
             }))}
             onChange={(coldChain) => update(product.id, { coldChain })}
           />
+          <Pressable accessibilityRole="button" accessibilityLabel={`Quitar producto ${index + 1}`} accessibilityState={{ disabled: draft.products.length === 1 }} disabled={draft.products.length === 1} onPress={() => setDraft(current => removeProduct(current, product.id))} style={{ minHeight: 48, justifyContent: "center", opacity: draft.products.length === 1 ? 0.5 : 1 }}>
+            <Copy style={{ color: colors.danger }}>Quitar producto</Copy>
+          </Pressable>
+          {draft.products.length === 1 && <Copy tone="secondary">La donación debe tener al menos un producto.</Copy>}
           <Section title="Fotografía">
             <PhotoPlaceholder compact />
           </Section>
@@ -94,21 +98,21 @@ export function NewDonationScreen() {
       </Pressable>
       <Section title="Ventana de recogida">
         <Row>
-          <Field
+          <DateTimeField
+            mode="time"
             label="Desde"
             value={draft.pickupFrom}
-            onChangeText={(pickupFrom) =>
+            onChange={(pickupFrom) =>
               setDraft((current) => ({ ...current, pickupFrom }))
             }
-            grow
           />
-          <Field
+          <DateTimeField
+            mode="time"
             label="Hasta"
             value={draft.pickupUntil}
-            onChangeText={(pickupUntil) =>
+            onChange={(pickupUntil) =>
               setDraft((current) => ({ ...current, pickupUntil }))
             }
-            grow
           />
         </Row>
       </Section>
@@ -132,6 +136,7 @@ export function NewDonationScreen() {
   );
 }
 export function WaitingScreen() {
+  const { draft } = useMobile();
   return (
     <Screen
       title="Donación publicada"
@@ -163,10 +168,11 @@ export function WaitingScreen() {
       </View>
       <Section title="Resumen de la donación">
         <Card>
-          <Copy weight="semibold">DON-1024</Copy>
-          <Copy>Frutas y verduras frescas</Copy>
-          <Copy tone="secondary">120 kg · Refrigerado</Copy>
-          <Copy tone="secondary">Recogida: 16:00–18:00</Copy>
+          {draft.products.map(product => <View key={product.id} style={{ gap: 4 }}>
+            <Copy weight="semibold">{product.name || "Producto pendiente"}</Copy>
+            <Copy tone="secondary">{product.quantity || "—"} {product.unit} · {product.coldChain}</Copy>
+          </View>)}
+          <Copy tone="secondary">Recogida: {draft.pickupFrom}–{draft.pickupUntil}</Copy>
         </Card>
       </Section>
       <Card soft>
@@ -206,13 +212,8 @@ export function WaitingScreen() {
           ))}
         </Stack>
       </Section>
-      <NavButton
-        href="/inicio-donante"
-        variant="outline"
-        showArrow={false}
-      >
-        Cancelar donación
-      </NavButton>
+      <NavButton href="/voluntario-asignado" showArrow={false}>Ver voluntario asignado (demo)</NavButton>
+      <NavButton href="/inicio-donante" variant="outline" showArrow={false}>Cancelar donación</NavButton>
     </Screen>
   );
 }

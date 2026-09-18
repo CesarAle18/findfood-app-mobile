@@ -26,3 +26,6 @@ Fuente: Mock Up Proyecto de grado.fig. 22 marcos móviles; la pantalla 37 aparec
 | 40_Mobile_Verificacion_Correo_OTP 1 | /verificar-correo |
 | 41_Mobile_Revision_Donacion_Antes_Publicar 1 | /revisar-donacion |
 | 37_Mobile_Calificacion_Voluntario 1 | /calificar-voluntario |
+
+
+Nueva pantalla adicional al Figma: `/voluntario-asignado`, accesible desde Donación publicada y la galería, muestra la asignación y el mapa de ejemplo para el donante.

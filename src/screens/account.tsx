@@ -1,4 +1,6 @@
-import { Icon } from "@/components/findfood/icon";
+import { useState } from "react";
+import { Pressable, TextInput, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
 import {
   Badge,
   Card,
@@ -9,14 +11,12 @@ import {
   Row,
   Screen,
   Section,
-  TextLink
+  TextLink,
 } from "@/components/findfood/ui";
-import { colors, fonts } from "@/design/tokens";
-import { useMobile } from "@/state/mobile-context";
-import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
-import { Pressable, TextInput, View } from "react-native";
+import { Icon } from "@/components/findfood/icon";
 import { Metrics } from "./donor";
+import { useMobile } from "@/state/mobile-context";
+import { colors, fonts } from "@/design/tokens";
 
 export function ProfileScreen({ volunteer = false }: { volunteer?: boolean }) {
   const { data } = useMobile();
@@ -291,15 +291,7 @@ export function RatingScreen() {
         placeholder="Ej. Fue muy puntual y cuidadoso con la entrega."
         multiline
       />
-      <NavButton
-          href={{
-            pathname: "/detalle-donacion",
-            params: { id: donation.id },
-          }}
-          showArrow={false}
-        >
-          Enviar calificación
-      </NavButton>
+      <NavButton href={{ pathname: "/detalle-donacion", params: { id: donation.id } }} showArrow={false}>Enviar calificación</NavButton>
       <Copy tone="secondary">
         Tu opinión ayuda a mejorar futuras asignaciones.
       </Copy>

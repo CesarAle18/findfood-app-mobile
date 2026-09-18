@@ -108,7 +108,7 @@ export function Screen({
               onPress={() => setRole(viewRole ?? role)}
               style={styles.iconButton}
             >
-              <Icon name="menu" size={19} />
+              <Icon name="menu" size={32} />
             </Pressable>
           </Link>
         </View>

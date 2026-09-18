@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 import { colors, fonts } from "@/design/tokens";
 
 export type IconName =
+  | "calendar"
   | "menu"
   | "star"
   | "back"
@@ -25,6 +26,7 @@ export type IconName =
   | "file";
 
 const paths: Record<IconName, string> = {
+  calendar: "M3 5h18v16H3zM3 10h18M7 3v4M17 3v4",
   menu: "M4 12h1m6 0h1m6 0h1",
   star: "m12 2 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z",
   back: "M19 12H5m7-7-7 7 7 7",

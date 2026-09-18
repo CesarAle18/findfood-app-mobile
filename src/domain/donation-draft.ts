@@ -43,3 +43,10 @@ export function appendProduct(draft: DonationDraft): DonationDraft {
     ],
   };
 }
+
+/** Conserva al menos un producto y no modifica el borrador original. */
+export function removeProduct(draft: DonationDraft, id: number): DonationDraft {
+  if (draft.products.length <= 1) return draft;
+  return { ...draft, products: draft.products.filter(product => product.id !== id) };
+}
+export const productOptions = ["Lácteos", "Frutas", "Verduras", "Panadería", "Arroz", "Legumbres", "Enlatados", "Otros alimentos"].map(value => ({ label: value, value }));

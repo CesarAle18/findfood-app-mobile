@@ -43,6 +43,7 @@ export const previewScreens: {
   {
     group: "Diseño móvil actualizado",
     screens: [
+      { title: "Voluntario asignado", href: "/voluntario-asignado", frame: "Nueva vista de donante · demostración" },
       {
         title: "Login",
         href: "/login",

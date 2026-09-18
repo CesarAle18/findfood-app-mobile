@@ -35,3 +35,12 @@ No se prescriben endpoints, proveedores de identidad, formatos de token ni almac
 ## Borrador de donación
 
 `src/domain/donation-draft.ts` define productos con unidad KG/L/ML/G y una ventana de recogida común. `MobileProvider` conserva el borrador durante la navegación para compartirlo entre nueva donación y revisión. No hay almacenamiento persistente, envío ni normalización de unidades contra el backend. La ubicación es un bloque visual único pendiente de Google Maps. La navegación a calificación está habilitada para demostración sin comprobar el estado real de entrega.
+
+
+## Actualización de formulario y asignación
+
+El menú de tres puntos mide 32 unidades dentro del área táctil de 48. Nueva donación utiliza un catálogo de productos de ejemplo (`productOptions`), selección de unidades, calendario mensual y selector de hora de 24 horas. Cada producto se puede quitar mientras quede al menos uno. El borrador se mantiene en memoria entre las vistas; no hay persistencia ni envío.
+
+Desde Donación publicada, «Ver voluntario asignado (demo)» abre `/voluntario-asignado`. Muestra el perfil del voluntario de los datos de demostración, el resumen del borrador y un mapa esquemático con marcadores V (voluntario) y D (donante). No hay GPS, Google Maps ni asignación automática. La futura integración deberá reemplazar el catálogo local, la asignación y las coordenadas con datos reales.
+
+Las fechas siguen usando DD/MM/AAAA y las horas HH:mm en el modelo de presentación; un adaptador de backend deberá convertirlas al contrato acordado, incluida la zona horaria. No se implementaron reglas de disponibilidad o vencimiento.
