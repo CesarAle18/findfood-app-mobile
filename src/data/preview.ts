@@ -19,6 +19,7 @@ export const notifications = [
   },
   {
     title: "Cambio de ruta",
+    important: true,
     detail: "R-045 tiene nueva secuencia",
     time: "Hace 5 min",
     icon: "route" as const,
@@ -43,6 +44,7 @@ export const previewScreens: {
   {
     group: "Diseño móvil actualizado",
     screens: [
+      { title: "Calificar donante", href: "/calificar-donante", frame: "Recogida · nueva pantalla" },
       { title: "Voluntario asignado", href: "/voluntario-asignado", frame: "Nueva vista de donante · demostración" },
       {
         title: "Login",

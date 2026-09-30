@@ -20,6 +20,10 @@ import {
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { colors } from "@/design/tokens";
 const Context = createContext<{
+  available: boolean;
+  setAvailable: (value: boolean) => void;
+  ratings: Record<UserRole, number[]>;
+  addRating: (role: UserRole, rating: number) => void;
   data: MobileData;
   draft: DonationDraft;
   setDraft: Dispatch<SetStateAction<DonationDraft>>;
@@ -33,6 +37,9 @@ export function MobileProvider({
   const [data, setData] = useState<MobileData | null>(
     repository === demoRepository ? mobileData : null,
   );
+  const [available, setAvailable] = useState(true);
+  const [ratings, setRatings] = useState<Record<UserRole, number[]>>({ donor: [5, 4, 5, 5, 4], volunteer: [5, 5, 4, 5, 5] });
+  const addRating = (target: UserRole, rating: number) => setRatings(current => ({ ...current, [target]: [...current[target], rating] }));
   const [draft, setDraft] = useState(initialDonationDraft);
   const [error, setError] = useState(false);
   const [attempt, retry] = useState(0);
@@ -82,7 +89,7 @@ export function MobileProvider({
       </View>
     );
   return (
-    <Context.Provider value={{ data, role, setRole, draft, setDraft }}>
+    <Context.Provider value={{ data, role, setRole, draft, setDraft, available, setAvailable, ratings, addRating }}>
       {children}
     </Context.Provider>
   );

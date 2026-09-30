@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { View } from "react-native";
 import {
   Card,
@@ -12,11 +13,12 @@ import { notifications } from "@/data/preview";
 import { colors } from "@/design/tokens";
 
 export function NotificationsScreen() {
+  const [filter, setFilter] = useState(0);
   return (
     <Screen title="Notificaciones" subtitle="Últimas novedades" tabs="bell">
-      <Choices values={["Todas", "Sin leer", "Importantes"]} />
+      <Choices values={["Todas", "Sin leer", "Importantes"]} selected={filter} onChange={setFilter} />
       <Stack gap={12}>
-        {notifications.map((item) => (
+        {notifications.filter(item => filter === 0 || (filter === 1 ? item.highlight : item.important)).map((item) => (
           <Card key={item.title} soft={item.highlight}>
             <Row style={{ alignItems: "flex-start" }}>
               <View

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import {
@@ -118,6 +119,8 @@ export function DonorHomeScreen() {
 }
 export function DonationsScreen() {
   const { data } = useMobile();
+  const [filter, setFilter] = useState(0);
+  const visible = data.donations.filter(d => filter === 0 || (filter === 2 ? d.status === "Completada" : d.status !== "Completada"));
   return (
     <Screen
       viewRole="donor"
@@ -126,11 +129,11 @@ export function DonationsScreen() {
       tabs="route"
       badge={<Badge>3 activas</Badge>}
     >
-      <Choices values={["Todas", "En seguimiento", "Entregadas"]} />
-      {data.donations.length === 0 && (
+      <Choices values={["Todas", "En seguimiento", "Entregadas"]} selected={filter} onChange={setFilter} />
+      {visible.length === 0 && (
         <Copy tone="secondary">Aún no tienes donaciones.</Copy>
       )}
-      {data.donations.map((d) => (
+      {visible.map((d) => (
         <Card key={d.id}>
           <Row style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
             <Copy weight="bold">{d.id}</Copy>

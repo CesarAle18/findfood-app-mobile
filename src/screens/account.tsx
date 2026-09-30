@@ -3,6 +3,7 @@ import { Pressable, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   Badge,
+  Choices,
   Card,
   Copy,
   Detail,
@@ -19,7 +20,9 @@ import { useMobile } from "@/state/mobile-context";
 import { colors, fonts } from "@/design/tokens";
 
 export function ProfileScreen({ volunteer = false }: { volunteer?: boolean }) {
-  const { data } = useMobile();
+  const { data, available, setAvailable, ratings } = useMobile();
+  const scores = ratings[volunteer ? "volunteer" : "donor"];
+  const average = (scores.reduce((sum, n) => sum + n, 0) / scores.length).toFixed(1);
   const p = volunteer ? data.volunteer : data.donor;
   return (
     <Screen
@@ -53,7 +56,9 @@ export function ProfileScreen({ volunteer = false }: { volunteer?: boolean }) {
         <Copy tone="secondary">
           {volunteer ? "Voluntario activo" : "Donante desde Sep 2026"}
         </Copy>
-        {volunteer && <Badge>Disponible</Badge>}
+        <Row><Icon name="star" /><Copy weight="bold">{average} / 5</Copy><Copy tone="secondary">{scores.length} calificaciones</Copy></Row>
+        <Copy tone="secondary">Promedio de demostración</Copy>
+        {volunteer && <Choices values={["Disponible", "No disponible"]} selected={available ? 0 : 1} onChange={i => setAvailable(i === 0)} />}
       </Card>
       <Section title={volunteer ? "Resumen operativo" : "Resumen"}>
         <Card soft>
@@ -220,8 +225,10 @@ export function VerifyEmailScreen() {
     </Screen>
   );
 }
-export function RatingScreen() {
-  const { data } = useMobile();
+export function RatingScreen({ donor = false }: { donor?: boolean }) {
+  const { data, addRating } = useMobile();
+  const [aspects, setAspects] = useState<string[]>([]);
+  const [submitted, setSubmitted] = useState(false);
   const { id } = useLocalSearchParams<{ id?: string }>();
   const donation = id
     ? data.donations.find((d) => d.id === id)
@@ -230,23 +237,23 @@ export function RatingScreen() {
   const [comment, setComment] = useState("");
   if (!donation) {
     return (
-      <Screen title="Calificar voluntario" back>
+      <Screen title={donor ? "Calificar donante" : "Calificar voluntario"} back>
         <Copy>Donación no encontrada.</Copy>
       </Screen>
     );
   }
   return (
     <Screen
-      viewRole="donor"
-      title="Calificar voluntario"
-      subtitle="Tu donación fue entregada"
+      viewRole={donor ? "volunteer" : "donor"}
+      title={donor ? "Calificar donante" : "Calificar voluntario"}
+      subtitle={donor ? "Experiencia durante la recogida" : "Tu donación fue entregada"}
       back
       tabs="route"
     >
       <Card>
-        <Copy weight="bold">Carlos Ruiz</Copy>
-        <Copy tone="secondary">Voluntario asignado a {donation.id}</Copy>
-        <Badge>Entrega completada · Hoy 18:40</Badge>
+        <Copy weight="bold">{donor ? data.donor.name : data.volunteer.name}</Copy>
+        <Copy tone="secondary">{donor ? "Donante" : "Voluntario"} · {donation.id}</Copy>
+        <Badge>{donor ? "Recogida de donación" : "Entrega completada"}</Badge>
       </Card>
       <Section title="¿Cómo fue tu experiencia?">
         <Row style={{ justifyContent: "center", gap: 4 }}>
@@ -256,8 +263,8 @@ export function RatingScreen() {
               accessibilityRole="radio"
               accessibilityLabel={`${n} estrellas`}
               accessibilityState={{ checked: n === rating }}
-              onPress={() => setRating(n)}
-              style={{ padding: 8 }}
+              onPress={() => { setRating(n); if (n === 5) setAspects([]); }}
+              style={{ minWidth: 44, minHeight: 48, alignItems: "center", justifyContent: "center" }}
             >
               <Icon
                 name="star"
@@ -272,6 +279,7 @@ export function RatingScreen() {
         </Copy>
       </Section>
       <Section title="Aspectos a evaluar">
+        {rating === 5 && <Copy tone="secondary">Con 5 estrellas solo puedes añadir un comentario.</Copy>}
         <Row style={{ flexWrap: "wrap" }}>
           {[
             "Puntualidad",
@@ -280,7 +288,7 @@ export function RatingScreen() {
             "Comunicación",
             "Presentación",
           ].map((t) => (
-            <Badge key={t}>{t}</Badge>
+            <Pressable key={t} accessibilityRole="checkbox" accessibilityState={{ checked: aspects.includes(t), disabled: rating === 5 }} disabled={rating === 5} onPress={() => setAspects(current => current.includes(t) ? current.filter(v => v !== t) : [...current, t])} style={{ minHeight: 44, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: aspects.includes(t) ? colors.primary : colors.border, backgroundColor: aspects.includes(t) ? colors.soft : colors.surface, opacity: rating === 5 ? 0.45 : 1 }}><Copy>{t}</Copy></Pressable>
           ))}
         </Row>
       </Section>
@@ -291,7 +299,10 @@ export function RatingScreen() {
         placeholder="Ej. Fue muy puntual y cuidadoso con la entrega."
         multiline
       />
-      <NavButton href={{ pathname: "/detalle-donacion", params: { id: donation.id } }} showArrow={false}>Enviar calificación</NavButton>
+      {submitted ? <>
+        <Copy tone="primary">Calificación guardada en esta sesión de demostración.</Copy>
+        <NavButton href={donor ? "/registrar-recogida" : { pathname: "/detalle-donacion", params: { id: donation.id } }} showArrow={false}>{donor ? "Volver a recogida" : "Volver al detalle de donación"}</NavButton>
+      </> : <Pressable accessibilityRole="button" onPress={() => { addRating(donor ? "donor" : "volunteer", rating); setSubmitted(true); }} style={{ minHeight: 52, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}><Copy style={{ color: colors.surface }} weight="bold">Enviar calificación</Copy></Pressable>}
       <Copy tone="secondary">
         Tu opinión ayuda a mejorar futuras asignaciones.
       </Copy>

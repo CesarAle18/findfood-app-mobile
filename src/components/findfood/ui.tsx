@@ -448,28 +448,34 @@ export function Badge({
 }
 export function Choices({
   values,
-  selected = 0,
+  selected,
+  onChange,
 }: {
   values: string[];
   selected?: number;
+  onChange?: (index: number) => void;
 }) {
+  const [local, setLocal] = useState(0);
+  const active = selected ?? local;
   return (
     <View style={styles.choices}>
       {values.map((v, i) => (
-        <View
+        <Pressable
           key={v}
+          accessibilityRole="radio"
+          onPress={() => { setLocal(i); onChange?.(i); }}
           accessible
-          accessibilityState={{ selected: i === selected, disabled: true }}
-          style={[styles.choice, i === selected && styles.choiceSelected]}
+          accessibilityState={{ checked: i === active }}
+          style={[styles.choice, i === active && styles.choiceSelected]}
         >
           <Copy
             style={{ fontSize: 12 }}
-            tone={i === selected ? "primary" : "secondary"}
-            weight={i === selected ? "semibold" : "regular"}
+            tone={i === active ? "primary" : "secondary"}
+            weight={i === active ? "semibold" : "regular"}
           >
             {v}
           </Copy>
-        </View>
+        </Pressable>
       ))}
     </View>
   );
@@ -707,9 +713,14 @@ export function SelectField({
               borderRadius: 14,
               padding: 20,
               gap: 8,
+              maxHeight: "85%",
+              width: "100%",
+              maxWidth: 480,
+              alignSelf: "center",
             }}
           >
             <Copy weight="bold">{label}</Copy>
+            <ScrollView>
             {options.map((o) => (
               <Pressable
                 key={o.value}
@@ -726,6 +737,7 @@ export function SelectField({
                 </Copy>
               </Pressable>
             ))}
+            </ScrollView>
             <Pressable
               onPress={() => setOpen(false)}
               accessibilityRole="button"

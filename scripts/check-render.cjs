@@ -57,6 +57,7 @@ Module._load = function (name, parent, isMain) {
     return {
       useMobile: () => ({
         data: fixtures,
+        available: true, setAvailable() {}, ratings: { donor: [5, 4], volunteer: [5, 5] }, addRating() {},
         role: "donor",
         setRole() {},
         draft,
@@ -179,6 +180,43 @@ try {
       React.createElement(VolunteerRegistrationScreen),
     ).includes('href="/inicio-donante"'),
   );
+  // Exercise local handlers without requiring a native device or browser.
+  const realUseState = React.useState;
+  function harness(Component, props = {}) {
+    const states = [];
+    let cursor = 0;
+    return () => {
+      cursor = 0;
+      React.useState = initial => {
+        const i = cursor++;
+        if (!(i in states)) states[i] = typeof initial === 'function' ? initial() : initial;
+        return [states[i], value => { states[i] = typeof value === 'function' ? value(states[i]) : value; }];
+      };
+      try { return Component(props); } finally { React.useState = realUseState; }
+    };
+  }
+  function nodes(tree) {
+    if (!tree || typeof tree !== 'object') return [];
+    if (Array.isArray(tree)) return tree.flatMap(nodes);
+    return [tree, ...nodes(tree.props?.children)];
+  }
+  const { Choices } = require('../src/components/findfood/ui.tsx');
+  const choice = harness(Choices, { values: ['Sí, dispone', 'No dispone'] });
+  nodes(choice()).filter(n => n.props?.accessibilityRole === 'radio')[1].props.onPress();
+  assert.equal(nodes(choice()).filter(n => n.props?.accessibilityRole === 'radio')[1].props.accessibilityState.checked, true);
+  const rating = harness(RatingScreen, { donor: true });
+  nodes(rating()).find(n => n.props?.accessibilityLabel === '5 estrellas').props.onPress();
+  assert(nodes(rating()).filter(n => n.props?.accessibilityRole === 'checkbox').every(n => n.props.disabled));
+  nodes(rating()).find(n => n.props?.accessibilityLabel === '4 estrellas').props.onPress();
+  assert(nodes(rating()).filter(n => n.props?.accessibilityRole === 'checkbox').every(n => !n.props.disabled));
+  const { AvailabilityField } = require('../src/components/findfood/availability-field.tsx');
+  let schedule;
+  const availability = harness(AvailabilityField, { onChange: value => { schedule = value; } });
+  nodes(availability()).find(n => n.props?.label === 'Desde · Lunes').props.onChange('23:00');
+  assert.equal(nodes(availability()).find(n => n.props?.label === 'Hasta · Lunes').props.value, '23:30');
+  assert(schedule.includes('23:00–23:30'));
+  console.log('PASS: option selection, five-star aspect lock/unlock and availability time boundaries.');
+
   const invalid = warnings.filter((w) =>
     /does not recognize|Invalid|array of styles|Each child.*key/i.test(w),
   );

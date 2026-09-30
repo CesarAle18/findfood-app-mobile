@@ -1,3 +1,5 @@
+import { AvailabilityField } from "@/components/findfood/availability-field";
+import { useMobile } from "@/state/mobile-context";
 import { useState } from "react";
 import type { VolunteerApplication } from "@/domain/models";
 import { View } from "react-native";
@@ -29,7 +31,7 @@ export function VolunteerRegistrationScreen() {
     vehicleType: "",
     capacityKg: "",
     refrigerated: true,
-    availability: "",
+    availability: "Lunes · 08:00–18:00",
   });
   const change = (key: keyof VolunteerApplication) => (value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -99,13 +101,8 @@ export function VolunteerRegistrationScreen() {
           <Copy weight="medium" style={{ fontSize: 12 }}>
             Cadena de frío
           </Copy>
-          <Choices values={["Sí, dispone", "No dispone"]} />
-          <Field
-            label="Disponibilidad *"
-            value={form.availability}
-            onChangeText={change("availability")}
-            placeholder="Lunes a viernes · 08:00–18:00"
-          />
+          <Choices values={["Sí, dispone", "No dispone"]} selected={form.refrigerated ? 0 : 1} onChange={(index) => setForm(current => ({ ...current, refrigerated: index === 0 }))} />
+          <AvailabilityField onChange={change("availability")} />
           <Row style={{ alignItems: "flex-start" }}>
             <View style={{ flex: 1 }}>
               <Section title="Foto documento">
@@ -173,14 +170,19 @@ export function OfferScreen() {
   );
 }
 export function CollectionScreen() {
+  const { data } = useMobile();
+  const [condition, setCondition] = useState("Bueno");
+  const [weight, setWeight] = useState("20 kg");
+  const [notes, setNotes] = useState("");
   return (
     <Screen title="Registrar recogida" subtitle="Parada 3 de 4" back>
-      <Field label="Estado del producto" value="Bueno" select />
-      <Field label="Peso aprox." value="20 kg" />
+      <SelectField label="Estado del producto" value={condition} onChange={setCondition} options={["Bueno", "Regular", "Malo"].map(value => ({ label: value, value }))} />
+      <Field label="Peso aprox." value={weight} onChangeText={setWeight} />
       <Section title="Evidencia fotográfica">
         <PhotoPlaceholder label="Evidencia fotográfica" />
       </Section>
-      <Field label="Observaciones" value="Producto en buen estado." multiline />
+      <Field label="Observaciones" value={notes} onChangeText={setNotes} placeholder="Describe el estado del producto" multiline />
+      <NavButton href={{ pathname: "/calificar-donante", params: { id: data.donations[0]?.id } }} showArrow={false}>Calificar donante</NavButton>
       <NavButton href="/ruta-activa" showArrow={false}>
         Confirmar recogida
       </NavButton>

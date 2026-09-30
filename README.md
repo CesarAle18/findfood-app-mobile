@@ -67,3 +67,13 @@ El menú de tres puntos mide 32 unidades dentro del área táctil de 48. Nueva d
 Desde Donación publicada, «Ver voluntario asignado (demo)» abre `/voluntario-asignado`. Muestra el perfil del voluntario de los datos de demostración, el resumen del borrador y un mapa esquemático con marcadores V (voluntario) y D (donante). No hay GPS, Google Maps ni asignación automática. La futura integración deberá reemplazar el catálogo local, la asignación y las coordenadas con datos reales.
 
 Las fechas siguen usando DD/MM/AAAA y las horas HH:mm en el modelo de presentación; un adaptador de backend deberá convertirlas al contrato acordado, incluida la zona horaria. No se implementaron reglas de disponibilidad o vencimiento.
+
+## Actualización: disponibilidad y calificaciones
+
+- Disponibilidad: selector de días (hasta siete) y horas en intervalos de 30 minutos. El fin siempre es posterior al inicio; se pueden quitar días conservando uno.
+- Cadena de frío, disponibilidad del voluntario y filtros de donaciones/notificaciones interactivos.
+- Recogida: estado de producto, peso y observaciones editables; enlace a Calificar donante.
+- Calificaciones: con 5 estrellas se deshabilitan y limpian los aspectos, queda editable el comentario. Se puede cambiar la puntuación o enviar.
+- Ambos perfiles muestran promedio y número de calificaciones de demostración. Enviar suma la puntuación al promedio local del destinatario; no hay persistencia ni backend.
+
+Para revisar: Registro voluntario → Disponibilidad y Cadena de frío; Registrar recogida → Calificar donante; Perfil donante/voluntario → promedio.

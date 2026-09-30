@@ -1,6 +1,8 @@
+import { useMobile } from "@/state/mobile-context";
 import { View } from "react-native";
 import {
   Badge,
+  Choices,
   Card,
   Copy,
   NavButton,
@@ -13,14 +15,16 @@ import { activity } from "@/data/preview";
 import { colors } from "@/design/tokens";
 
 export function HomeScreen() {
+  const { available, setAvailable } = useMobile();
   return (
     <Screen
       title="Inicio"
-      subtitle="Voluntario disponible"
-      badge={<Badge>Disponible</Badge>}
+      subtitle="Vista voluntario"
+      badge={<Badge>{available ? "Disponible" : "No disponible"}</Badge>}
       tabs="home"
       viewRole="volunteer"
     >
+      <Choices values={["Disponible", "No disponible"]} selected={available ? 0 : 1} onChange={i => setAvailable(i === 0)} />
       <Card soft>
         <Copy weight="medium" style={{ fontSize: 12 }}>
           Resumen de hoy
