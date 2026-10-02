@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Pressable, TextInput, View } from "react-native";
+import { TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   Badge,
+  Chip,
   Choices,
   Card,
   Copy,
@@ -15,6 +16,14 @@ import {
   TextLink,
 } from "@/components/findfood/ui";
 import { Icon } from "@/components/findfood/icon";
+import {
+  Animated,
+  Pressing,
+  enterItem,
+  fadeIn,
+  fadeOut,
+  itemLayout,
+} from "@/components/findfood/motion";
 import { Metrics } from "./donor";
 import { useMobile } from "@/state/mobile-context";
 import { colors, fonts } from "@/design/tokens";
@@ -116,7 +125,7 @@ export function AccountScreen() {
         <Copy tone="secondary">{data.donor.email}</Copy>
         <Section title="Cambiar vista">
           {(["donor", "volunteer"] as const).map((value) => (
-            <Pressable
+            <Pressing
               key={value}
               accessibilityRole="radio"
               accessibilityState={{ checked: role === value }}
@@ -126,7 +135,8 @@ export function AccountScreen() {
                   value === "donor" ? "/inicio-donante" : "/inicio",
                 );
               }}
-              style={{
+              scale={1}
+              surface={{
                 minHeight: 52,
                 flexDirection: "row",
                 alignItems: "center",
@@ -147,7 +157,7 @@ export function AccountScreen() {
               <Copy>
                 Ver como {value === "donor" ? "donante" : "voluntario"}
               </Copy>
-            </Pressable>
+            </Pressing>
           ))}
         </Section>
         <TextLink href="/login">Cerrar sesión</TextLink>
@@ -258,20 +268,21 @@ export function RatingScreen({ donor = false }: { donor?: boolean }) {
       <Section title="¿Cómo fue tu experiencia?">
         <Row style={{ justifyContent: "center", gap: 4 }}>
           {[1, 2, 3, 4, 5].map((n) => (
-            <Pressable
+            <Pressing
               key={n}
               accessibilityRole="radio"
               accessibilityLabel={`${n} estrellas`}
               accessibilityState={{ checked: n === rating }}
               onPress={() => { setRating(n); if (n === 5) setAspects([]); }}
-              style={{ minWidth: 44, minHeight: 48, alignItems: "center", justifyContent: "center" }}
+              scale={0.88}
+              surface={{ minWidth: 44, minHeight: 48, alignItems: "center", justifyContent: "center" }}
             >
               <Icon
                 name="star"
                 size={32}
                 color={n <= rating ? colors.primary : colors.border}
               />
-            </Pressable>
+            </Pressing>
           ))}
         </Row>
         <Copy tone="secondary" style={{ textAlign: "center" }}>
@@ -279,7 +290,7 @@ export function RatingScreen({ donor = false }: { donor?: boolean }) {
         </Copy>
       </Section>
       <Section title="Aspectos a evaluar">
-        {rating === 5 && <Copy tone="secondary">Con 5 estrellas solo puedes añadir un comentario.</Copy>}
+        {rating === 5 && <Animated.View entering={fadeIn} exiting={fadeOut}><Copy tone="secondary">Con 5 estrellas solo puedes añadir un comentario.</Copy></Animated.View>}
         <Row style={{ flexWrap: "wrap" }}>
           {[
             "Puntualidad",
@@ -288,7 +299,7 @@ export function RatingScreen({ donor = false }: { donor?: boolean }) {
             "Comunicación",
             "Presentación",
           ].map((t) => (
-            <Pressable key={t} accessibilityRole="checkbox" accessibilityState={{ checked: aspects.includes(t), disabled: rating === 5 }} disabled={rating === 5} onPress={() => setAspects(current => current.includes(t) ? current.filter(v => v !== t) : [...current, t])} style={{ minHeight: 44, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: aspects.includes(t) ? colors.primary : colors.border, backgroundColor: aspects.includes(t) ? colors.soft : colors.surface, opacity: rating === 5 ? 0.45 : 1 }}><Copy>{t}</Copy></Pressable>
+            <Chip key={t} label={t} role="checkbox" selected={aspects.includes(t)} disabled={rating === 5} onPress={() => setAspects(current => current.includes(t) ? current.filter(v => v !== t) : [...current, t])} style={{ minHeight: 44, paddingVertical: 12 }} />
           ))}
         </Row>
       </Section>
@@ -299,10 +310,10 @@ export function RatingScreen({ donor = false }: { donor?: boolean }) {
         placeholder="Ej. Fue muy puntual y cuidadoso con la entrega."
         multiline
       />
-      {submitted ? <>
+      {submitted ? <Animated.View entering={enterItem} layout={itemLayout} style={{ gap: 24 }}>
         <Copy tone="primary">Calificación guardada en esta sesión de demostración.</Copy>
         <NavButton href={donor ? "/registrar-recogida" : { pathname: "/detalle-donacion", params: { id: donation.id } }} showArrow={false}>{donor ? "Volver a recogida" : "Volver al detalle de donación"}</NavButton>
-      </> : <Pressable accessibilityRole="button" onPress={() => { addRating(donor ? "donor" : "volunteer", rating); setSubmitted(true); }} style={{ minHeight: 52, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}><Copy style={{ color: colors.surface }} weight="bold">Enviar calificación</Copy></Pressable>}
+      </Animated.View> : <Pressing accessibilityRole="button" onPress={() => { addRating(donor ? "donor" : "volunteer", rating); setSubmitted(true); }} surface={{ minHeight: 52, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}><Copy style={{ color: colors.surface }} weight="bold">Enviar calificación</Copy></Pressing>}
       <Copy tone="secondary">
         Tu opinión ayuda a mejorar futuras asignaciones.
       </Copy>

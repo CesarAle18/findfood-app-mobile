@@ -1,9 +1,10 @@
-import { Pressable, View } from "react-native";
-import { Link } from "expo-router";
-import { Card, Copy, Screen, Section } from "@/components/findfood/ui";
 import { Icon } from "@/components/findfood/icon";
+import { Pressing } from "@/components/findfood/motion";
+import { Card, Copy, Screen, Section } from "@/components/findfood/ui";
 import { previewScreens } from "@/data/preview";
 import { colors } from "@/design/tokens";
+import { Link } from "expo-router";
+import { View } from "react-native";
 
 /** Galería auxiliar para revisar el cascarón sin activar acciones de negocio. */
 export default function PreviewGallery() {
@@ -24,9 +25,9 @@ export default function PreviewGallery() {
         <Section key={group.group} title={group.group}>
           {group.screens.map((screen) => (
             <Link key={screen.href.toString()} href={screen.href} asChild>
-              <Pressable
+              <Pressing
                 accessibilityRole="link"
-                style={{
+                surface={{
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 16,
@@ -43,7 +44,7 @@ export default function PreviewGallery() {
                   </Copy>
                 </View>
                 <Icon name="chevron" size={17} />
-              </Pressable>
+              </Pressing>
             </Link>
           ))}
         </Section>

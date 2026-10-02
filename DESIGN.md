@@ -134,7 +134,7 @@ Los controles tienen esquinas suaves, las tarjetas una curva algo mayor y las in
 ## Components
 
 - **Button:** variantes primaria, contorno y cancelación, altura mínima 52, texto 13 en negrita y radio de control. Representa acciones de negocio inactivas y declara estado deshabilitado sin atenuar su aspecto. Los avances de demostración utilizan enlaces separados y no ejecutan estas operaciones.
-- **NavButton y TextLink:** enlaces de navegación de demostración. NavButton conserva el aspecto primario, texto negrita de tamaño 13 y opacidad 0.8 al presionar. TextLink tiene altura mínima 44 y texto verde de tamaño 12. No hay estilos explícitos de hover ni foco en el código.
+- **NavButton y TextLink:** enlaces de navegación de demostración. NavButton conserva el aspecto primario y texto negrita de tamaño 13; al presionar se atenúa a opacidad 0,88 y reduce su escala a 0,98. TextLink tiene altura mínima 44 y texto verde de tamaño 12, y al presionar solo se atenúa. No hay estilos de hover declarados; el estado de foco sí existe en Field y se describe en Motion.
 - **Field:** etiqueta separada 9, contenedor de altura mínima 48, borde fino y margen interior horizontal 14. Los valores son de solo lectura cuando no se proporciona un controlador de cambio; los campos habilitados editan estado local sin envío ni persistencia. La variante multilínea eleva el mínimo a 88; selección y contraseña agregan iconos, sin interacción de negocio. SelectField permite escoger opciones locales con la misma identidad visual.
 - **Card:** margen interior 18 y separación 14; variante suave con fondo y borde `soft`.
 - **Badge y Choices:** Badge muestra estados; Choices permite selección local con estado accesible. Badge usa texto medio; Choices utiliza altura mínima 42, radio 8 y selección verde sobre fondo suave.
@@ -143,7 +143,23 @@ Los controles tienen esquinas suaves, las tarjetas una curva algo mayor y las in
 
 El formulario 19 conserva desplazamiento vertical y agrupaciones de datos personales y vehículo. Incluye tipo de identificación y espacios separados para documento, vehículo y licencia; estos espacios no cargan fotografías. Los perfiles donante y voluntario reutilizan una composición compartida.
 
-Los fragmentos HTML del archivo auxiliar traducen primitivas para el panel de documentación; no sustituyen los componentes React Native. No se inventan estados interactivos para las acciones inactivas, escalas tonales, animaciones ni breakpoints. Las transiciones de Expo Router están desactivadas.
+Los fragmentos HTML del archivo auxiliar traducen primitivas para el panel de documentación; no sustituyen los componentes React Native. No se inventan estados interactivos para las acciones inactivas, ni escalas tonales ni breakpoints. El movimiento declarado se describe en Motion.
+
+## Motion
+
+El movimiento acompaña la interacción y nunca la protagoniza. Las duraciones viven en `motion`, dentro de `src/design/tokens.ts` (`press` 120, `fast` 140, `exit` 160 y `base` 200 ms), y las primitivas compartidas en `src/components/findfood/motion.tsx`, sobre react-native-reanimated, que ya era una dependencia del proyecto. La curva es siempre `Easing.out(Easing.cubic)`: avanza rápido y se asienta sin rebote. Se animan opacidad, escala, rotación y color; no se animan medidas que obliguen a recalcular el layout.
+
+La navegación usa un fundido de 200 ms declarado en el `Stack` de `src/app/_layout.tsx`, con `animationTypeForReplace` en `push` porque la barra inferior navega con `replace`. Lo ejecuta react-native-screens en el hilo nativo.
+
+`Pressing` sustituye a `Pressable` en los controles con acción: atenúa a opacidad 0,88 y reduce la escala a 0,98 en 120 ms, y vuelve en 160 ms. El valor animado vive en el hilo de interfaz, así que presionar no provoca un render adicional. Las rejillas densas de los selectores de fecha y hora conservan `Pressable` sin animación: son decenas de celdas y un valor animado por celda no se justifica en gama media.
+
+Los elementos que se suman o se retiran de una lista o de un formulario entran con opacidad 0→1 y 10 px de desplazamiento vertical en 200 ms, salen con un fundido de 160 ms y reacomodan a sus hermanos con `LinearTransition` de 200 ms. Cada lista se envuelve en `LayoutAnimationConfig skipEntering` para que el primer montaje no produzca una cascada. Aplica a las donaciones filtradas, las notificaciones filtradas, los productos de la nueva donación y los días de disponibilidad.
+
+Las tarjetas de los diálogos locales aparecen con opacidad 0→1 y escala 0,97→1 en 200 ms; el velo conserva el fundido nativo del `Modal`, que también cubre el cierre.
+
+El estado activo de un control transita en 140 ms. `Field` lleva su borde de `border` a `primary` mientras el campo tiene foco; `SelectField` y `DateTimeField` hacen lo mismo mientras su panel está abierto, y el chevron de `SelectField` gira 90°, de apuntar a la derecha a apuntar abajo. `Chip`, base de `Choices` y de los aspectos a calificar, transita borde y fondo a `primary` sobre `soft`, y se atenúa a 0,45 cuando queda deshabilitado.
+
+No hay animaciones en bucle, ni transiciones en el eco de la escritura, ni movimiento en el mapa SVG, ni cuentas progresivas en las cifras: cada una gastaría CPU o batería sin resolver un problema de uso. Reanimated y la transición nativa respetan el ajuste de reducción de movimiento del sistema. Esta descripción proviene de la revisión del código, del render de prueba y del export web; no acredita medición de rendimiento ni validación en dispositivo nativo.
 
 ## Do's and Don'ts
 
@@ -153,3 +169,4 @@ Los fragmentos HTML del archivo auxiliar traducen primitivas para el panel de do
 - **Don't** presentar interacciones locales o datos simulados como operaciones de negocio reales.
 - **Don't** tratar colores auxiliares, fragmentos HTML o el mapa local como extracción literal de Figma.
 - **Don't** afirmar fidelidad visual verificada o validación nativa a partir de la revisión de código y el export.
+- **Don't** introducir animaciones en bucle, transiciones largas ni movimiento en elementos que no respondan a una interacción.

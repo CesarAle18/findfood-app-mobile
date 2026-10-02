@@ -1,9 +1,10 @@
+import { colors, fonts } from "@/design/tokens";
 import { useMobile } from "@/state/mobile-context";
+import { Link, router, type Href } from "expo-router";
 import { useState, type PropsWithChildren, type ReactNode } from "react";
 import {
   Image,
   Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,10 +14,15 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
-import { Link, router, type Href } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors, fonts } from "@/design/tokens";
 import { Icon, type IconName } from "./icon";
+import {
+  Animated,
+  Pressing,
+  dialogEnter,
+  useActiveStyle,
+  useRotation,
+} from "./motion";
 
 export function Copy({
   children,
@@ -76,11 +82,11 @@ export function Screen({
       <View style={styles.frame}>
         <View style={styles.header}>
           {back && (
-            <Pressable
+            <Pressing
               accessibilityRole="button"
               accessibilityLabel="Volver"
               hitSlop={6}
-              style={styles.iconButton}
+              surface={styles.iconButton}
               onPress={() =>
                 router.canGoBack()
                   ? router.back()
@@ -88,7 +94,7 @@ export function Screen({
               }
             >
               <Icon name="back" />
-            </Pressable>
+            </Pressing>
           )}
           <View style={styles.brand}>
             <Image
@@ -102,14 +108,14 @@ export function Screen({
             </Copy>
           </View>
           <Link href="/cuenta" asChild>
-            <Pressable
+            <Pressing
               accessibilityRole="link"
               accessibilityLabel="Abrir menú de cuenta"
               onPress={() => setRole(viewRole ?? role)}
-              style={styles.iconButton}
+              surface={styles.iconButton}
             >
               <Icon name="menu" size={32} />
-            </Pressable>
+            </Pressing>
           </Link>
         </View>
         <ScrollView
@@ -196,14 +202,15 @@ function BottomNav({
         );
         return item.href ? (
           <Link key={item.title} href={item.href} replace asChild>
-            <Pressable
+            <Pressing
               accessibilityRole="link"
               accessibilityState={{ selected }}
               onPress={() => setRole(role)}
               style={styles.navItem}
+              surface={styles.navSurface}
             >
               {content}
-            </Pressable>
+            </Pressing>
           </Link>
         ) : (
           <View
@@ -275,8 +282,9 @@ export function TextLink({
 }: PropsWithChildren<{ href: Href; align?: "left" | "center" | "right" }>) {
   return (
     <Link href={href} asChild>
-      <Pressable
+      <Pressing
         accessibilityRole="link"
+        scale={1}
         style={StyleSheet.flatten([
           styles.textLink,
           {
@@ -292,7 +300,7 @@ export function TextLink({
         <Copy tone="primary" weight="medium" style={{ fontSize: 12 }}>
           {children}
         </Copy>
-      </Pressable>
+      </Pressing>
     </Link>
   );
 }
@@ -310,9 +318,9 @@ export function NavButton({
   const foreground = variant === "primary" ? colors.surface : colors.primary;
   return (
     <Link href={href} asChild>
-      <Pressable
+      <Pressing
         accessibilityRole="link"
-        style={StyleSheet.flatten([
+        surface={StyleSheet.flatten([
           styles.button,
           variant === "outline" && styles.outline,
         ])}
@@ -321,7 +329,7 @@ export function NavButton({
           {children}
         </Copy>
         {showArrow && <Icon name="arrow" color={foreground} size={18} />}
-      </Pressable>
+      </Pressing>
     </Link>
   );
 }
@@ -345,15 +353,18 @@ export function Field({
   onChangeText?: (value: string) => void;
   placeholder?: string;
 }) {
+  const [focused, setFocused] = useState(false);
+  const focusBorder = useActiveStyle(focused, { border: true });
   return (
     <View style={[styles.field, grow && { flex: 1 }]}>
       <Copy style={styles.label} weight="bold">
         {label}
       </Copy>
-      <View
+      <Animated.View
         style={[
           styles.inputRow,
           multiline && { minHeight: 88, alignItems: "flex-start" },
+          focusBorder,
         ]}
       >
         <TextInput
@@ -362,6 +373,8 @@ export function Field({
           selectTextOnFocus={false}
           value={value}
           onChangeText={onChangeText}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           placeholder={placeholder}
           secureTextEntry={secure}
           multiline={multiline}
@@ -377,7 +390,7 @@ export function Field({
             color={colors.secondary}
           />
         )}
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -446,6 +459,48 @@ export function Badge({
     </View>
   );
 }
+/**
+ * Opción seleccionable con transición de color. Base de Choices y de cualquier
+ * lista de etiquetas elegibles, para no repetir la lógica de animación.
+ */
+export function Chip({
+  label,
+  selected,
+  disabled = false,
+  role = "radio",
+  onPress,
+  style,
+}: {
+  label: string;
+  selected: boolean;
+  disabled?: boolean;
+  role?: "radio" | "checkbox";
+  onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const selection = useActiveStyle(selected, { border: true, fill: true });
+  const faded = useActiveStyle(disabled, { dim: true });
+  return (
+    <Animated.View style={faded}>
+      <Pressing
+        accessible
+        accessibilityRole={role}
+        accessibilityState={{ checked: selected, disabled }}
+        disabled={disabled}
+        onPress={onPress}
+        surface={[styles.choice, style, selection]}
+      >
+        <Copy
+          style={{ fontSize: 12 }}
+          tone={selected ? "primary" : "secondary"}
+          weight={selected ? "semibold" : "regular"}
+        >
+          {label}
+        </Copy>
+      </Pressing>
+    </Animated.View>
+  );
+}
 export function Choices({
   values,
   selected,
@@ -460,22 +515,16 @@ export function Choices({
   return (
     <View style={styles.choices}>
       {values.map((v, i) => (
-        <Pressable
+        <Chip
           key={v}
-          accessibilityRole="radio"
-          onPress={() => { setLocal(i); onChange?.(i); }}
-          accessible
-          accessibilityState={{ checked: i === active }}
-          style={[styles.choice, i === active && styles.choiceSelected]}
-        >
-          <Copy
-            style={{ fontSize: 12 }}
-            tone={i === active ? "primary" : "secondary"}
-            weight={i === active ? "semibold" : "regular"}
-          >
-            {v}
-          </Copy>
-        </Pressable>
+          label={v}
+          role="radio"
+          selected={i === active}
+          onPress={() => {
+            setLocal(i);
+            onChange?.(i);
+          }}
+        />
       ))}
     </View>
   );
@@ -632,7 +681,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  choiceSelected: { borderColor: colors.primary, backgroundColor: colors.soft },
   photo: {
     minHeight: 150,
     backgroundColor: colors.muted,
@@ -658,6 +706,7 @@ const styles = StyleSheet.create({
     minHeight: 54,
     gap: 2,
   },
+  navSurface: { alignItems: "center", gap: 2 },
   navIcon: { paddingHorizontal: 18, paddingVertical: 5, borderRadius: 16 },
   navSelected: { backgroundColor: colors.soft },
   navLabel: { fontSize: 10, lineHeight: 16 },
@@ -676,22 +725,26 @@ export function SelectField({
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const openBorder = useActiveStyle(open, { border: true });
+  const chevron = useRotation(open);
   return (
     <View style={styles.field}>
       <Copy style={styles.label} weight="bold">
         {label}
       </Copy>
-      <Pressable
+      <Pressing
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${options.find((o) => o.value === value)?.label ?? "Selecciona"}`}
         onPress={() => setOpen(true)}
-        style={styles.inputRow}
+        surface={[styles.inputRow, openBorder]}
       >
         <Copy style={{ flex: 1 }} tone="secondary">
           {options.find((o) => o.value === value)?.label ?? "Selecciona"}
         </Copy>
-        <Icon name="chevron" size={16} />
-      </Pressable>
+        <Animated.View style={chevron}>
+          <Icon name="chevron" size={16} />
+        </Animated.View>
+      </Pressing>
       <Modal
         visible={open}
         transparent
@@ -706,8 +759,9 @@ export function SelectField({
             padding: 24,
           }}
         >
-          <View
+          <Animated.View
             accessibilityViewIsModal
+            entering={dialogEnter}
             style={{
               backgroundColor: colors.surface,
               borderRadius: 14,
@@ -721,31 +775,33 @@ export function SelectField({
           >
             <Copy weight="bold">{label}</Copy>
             <ScrollView>
-            {options.map((o) => (
-              <Pressable
-                key={o.value}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: value === o.value }}
-                onPress={() => {
-                  onChange(o.value);
-                  setOpen(false);
-                }}
-                style={{ minHeight: 48, justifyContent: "center" }}
-              >
-                <Copy tone={o.value === value ? "primary" : "default"}>
-                  {o.label}
-                </Copy>
-              </Pressable>
-            ))}
+              {options.map((o) => (
+                <Pressing
+                  key={o.value}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: value === o.value }}
+                  onPress={() => {
+                    onChange(o.value);
+                    setOpen(false);
+                  }}
+                  scale={1}
+                  surface={{ minHeight: 48, justifyContent: "center" }}
+                >
+                  <Copy tone={o.value === value ? "primary" : "default"}>
+                    {o.label}
+                  </Copy>
+                </Pressing>
+              ))}
             </ScrollView>
-            <Pressable
+            <Pressing
               onPress={() => setOpen(false)}
               accessibilityRole="button"
-              style={{ minHeight: 48, justifyContent: "center" }}
+              scale={1}
+              surface={{ minHeight: 48, justifyContent: "center" }}
             >
               <Copy tone="primary">Cerrar</Copy>
-            </Pressable>
-          </View>
+            </Pressing>
+          </Animated.View>
         </View>
       </Modal>
     </View>

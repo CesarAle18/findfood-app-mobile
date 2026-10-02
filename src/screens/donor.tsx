@@ -1,6 +1,13 @@
-import { useState } from "react";
-import { View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { Icon, RouteMap } from "@/components/findfood/icon";
+import {
+  Animated,
+  LayoutAnimationConfig,
+  enterItem,
+  exitItem,
+  fadeIn,
+  fadeOut,
+  itemLayout,
+} from "@/components/findfood/motion";
 import {
   Badge,
   Button,
@@ -15,10 +22,12 @@ import {
   Stack,
   TextLink,
 } from "@/components/findfood/ui";
-import { Icon, RouteMap } from "@/components/findfood/icon";
-import { useMobile } from "@/state/mobile-context";
-import type { Donation } from "@/domain/models";
 import { colors } from "@/design/tokens";
+import type { Donation } from "@/domain/models";
+import { useMobile } from "@/state/mobile-context";
+import { useLocalSearchParams } from "expo-router";
+import { useState } from "react";
+import { View } from "react-native";
 
 export function Metrics({ values }: { values: [string, string][] }) {
   return (
@@ -120,7 +129,11 @@ export function DonorHomeScreen() {
 export function DonationsScreen() {
   const { data } = useMobile();
   const [filter, setFilter] = useState(0);
-  const visible = data.donations.filter(d => filter === 0 || (filter === 2 ? d.status === "Completada" : d.status !== "Completada"));
+  const visible = data.donations.filter(
+    (d) =>
+      filter === 0 ||
+      (filter === 2 ? d.status === "Completada" : d.status !== "Completada"),
+  );
   return (
     <Screen
       viewRole="donor"
@@ -129,31 +142,48 @@ export function DonationsScreen() {
       tabs="route"
       badge={<Badge>3 activas</Badge>}
     >
-      <Choices values={["Todas", "En seguimiento", "Entregadas"]} selected={filter} onChange={setFilter} />
-      {visible.length === 0 && (
-        <Copy tone="secondary">Aún no tienes donaciones.</Copy>
-      )}
-      {visible.map((d) => (
-        <Card key={d.id}>
-          <Row style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-            <Copy weight="bold">{d.id}</Copy>
-            <Badge>{d.status}</Badge>
-          </Row>
-          <Copy>{d.category}</Copy>
-          <Copy tone="secondary">
-            {d.weightKg} kg · {d.pickupWindow}
-          </Copy>
-          {d.status === "Completada" ? (
-            <TextLink
-              href={{ pathname: "/detalle-donacion", params: { id: d.id } }}
-            >
-              Ver detalle
-            </TextLink>
-          ) : (
-            <DonationLinks donation={d} />
-          )}
-        </Card>
-      ))}
+      <Choices
+        values={["Todas", "En seguimiento", "Entregadas"]}
+        selected={filter}
+        onChange={setFilter}
+      />
+      <LayoutAnimationConfig skipEntering>
+        {visible.length === 0 && (
+          <Animated.View entering={fadeIn} exiting={fadeOut}>
+            <Copy tone="secondary">Aún no tienes donaciones.</Copy>
+          </Animated.View>
+        )}
+        {visible.map((d) => (
+          <Animated.View
+            key={d.id}
+            entering={enterItem}
+            exiting={exitItem}
+            layout={itemLayout}
+          >
+            <Card>
+              <Row
+                style={{ justifyContent: "space-between", flexWrap: "wrap" }}
+              >
+                <Copy weight="bold">{d.id}</Copy>
+                <Badge>{d.status}</Badge>
+              </Row>
+              <Copy>{d.category}</Copy>
+              <Copy tone="secondary">
+                {d.weightKg} kg · {d.pickupWindow}
+              </Copy>
+              {d.status === "Completada" ? (
+                <TextLink
+                  href={{ pathname: "/detalle-donacion", params: { id: d.id } }}
+                >
+                  Ver detalle
+                </TextLink>
+              ) : (
+                <DonationLinks donation={d} />
+              )}
+            </Card>
+          </Animated.View>
+        ))}
+      </LayoutAnimationConfig>
     </Screen>
   );
 }

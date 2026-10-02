@@ -1,15 +1,15 @@
+import { colors } from "@/design/tokens";
 import { MobileProvider } from "@/state/mobile-context";
-import { Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
 import {
-  useFonts,
   Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
+  useFonts,
 } from "@expo-google-fonts/inter";
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, Text, View } from "react-native";
-import { colors } from "@/design/tokens";
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -48,7 +48,12 @@ export default function RootLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          animation: "none",
+          // Fundido corto: lo ejecuta react-native-screens en el hilo nativo.
+          // "push" es necesario porque la barra inferior navega con replace y el
+          // valor por omisión animaría la transición hacia atrás.
+          animation: "fade",
+          animationDuration: 200,
+          animationTypeForReplace: "push",
           contentStyle: { backgroundColor: colors.background },
         }}
       />

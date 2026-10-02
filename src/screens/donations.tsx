@@ -1,9 +1,17 @@
-import { useMobile } from "@/state/mobile-context";
-import { appendProduct, removeProduct, productOptions, type DraftProduct } from "@/domain/donation-draft";
-import { Pressable, View } from "react-native";
+import { DateTimeField } from "@/components/findfood/date-time-field";
+import { Icon } from "@/components/findfood/icon";
+import {
+  Animated,
+  LayoutAnimationConfig,
+  Pressing,
+  enterItem,
+  exitItem,
+  fadeIn,
+  fadeOut,
+  itemLayout,
+} from "@/components/findfood/motion";
 import {
   Card,
-  SelectField,
   Copy,
   Field,
   NavButton,
@@ -11,11 +19,18 @@ import {
   Row,
   Screen,
   Section,
+  SelectField,
   Stack,
 } from "@/components/findfood/ui";
-import { Icon } from "@/components/findfood/icon";
-import { DateTimeField } from "@/components/findfood/date-time-field";
 import { colors } from "@/design/tokens";
+import {
+  appendProduct,
+  productOptions,
+  removeProduct,
+  type DraftProduct,
+} from "@/domain/donation-draft";
+import { useMobile } from "@/state/mobile-context";
+import { View } from "react-native";
 
 export function NewDonationScreen() {
   const { draft, setDraft } = useMobile();
@@ -28,62 +43,88 @@ export function NewDonationScreen() {
     }));
   return (
     <Screen title="Nueva donación" subtitle="Donante" back>
-      {draft.products.map((product, index) => (
-        <Section key={product.id} title={`Producto ${index + 1}`}>
-          <SelectField
-            label="Producto"
-            value={product.name}
-            onChange={(name) => update(product.id, { name })}
-            options={productOptions}
-          />
-          <Row style={{ alignItems: "flex-end" }}>
-            <Field
-              label="Cantidad / peso"
-              value={product.quantity}
-              onChangeText={(quantity) => update(product.id, { quantity })}
-              grow
-            />
-            <View style={{ width: 110 }}>
+      <LayoutAnimationConfig skipEntering>
+        {draft.products.map((product, index) => (
+          <Animated.View
+            key={product.id}
+            entering={enterItem}
+            exiting={exitItem}
+            layout={itemLayout}
+          >
+            <Section title={`Producto ${index + 1}`}>
               <SelectField
-                label="Unidad"
-                value={product.unit}
-                options={["KG", "L", "ML", "G"].map((value) => ({
+                label="Producto"
+                value={product.name}
+                onChange={(name) => update(product.id, { name })}
+                options={productOptions}
+              />
+              <Row style={{ alignItems: "flex-end" }}>
+                <Field
+                  label="Cantidad / peso"
+                  value={product.quantity}
+                  onChangeText={(quantity) => update(product.id, { quantity })}
+                  grow
+                />
+                <View style={{ width: 110 }}>
+                  <SelectField
+                    label="Unidad"
+                    value={product.unit}
+                    options={["KG", "L", "ML", "G"].map((value) => ({
+                      label: value,
+                      value,
+                    }))}
+                    onChange={(unit) =>
+                      update(product.id, { unit: unit as DraftProduct["unit"] })
+                    }
+                  />
+                </View>
+              </Row>
+              <DateTimeField
+                label="Fecha de vencimiento"
+                value={product.expiresOn}
+                onChange={(expiresOn) => update(product.id, { expiresOn })}
+              />
+              <SelectField
+                label="Cadena de frío"
+                value={product.coldChain}
+                options={["Refrigerado", "No requiere"].map((value) => ({
                   label: value,
                   value,
                 }))}
-                onChange={(unit) =>
-                  update(product.id, { unit: unit as DraftProduct["unit"] })
-                }
+                onChange={(coldChain) => update(product.id, { coldChain })}
               />
-            </View>
-          </Row>
-          <DateTimeField
-            label="Fecha de vencimiento"
-            value={product.expiresOn}
-            onChange={(expiresOn) => update(product.id, { expiresOn })}
-          />
-          <SelectField
-            label="Cadena de frío"
-            value={product.coldChain}
-            options={["Refrigerado", "No requiere"].map((value) => ({
-              label: value,
-              value,
-            }))}
-            onChange={(coldChain) => update(product.id, { coldChain })}
-          />
-          <Pressable accessibilityRole="button" accessibilityLabel={`Quitar producto ${index + 1}`} accessibilityState={{ disabled: draft.products.length === 1 }} disabled={draft.products.length === 1} onPress={() => setDraft(current => removeProduct(current, product.id))} style={{ minHeight: 48, justifyContent: "center", opacity: draft.products.length === 1 ? 0.5 : 1 }}>
-            <Copy style={{ color: colors.danger }}>Quitar producto</Copy>
-          </Pressable>
-          {draft.products.length === 1 && <Copy tone="secondary">La donación debe tener al menos un producto.</Copy>}
-          <Section title="Fotografía">
-            <PhotoPlaceholder compact />
-          </Section>
-        </Section>
-      ))}
-      <Pressable
+              <Pressing
+                accessibilityRole="button"
+                accessibilityLabel={`Quitar producto ${index + 1}`}
+                accessibilityState={{ disabled: draft.products.length === 1 }}
+                disabled={draft.products.length === 1}
+                onPress={() =>
+                  setDraft((current) => removeProduct(current, product.id))
+                }
+                scale={1}
+                opacity={draft.products.length === 1 ? 0.5 : 1}
+                surface={{ minHeight: 48, justifyContent: "center" }}
+              >
+                <Copy style={{ color: colors.danger }}>Quitar producto</Copy>
+              </Pressing>
+              {draft.products.length === 1 && (
+                <Animated.View entering={fadeIn} exiting={fadeOut}>
+                  <Copy tone="secondary">
+                    La donación debe tener al menos un producto.
+                  </Copy>
+                </Animated.View>
+              )}
+              <Section title="Fotografía">
+                <PhotoPlaceholder compact />
+              </Section>
+            </Section>
+          </Animated.View>
+        ))}
+      </LayoutAnimationConfig>
+      <Pressing
         accessibilityRole="button"
         onPress={() => setDraft(appendProduct)}
-        style={{
+        surface={{
           minHeight: 52,
           borderWidth: 1,
           borderColor: colors.primary,
@@ -95,7 +136,7 @@ export function NewDonationScreen() {
         <Copy tone="primary" weight="bold">
           Añadir otro producto
         </Copy>
-      </Pressable>
+      </Pressing>
       <Section title="Ventana de recogida">
         <Row>
           <DateTimeField
@@ -168,11 +209,19 @@ export function WaitingScreen() {
       </View>
       <Section title="Resumen de la donación">
         <Card>
-          {draft.products.map(product => <View key={product.id} style={{ gap: 4 }}>
-            <Copy weight="semibold">{product.name || "Producto pendiente"}</Copy>
-            <Copy tone="secondary">{product.quantity || "—"} {product.unit} · {product.coldChain}</Copy>
-          </View>)}
-          <Copy tone="secondary">Recogida: {draft.pickupFrom}–{draft.pickupUntil}</Copy>
+          {draft.products.map((product) => (
+            <View key={product.id} style={{ gap: 4 }}>
+              <Copy weight="semibold">
+                {product.name || "Producto pendiente"}
+              </Copy>
+              <Copy tone="secondary">
+                {product.quantity || "—"} {product.unit} · {product.coldChain}
+              </Copy>
+            </View>
+          ))}
+          <Copy tone="secondary">
+            Recogida: {draft.pickupFrom}–{draft.pickupUntil}
+          </Copy>
         </Card>
       </Section>
       <Card soft>
@@ -212,8 +261,12 @@ export function WaitingScreen() {
           ))}
         </Stack>
       </Section>
-      <NavButton href="/voluntario-asignado" showArrow={false}>Ver voluntario asignado (demo)</NavButton>
-      <NavButton href="/inicio-donante" variant="outline" showArrow={false}>Cancelar donación</NavButton>
+      <NavButton href="/voluntario-asignado" showArrow={false}>
+        Ver voluntario asignado (demo)
+      </NavButton>
+      <NavButton href="/inicio-donante" variant="outline" showArrow={false}>
+        Cancelar donación
+      </NavButton>
     </Screen>
   );
 }

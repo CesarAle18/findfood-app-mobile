@@ -21,3 +21,6 @@ export const fonts = {
 };
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
+
+/** Duraciones de movimiento en ms. Cortas a propósito: acompañan, no protagonizan. */
+export const motion = { press: 120, fast: 140, base: 200, exit: 160 };
