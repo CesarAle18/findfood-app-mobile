@@ -31,8 +31,11 @@
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
+    "@types/jest": "29.5.14",
     "@types/react": "~19.2.2",
     "eslint": "^9.39.5",
+    "jest": "~29.7.0",
+    "jest-expo": "~57.0.5",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -42,6 +45,9 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "start:local": "node scripts/dev-env.mjs local",
+    "start:real": "node scripts/dev-env.mjs real",
     "export:preview": "expo export --platform web",
     "test:render": "node scripts/check-render.cjs"
   },

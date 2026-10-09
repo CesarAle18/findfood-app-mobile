@@ -20,6 +20,22 @@ npx expo start --clear
 
 En la terminal de Expo, pulsar **w** para la vista previa web o escanear el **QR** con Expo Go compatible con SDK 57. También se puede abrir un emulador Android configurado; el simulador iOS requiere macOS y Xcode. La vista web corresponde a la interfaz móvil, no a la aplicación administrativa.
 
+## Entornos
+
+La configuración se lee de variables `EXPO_PUBLIC_*` (plantilla en `.env.example`). Si falta alguna o es inválida, la app falla al arrancar con un error que lista todas. Hay dos perfiles:
+
+- **real** (por defecto): API desplegada y Supabase. Copiar `.env.example` a `.env.local` (no se versiona) y completar los valores. `npm run start:real` arranca Expo con este perfil y borra el `.env.development.local` generado, si existe.
+- **local** (solo desarrollo): `findfood-api` en tu computador. `npm run start:local` (o `npm run start:local -- voluntario`; por defecto `donante`) firma un token de desarrollo para el usuario de prueba y escribe `.env.development.local`, que tiene prioridad sobre `.env.local` y solo se carga en desarrollo.
+
+Requisitos del perfil local:
+
+1. En `findfood-api`: `npm run datos:prueba` (crea los usuarios de prueba y `postman/FindFood-local.postman_environment.json`) y luego `npm run start:local`.
+2. El script busca la API en `../findfood-api`; si está en otra carpeta, definir `FINDFOOD_API_DIR`.
+3. El teléfono debe estar en la misma red LAN que el computador. Se usa la primera IPv4 de la LAN; si no es la correcta (VPN, WSL, adaptadores virtuales), definir `DEV_API_HOST`. El puerto es `DEV_API_PORT` (3000 por defecto).
+4. En Windows, permitir conexiones entrantes al puerto 3000 en el firewall para redes privadas. Por ejemplo, en PowerShell como administrador: `New-NetFirewallRule -DisplayName "findfood-api 3000" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -Profile Private`.
+
+El token dura 24 h (`DEV_TOKEN_TTL_HOURS`); al vencer, ejecutar de nuevo `npm run start:local`. `EXPO_PUBLIC_DEV_TOKEN` nunca debe ir en `.env`, `.env.local` ni en EAS. Los argumentos extra pasan a `expo start` (`npm run start:local -- donante --android`), y `--no-start` solo genera o borra el archivo.
+
 ## Recorrer la demostración
 
 La aplicación abre `/login`. Iniciar sesión y Google navegan a `/inicio-donante` sin autenticar. El enlace de registro lleva a `/registro`, después a `/verificar-correo` y al inicio de sesión; el código editable no se verifica contra ningún servicio.
@@ -45,6 +61,7 @@ El formulario `/registro-voluntario` tiene scroll, tipo de identificación, dato
 ## Comprobaciones
 
 ```bash
+npm test
 npm run typecheck
 npm run lint
 npx expo export --platform all
