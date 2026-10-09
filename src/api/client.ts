@@ -4,7 +4,7 @@
  * Framework-free on purpose: the session (token source, refresh, sign-out) is injected,
  * so the client is tested with a fake `fetch` and wired to the app session elsewhere.
  */
-import { ApiError, parseProblem } from "./errors";
+import { ApiError, isApiError, parseProblem } from "./errors";
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -21,9 +21,15 @@ export interface ApiRequestOptions {
   query?: Record<string, QueryValue>;
   /** Serialized as JSON. */
   body?: unknown;
-  /** Caller cancellation (e.g. React Query); its abort error is rethrown untouched. */
+  /**
+   * Caller cancellation (e.g. React Query); its abort error is rethrown untouched, also
+   * while the request waits for a token refresh.
+   */
   signal?: AbortSignal;
-  /** Per attempt; defaults to the client's `timeoutMs`. */
+  /**
+   * Per attempt (each fetch, and the wait for a token refresh after a 401); defaults to
+   * the client's `timeoutMs`.
+   */
   timeoutMs?: number;
   /** Send the bearer token and refresh it on 401. Default true. */
   auth?: boolean;
@@ -34,9 +40,21 @@ export interface ApiClientOptions {
   /** API origin without trailing slash and without `/v1` (`env.apiUrl`). */
   baseUrl: string;
   getAccessToken: () => string | null | Promise<string | null>;
-  /** Resolves the new access token, or null when the session cannot be refreshed. */
+  /**
+   * Called after a 401; concurrent 401s share one call.
+   * - Resolve the new access token to retry the request once with it.
+   * - Resolve null only when the session is definitively invalid (revoked or expired
+   *   refresh token, no session): the 401 is surfaced and `onUnauthorized` runs.
+   * - Reject on transient failures (offline, timeouts, 5xx): the waiting requests fail
+   *   with that error (an ApiError as-is, anything else as `sin-conexion`) and the
+   *   session is kept, so a flaky network never signs the user out.
+   */
   refreshAccessToken: () => Promise<string | null>;
-  /** The session is no longer valid: the refresh failed or the retry got another 401. */
+  /**
+   * The session is no longer valid: the refresh resolved null, or the retry with the new
+   * token got another 401. Called at most once per rejected access token, however many
+   * requests were rejected with it.
+   */
   onUnauthorized: () => void;
   /** Default DEFAULT_TIMEOUT_MS. */
   timeoutMs?: number;
@@ -134,6 +152,44 @@ async function execute(
   }
 }
 
+/**
+ * Waits for a promise shared with other requests, bounded by this request's timeout and
+ * signal. Giving up only detaches this waiter: the shared promise keeps running for the
+ * others.
+ */
+function waitShared<T>(
+  shared: Promise<T>,
+  callerSignal: AbortSignal | undefined,
+  timeoutMs: number,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      detach();
+      reject(ApiError.timeout());
+    }, timeoutMs);
+    const onAbort = () => {
+      detach();
+      reject(abortError(callerSignal as AbortSignal));
+    };
+    function detach() {
+      clearTimeout(timer);
+      callerSignal?.removeEventListener("abort", onAbort);
+    }
+    callerSignal?.addEventListener("abort", onAbort);
+
+    shared.then(
+      (value) => {
+        detach();
+        resolve(value);
+      },
+      (error: unknown) => {
+        detach();
+        reject(error);
+      },
+    );
+  });
+}
+
 function readResult<T>({ status, contentType, text }: RawResponse): T {
   const isJson = contentType.toLowerCase().includes("json");
 
@@ -150,6 +206,9 @@ function readResult<T>({ status, contentType, text }: RawResponse): T {
   }
 
   if (status === 204 || text === "") return undefined as T;
+  // A 2xx body that is not JSON (text/plain, text/html...) resolves as its raw text. No
+  // findfood-api route answers that way, so a caller expecting JSON gets a string here
+  // instead of an error; only a body declared as JSON is parsed and validated.
   if (!isJson) return text as T;
   try {
     return JSON.parse(text) as T;
@@ -170,26 +229,52 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   const fetchImpl: FetchFn =
     options.fetchImpl ?? ((url: string, init: RequestInit) => fetch(url, init));
 
-  // Single flight: concurrent 401s wait for the same refresh, and a failed refresh
-  // signs out once.
+  // Single flight: concurrent 401s wait for the same refresh. It settles with a token, null
+  // (session invalid) or a rejection (transient failure); none of them is cached.
   let refreshing: Promise<string | null> | null = null;
+  // The last access token reported through onUnauthorized (undefined: none yet), so the
+  // requests rejected with the same token notify once.
+  let rejectedToken: string | null | undefined;
 
   function refreshSession(): Promise<string | null> {
     if (!refreshing) {
-      refreshing = (async () => {
-        let token: string | null = null;
-        try {
-          token = await refreshAccessToken();
-        } catch {
-          token = null;
-        }
-        if (!token) onUnauthorized();
-        return token;
-      })().finally(() => {
-        refreshing = null;
-      });
+      // Built with `new Promise` so a synchronous throw becomes a rejection too.
+      refreshing = new Promise<string | null>((resolve) => resolve(refreshAccessToken()))
+        .then((token) => token || null)
+        .finally(() => {
+          refreshing = null;
+        });
     }
     return refreshing;
+  }
+
+  /**
+   * The token to retry with after `rejected` got a 401, or null when the session is
+   * invalid. Throws the caller's abort error, ApiError.timeout() when the wait exceeds the
+   * request timeout, and an ApiError for transient refresh failures.
+   */
+  async function renewToken(
+    rejected: string | null,
+    signal: AbortSignal | undefined,
+    timeoutMs: number,
+  ): Promise<string | null> {
+    if (signal?.aborted) throw abortError(signal);
+    // Another request may have rotated the token while this one was in flight.
+    const current = await getAccessToken();
+    if (current && current !== rejected) return current;
+    try {
+      return await waitShared(refreshSession(), signal, timeoutMs);
+    } catch (error) {
+      if (signal?.aborted) throw abortError(signal);
+      if (isApiError(error)) throw error;
+      throw ApiError.network(error);
+    }
+  }
+
+  function notifyUnauthorized(token: string | null) {
+    if (token === rejectedToken) return;
+    rejectedToken = token;
+    onUnauthorized();
   }
 
   async function request<T = unknown>(
@@ -225,14 +310,14 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     let response = await send(token);
 
     if (auth && response.status === 401) {
-      // Another request may have rotated the token while this one was in flight.
-      const current = await getAccessToken();
-      const next = current && current !== token ? current : await refreshSession();
-      // Without a token the refresh failed (onUnauthorized already ran): surface the 401.
-      if (next) {
+      const next = await renewToken(token, signal, timeoutMs);
+      if (next === null) {
+        // The session cannot be refreshed: surface the original 401.
+        notifyUnauthorized(token);
+      } else {
         // Retried once only; a second 401 means the session is gone.
         response = await send(next);
-        if (response.status === 401) onUnauthorized();
+        if (response.status === 401) notifyUnauthorized(next);
       }
     }
 

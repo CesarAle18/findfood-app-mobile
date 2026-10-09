@@ -28,7 +28,8 @@
           "image": "./assets/brand/findfood-logo.png",
           "imageWidth": 100
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

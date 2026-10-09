@@ -213,6 +213,12 @@ describe("responses", () => {
     await expect(client.post("/notificaciones/leer")).resolves.toBeUndefined();
   });
 
+  it("resolves a non-JSON 2xx body as its raw text", async () => {
+    const { client } = setup(() => ({ status: 200, body: "OK", contentType: "text/plain" }));
+
+    await expect(client.get("/salud")).resolves.toBe("OK");
+  });
+
   it("rejects malformed JSON as an ApiError", async () => {
     const { client } = setup(() => ({
       status: 200,
@@ -389,12 +395,63 @@ describe("401 handling", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("treats a failing refresh as no token", async () => {
-    const { client, session } = setup(rejectsOldToken);
-    session.refreshAccessToken.mockRejectedValue(new Error("refresh failed"));
+  it("keeps the session when the refresh fails transiently", async () => {
+    const { client, calls, session } = setup(rejectsOldToken);
+    const failure = new TypeError("Network request failed");
+    session.refreshAccessToken.mockRejectedValueOnce(failure);
 
-    await expect(client.get("/me")).rejects.toBeInstanceOf(ApiError);
-    expect(session.onUnauthorized).toHaveBeenCalledTimes(1);
+    const error = await client.get("/me").catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ type: "sin-conexion", status: 0, cause: failure });
+    expect(session.onUnauthorized).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(1);
+    // The failure is not cached: the next 401 refreshes again.
+    await expect(client.get("/me")).resolves.toEqual({ ok: true });
+    expect(session.refreshAccessToken).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats a synchronous throw from the refresh as transient", async () => {
+    const { client, session } = setup(rejectsOldToken);
+    session.refreshAccessToken.mockImplementationOnce(() => {
+      throw new Error("not ready");
+    });
+
+    await expect(client.get("/me")).rejects.toMatchObject({ type: "sin-conexion" });
+    expect(session.onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("rethrows an ApiError from the refresh as-is", async () => {
+    const { client, session } = setup(rejectsOldToken);
+    const timeout = ApiError.timeout();
+    session.refreshAccessToken.mockRejectedValueOnce(timeout);
+
+    await expect(client.get("/me")).rejects.toBe(timeout);
+    expect(session.onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("fails every waiter of a shared refresh that fails transiently", async () => {
+    const { client, session } = setup(rejectsOldToken);
+    let fail = () => {};
+    session.refreshAccessToken.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = () => reject(new TypeError("Network request failed"));
+        }),
+    );
+
+    const requests = Promise.allSettled([client.get("/a"), client.get("/b")]);
+    await flush();
+    fail();
+    const results = await requests;
+
+    const offline = {
+      status: "rejected",
+      reason: expect.objectContaining({ type: "sin-conexion" }),
+    };
+    expect(results).toEqual([offline, offline]);
+    expect(session.refreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(session.onUnauthorized).not.toHaveBeenCalled();
   });
 
   it("gives up after one retry and calls onUnauthorized once", async () => {
@@ -469,5 +526,170 @@ describe("401 handling", () => {
     expect(calls).toHaveLength(1);
     expect(session.refreshAccessToken).not.toHaveBeenCalled();
     expect(session.onUnauthorized).not.toHaveBeenCalled();
+  });
+});
+
+describe("onUnauthorized deduplication", () => {
+  it("notifies once when concurrent retries all get 401 again", async () => {
+    const { client, calls, session } = setup(() => unauthorized);
+    let release = () => {};
+    session.refreshAccessToken.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () => {
+            session.token = "new-token";
+            resolve("new-token");
+          };
+        }),
+    );
+
+    const requests = Promise.allSettled([client.get("/a"), client.get("/b"), client.get("/c")]);
+    await flush();
+    release();
+    const results = await requests;
+
+    expect(results.map((result) => result.status)).toEqual([
+      "rejected",
+      "rejected",
+      "rejected",
+    ]);
+    expect(calls).toHaveLength(6);
+    expect(calls.slice(3).map((call) => call.headers.Authorization)).toEqual([
+      "Bearer new-token",
+      "Bearer new-token",
+      "Bearer new-token",
+    ]);
+    expect(session.refreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(session.onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not notify again for a token that was already rejected", async () => {
+    const { client, session } = setup(() => unauthorized);
+    session.refreshAccessToken.mockResolvedValue(null);
+
+    await expect(client.get("/a")).rejects.toMatchObject({ status: 401 });
+    await expect(client.get("/b")).rejects.toMatchObject({ status: 401 });
+
+    expect(session.refreshAccessToken).toHaveBeenCalledTimes(2);
+    expect(session.onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not notify again when a retried token is rejected again later", async () => {
+    const { client, session } = setup(() => unauthorized);
+    session.refreshAccessToken.mockImplementation(async () => {
+      session.token = "new-token";
+      return "new-token";
+    });
+
+    await expect(client.get("/a")).rejects.toMatchObject({ status: 401 });
+    await expect(client.get("/b")).rejects.toMatchObject({ status: 401 });
+
+    expect(session.onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("notifies again when a different token is rejected", async () => {
+    const { client, session } = setup(() => unauthorized);
+    session.refreshAccessToken.mockResolvedValue(null);
+
+    await expect(client.get("/a")).rejects.toMatchObject({ status: 401 });
+    session.token = "other-token";
+    await expect(client.get("/b")).rejects.toMatchObject({ status: 401 });
+
+    expect(session.onUnauthorized).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("waiting for a shared refresh", () => {
+  const rejectsOldToken: Handler = (call) =>
+    call.headers.Authorization === "Bearer old-token" ? unauthorized : ok({ ok: true });
+
+  /** Makes the refresh hang until the returned function settles it. */
+  function pendingRefresh(session: ReturnType<typeof createSession>) {
+    let settle: (token: string | null) => void = () => {};
+    session.refreshAccessToken.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          settle = (token) => {
+            session.token = token;
+            resolve(token);
+          };
+        }),
+    );
+    return (token: string | null) => settle(token);
+  }
+
+  it("times out with the request's budget without cancelling the refresh for others", async () => {
+    jest.useFakeTimers();
+    const { client, session } = setup(rejectsOldToken);
+    const settle = pendingRefresh(session);
+
+    const short = client.get("/a", { timeoutMs: 100 });
+    const long = client.get("/b", { timeoutMs: 5_000 });
+    const shortRejects = expect(short).rejects.toMatchObject({
+      type: "tiempo-agotado",
+      status: 0,
+    });
+    await jest.advanceTimersByTimeAsync(100);
+    await shortRejects;
+
+    settle("new-token");
+    await expect(long).resolves.toEqual({ ok: true });
+    expect(session.refreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(session.onUnauthorized).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it("uses the client timeout for the wait by default", async () => {
+    jest.useFakeTimers();
+    const { client, session } = setup(rejectsOldToken, { timeoutMs: 1_000 });
+    pendingRefresh(session);
+    let settled = false;
+    const request = client.get("/me");
+    const markSettled = () => {
+      settled = true;
+    };
+    request.then(markSettled, markSettled);
+
+    await jest.advanceTimersByTimeAsync(999);
+    expect(settled).toBe(false);
+    await jest.advanceTimersByTimeAsync(1);
+
+    await expect(request).rejects.toMatchObject({ type: "tiempo-agotado" });
+  });
+
+  it("rethrows the caller's abort while waiting and detaches its listeners", async () => {
+    const { client, session } = setup(rejectsOldToken);
+    const settle = pendingRefresh(session);
+    const controller = new AbortController();
+    const attach = jest.spyOn(controller.signal, "addEventListener");
+    const detach = jest.spyOn(controller.signal, "removeEventListener");
+
+    const aborted = client.get("/a", { signal: controller.signal });
+    const other = client.get("/b");
+    await flush();
+    controller.abort();
+
+    const error = await aborted.catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ name: "AbortError" });
+    expect(detach).toHaveBeenCalledTimes(attach.mock.calls.length);
+
+    settle("new-token");
+    await expect(other).resolves.toEqual({ ok: true });
+    expect(session.refreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(session.onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("does not wait when the caller signal is already aborted", async () => {
+    const { client, session } = setup((call) => {
+      controller.abort();
+      return rejectsOldToken(call);
+    });
+    const controller = new AbortController();
+
+    await expect(client.get("/me", { signal: controller.signal })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(session.refreshAccessToken).not.toHaveBeenCalled();
   });
 });

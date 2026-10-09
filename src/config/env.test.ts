@@ -38,9 +38,14 @@ function setDev(value: boolean) {
 
 /**
  * Evaluates `./env` in an isolated registry with exactly `vars` as the public
- * environment, so the module-level `env` export is built from them.
+ * environment, so the module-level `env` export is built from them. With
+ * `withSetupDefaults`, jest.setup.ts runs again first and fills in its defaults.
  */
-function loadEnvModule(vars: PublicVars, isDev = true): typeof EnvModule {
+function loadEnvModule(
+  vars: PublicVars,
+  isDev = true,
+  withSetupDefaults = false,
+): typeof EnvModule {
   const saved = { ...process.env };
   const savedDev = __DEV__;
   for (const key of Object.keys(process.env)) {
@@ -51,6 +56,8 @@ function loadEnvModule(vars: PublicVars, isDev = true): typeof EnvModule {
   try {
     let loaded: typeof EnvModule | undefined;
     jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      if (withSetupDefaults) require("../../jest.setup");
       // `import()` is left untransformed under jest-expo and would need
       // --experimental-vm-modules; require re-evaluates the module synchronously.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -245,12 +252,15 @@ describe("env", () => {
   });
 
   it("imports with the defaults from jest.setup.ts", () => {
-    let loaded: typeof EnvModule | undefined;
-    jest.isolateModules(() => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      loaded = require("@/config/env") as typeof EnvModule;
+    // No inherited EXPO_PUBLIC_* value (shell, .env files) may mask the defaults.
+    const { env } = loadEnvModule({}, true, true);
+
+    expect(env).toMatchObject({
+      appEnv: "real",
+      apiUrl: "http://api.test",
+      supabaseUrl: "http://supabase.test",
+      supabaseAnonKey: "test-anon-key",
     });
-    expect(loaded?.env.apiUrl).toEqual(expect.any(String));
   });
 
   it("fails at import time when the configuration is invalid", () => {
