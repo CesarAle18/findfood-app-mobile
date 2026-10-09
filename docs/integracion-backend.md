@@ -44,3 +44,19 @@ El menú de tres puntos mide 32 unidades dentro del área táctil de 48. Nueva d
 Desde Donación publicada, «Ver voluntario asignado (demo)» abre `/voluntario-asignado`. Muestra el perfil del voluntario de los datos de demostración, el resumen del borrador y un mapa esquemático con marcadores V (voluntario) y D (donante). No hay GPS, Google Maps ni asignación automática. La futura integración deberá reemplazar el catálogo local, la asignación y las coordenadas con datos reales.
 
 Las fechas siguen usando DD/MM/AAAA y las horas HH:mm en el modelo de presentación; un adaptador de backend deberá convertirlas al contrato acordado, incluida la zona horaria. No se implementaron reglas de disponibilidad o vencimiento.
+
+## Configuración requerida en Supabase
+
+`findfood-api` no versiona `supabase/config.toml`; el proyecto alojado se configura en el panel de Supabase. La autenticación móvil depende de estos ajustes:
+
+| Sección del panel | Ajuste | Motivo |
+|---|---|---|
+| Authentication → URL Configuration | Agregar `findfoodappmobile://**` a *Redirect URLs* | El enlace de restablecer contraseña vuelve a la app (PKCE). |
+| Authentication → Providers → Email | *Confirm email* activo; revisar longitud y vigencia del OTP | El registro exige verificar el correo con código. |
+| Authentication → Email Templates → Confirm signup | Incluir `{{ .Token }}` en el cuerpo | La app pide el código de 6 dígitos (`verifyOtp` tipo `email`). |
+| Authentication → Email Templates → Reset password | Mantener `{{ .ConfirmationURL }}` | El enlace abre `restablecer-contrasena` con `code`. |
+| Authentication → Rate Limits | Intervalo mínimo de reenvío (60 s por defecto) | Define el contador de «Reenviar código». |
+| Authentication → SMTP Settings | SMTP propio | El SMTP integrado solo envía unos pocos correos por hora. |
+| Authentication → Providers → Google | Habilitar; *Client IDs*: primero el ID web y luego el de iOS; secreto del cliente web; activar *Skip nonce checks* | Inicio de sesión nativo con `signInWithIdToken`. |
+
+En Google Cloud se registran el cliente web, el cliente iOS y el cliente Android con las huellas SHA-1 del keystore de EAS y del de Google Play.

@@ -1,0 +1,71 @@
+# Feature · integracion-api-auth
+
+**Locator:** `odd/tasks/integracion-api-auth.md` · Engram `odd/integracion-api-auth/tasks` · project `findfood-app-mobile`
+**Branch:** `feat/integracion-api-auth` (app, from `develop`) · `feat/unidades-ml-g` (findfood-api, from `Conexion_Front`)
+**Plan:** `~/.claude/plans/necesito-que-realizes-un-sorted-ullman.md`
+
+## Objective
+Connect the Expo app to `findfood-api` (`/v1`, Supabase Auth): Phase 1 foundations (env config, HTTP client, session, data layer, role navigation, mappers, shared states, EAS dev build) and Phase 2 authentication (login, register, OTP, password recovery, account menu, Google native).
+
+## Problem / Why
+The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, static forms, no HTTP/session/tests. It cannot be used against the real backend.
+
+## Scope / constraints
+- User decisions: Google native sign-in; expo-router NativeTabs per role; TanStack Query; units ML/G added in the API.
+- API facts: field validation is 400 `validacion` + `errores: string[]`; `datos:prueba` emits no token (app mints dev HS256 JWT); `/me` `roles[]` + `pendientes[]` drive navigation; `fecha_vencimiento` must not be TZ-converted; Google users lack `apellidos`.
+- Dev token lives only in `.env.development.local`, read under `__DEV__`.
+- Conventional commits, no AI attribution. Tests ship with code. Read Expo v57 docs before using each library.
+- Out of scope: Phase 3 per-screen business flows (create/publish donation, offers, routes, evidence upload, push registration).
+
+## Acceptance criteria
+- Switching env profile needs no code change; dev token absent from release bundle.
+- 400/422 errors render in their fields; 401 refreshes once, then goes to login.
+- Session survives app restart; token never stored in plaintext.
+- No screen imports `src/data/mobile.ts`; each mutation invalidates affected queries.
+- Donor without VOLUNTARIO cannot open volunteer screens, even via deep link.
+- Unit tests for each mapper, including windows crossing midnight.
+- All remote-data screens use shared loading/empty/error components.
+- Development APK installable on Android with native modules.
+
+## Checks
+`npm test` · `npm run typecheck` · `npm run lint` · `npm run test:render` · API: `npm run test:e2e`
+
+## Delivery
+- Forecast: ~3,000+ authored changed lines (exceeds 400) → strategy `ask-on-risk`; chain strategy: `feature-branch-chain` (slices PR into `feat/integracion-api-auth`; final PR to `develop`).
+- RDD: on (global). Review boundary starts at branch point `e839b90`.
+
+## Tasks
+| ID | Task | Route | Status | Commit | Review |
+|---|---|---|---|---|---|
+| API-U1 | Migration ML/G units + e2e assertion + CLAUDE.md (findfood-api) | inline (3 mechanical files) | [x] | findfood-api `a910a73` | high (filename heuristic) → granted → approved, burned; 2 advisory suggestions (assert factor_a_kg; header note on ON CONFLICT) |
+| DOC-SB | Supabase dashboard checklist in `docs/integracion-backend.md` | inline | [x] | see log | passive |
+| F1-01 | Env config module, profiles, dev token script | delegated writer | [ ] | | |
+| F1-02 | Jest setup + HTTP client + problem+json errors | delegated writer | [ ] | | |
+| F1-03 | Supabase client + chunked SecureStore | delegated writer | [ ] | | |
+| F1-04 | QueryClient + SessionProvider + resolveAccess | delegated writer | [ ] | | |
+| F1-05 | Per-module services + query keys + DTO types | delegated writer | [ ] | | |
+| F1-06 | Mappers (dates, units, refrigeration, statuses) + tests | delegated writer | [ ] | | |
+| F1-07 | Feedback components, problem messages, Field/Button, useZodForm | delegated writer | [ ] | | |
+| F1-08 | Root layout guards + splash | delegated writer | [ ] | | |
+| F1-09a | Donor segment + NativeTabs | delegated writer | [ ] | | |
+| F1-09b | Volunteer segment + NativeTabs, remove BottomNav | delegated writer | [ ] | | |
+| F1-10 | Wire existing screens to services; delete mobile.ts | delegated writer | [ ] | | |
+| F1-11 | EAS dev build config | delegated writer | [ ] | | |
+| F2-01 | Login | delegated writer | [ ] | | |
+| F2-02 | Register | delegated writer | [ ] | | |
+| F2-03 | OTP verification | delegated writer | [ ] | | |
+| F2-04 | Forgot / reset password (PKCE deep link) | delegated writer | [ ] | | |
+| F2-05 | Complete profile / change password | delegated writer | [ ] | | |
+| F2-06 | Account menu (switch view, logout) | delegated writer | [ ] | | |
+| F2-07 | Google native sign-in | delegated writer | [ ] | | |
+
+## Progress / evidence
+- 2026-10-09: plan approved; branches created; feature document created.
+- API-U1: API `npm run typecheck` passed. `npm run test:e2e` **unavailable** (no docker/podman on this machine) — pending on a machine with a container runtime.
+- DOC-SB: structural readback only (passive docs).
+
+## Follow-ups
+- API: assert `factor_a_kg` of ML/G in e2e; note in migration header that ON CONFLICT never corrects pre-existing rows.
+
+## Next step
+F1-01 env config + dev token script.
