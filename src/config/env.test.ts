@@ -54,7 +54,7 @@ function loadEnvModule(vars: PublicVars, isDev = true): typeof EnvModule {
       // `import()` is left untransformed under jest-expo and would need
       // --experimental-vm-modules; require re-evaluates the module synchronously.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      loaded = require<typeof EnvModule>("./env");
+      loaded = require("./env") as typeof EnvModule;
     });
     if (!loaded) throw new Error("./env did not load");
     return loaded;
@@ -242,6 +242,15 @@ describe("env", () => {
     );
     expect(env.appEnv).toBe("real");
     expect(env.devToken).toBeUndefined();
+  });
+
+  it("imports with the defaults from jest.setup.ts", () => {
+    let loaded: typeof EnvModule | undefined;
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      loaded = require("@/config/env") as typeof EnvModule;
+    });
+    expect(loaded?.env.apiUrl).toEqual(expect.any(String));
   });
 
   it("fails at import time when the configuration is invalid", () => {

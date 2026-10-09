@@ -6,5 +6,7 @@ module.exports = {
     "^@/assets/(.*)$": "<rootDir>/assets/$1",
     "^@/(.*)$": "<rootDir>/src/$1",
   },
+  // Appended to the jest-expo preset's own setup files.
+  setupFiles: ["<rootDir>/jest.setup.ts"],
   testPathIgnorePatterns: ["/node_modules/", "/dist/", "/scripts/"],
 };

@@ -38,9 +38,9 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 | ID | Task | Route | Status | Commit | Review |
 |---|---|---|---|---|---|
 | API-U1 | Migration ML/G units + e2e assertion + CLAUDE.md (findfood-api) | inline (3 mechanical files) | [x] | findfood-api `a910a73` | high (filename heuristic) → granted → approved, burned; 2 advisory suggestions (assert factor_a_kg; header note on ON CONFLICT) |
-| DOC-SB | Supabase dashboard checklist in `docs/integracion-backend.md` | inline | [x] | see log | passive |
-| F1-01 | Env config module, profiles, dev token script | delegated writer | [ ] | | |
-| F1-02 | Jest setup + HTTP client + problem+json errors | delegated writer | [ ] | | |
+| DOC-SB | Supabase dashboard checklist in `docs/integracion-backend.md` | inline | [x] | `611c88d` | docs-only; assess flagged high on filename heuristic → skipped per trivial passive-doc rule, then covered by the F1-01 review range |
+| F1-01 | Env config module, profiles, dev token script **+ Jest setup** (moved from F1-02 to enable test-first) | delegated writer (2+ non-trivial files) | [x] | `c66b1e6` | high → granted → approved, burned (range e839b90..c66b1e6); 1 warning + 5 suggestions → Follow-ups |
+| F1-02 | HTTP client + problem+json errors + jest setupFiles with test env | delegated writer (2+ non-trivial files) | [x] | see log | |
 | F1-03 | Supabase client + chunked SecureStore | delegated writer | [ ] | | |
 | F1-04 | QueryClient + SessionProvider + resolveAccess | delegated writer | [ ] | | |
 | F1-05 | Per-module services + query keys + DTO types | delegated writer | [ ] | | |
@@ -63,9 +63,14 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - 2026-10-09: plan approved; branches created; feature document created.
 - API-U1: API `npm run typecheck` passed. `npm run test:e2e` **unavailable** (no docker/podman on this machine) — pending on a machine with a container runtime.
 - DOC-SB: structural readback only (passive docs).
+- F1-01: RED 22/22 (`Cannot find module ./env`) → GREEN 22/22; `npm run typecheck` ok (parent re-ran); `npm run lint` ok; `npm run test:render` ok; dev token verified against the API `jose` `jwtVerify` (HS256, iss, aud). `.env.example` copied by the user (tool writes to `.env*` are denied by permissions). ~666 authored lines (260 tests) + generated lockfile.
+- F1-02: RED (missing modules + env import ConfigError) → GREEN 87/87; typecheck, lint, test:render ok (parent re-ran `npm test`: 87/87). ~1,180 authored lines (≈687 tests). New slug `respuesta-invalida` for unparseable 2xx JSON.
 
 ## Follow-ups
 - API: assert `factor_a_kg` of ML/G in e2e; note in migration header that ON CONFLICT never corrects pre-existing rows.
+- F1-08: catch `ConfigError` at the root and render a configuration error screen instead of crashing on splash (R4-env-import-time-throw).
+- scripts/dev-env.mjs: `﻿` escape instead of literal BOM; reject TTL that yields exp <= iat + 60; reject positional args for `real`; add `node --test` coverage for marker/role/postman parsing (R3-dev-env-untested, WARNING).
+- env.test.ts: replace generic `require<T>` with a typed cast.
 
 ## Next step
-F1-01 env config + dev token script.
+F1-03 Supabase client + chunked SecureStore. Review boundary: `c66b1e6`.
