@@ -158,6 +158,11 @@ describe("messageFor", () => {
     );
   });
 
+  it("ignores types that name Object.prototype members", () => {
+    expect(messageFor(apiError("constructor", 422))).toBe(problemMessages["no-procesable"]);
+    expect(messageFor(apiError("toString", 409))).toBe(problemMessages.conflicto);
+  });
+
   it("never shows the API title or detail", () => {
     const error = new ApiError({
       type: "slug-nuevo",

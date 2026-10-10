@@ -68,6 +68,49 @@ describe("useZodForm", () => {
     expect(result.current.formError).toBeUndefined();
   });
 
+  it("validates on blur a field edited back to its initial value", async () => {
+    const { result } = await renderForm();
+
+    await act(() => result.current.field("correo").onChangeText("ana"));
+    await act(() => result.current.field("correo").onChangeText(""));
+    await act(() => result.current.field("correo").onBlur());
+
+    expect(result.current.errors.correo).toBe("Ingresa tu correo.");
+  });
+
+  it("ignores a second submit while the first is still running", async () => {
+    let finish: () => void = () => undefined;
+    const onValid = jest.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { result } = await renderForm();
+    await act(() => {
+      result.current.setValue("correo", "ana@correo.com");
+      result.current.setValue("password", "secreta123");
+    });
+
+    let first: Promise<void> = Promise.resolve();
+    try {
+      await act(async () => {
+        const submit = result.current.handleSubmit(onValid);
+        first = submit();
+        await submit();
+      });
+
+      expect(onValid).toHaveBeenCalledTimes(1);
+      expect(result.current.submitting).toBe(true);
+    } finally {
+      await act(async () => {
+        finish();
+        await first;
+      });
+    }
+    expect(result.current.submitting).toBe(false);
+  });
+
   it("puts form-level schema issues in formError", async () => {
     const onValid = jest.fn();
     const { result } = await renderForm();

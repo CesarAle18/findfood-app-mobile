@@ -2,11 +2,12 @@
  * Form state for the app's forms: text values ready for `Field`, client validation with a
  * zod schema, and server errors (`ApiError.fields`) mapped onto the same fields.
  *
- * Plain state only (no refs, no subscriptions), so the React Compiler can memoize the
- * components that use it. Schemas must carry their own Spanish messages, e.g.
+ * Plain state for everything rendered; the only ref is the submit re-entry guard, read and
+ * written inside the handler (never during render), so the React Compiler can still memoize
+ * the components that use it. Schemas must carry their own Spanish messages, e.g.
  * `z.string().min(1, "Ingresa tu correo.")`: zod's default messages are English.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { z } from "zod";
 
 import { FORM_ERROR_KEY, isApiError } from "@/api/errors";
@@ -26,12 +27,15 @@ interface FormState<TValues> {
   values: TValues;
   errors: FieldErrors<TValues>;
   formError: string | undefined;
+  /** Fields the user has typed in, so blur validation stays quiet while tabbing through. */
+  touched: Partial<Record<keyof TValues & string, true>>;
+  submitting: boolean;
 }
 
 type ErrorState<TValues> = Pick<FormState<TValues>, "errors" | "formError">;
 
 function initialState<TValues>(values: TValues): FormState<TValues> {
-  return { values, errors: {}, formError: undefined };
+  return { values, errors: {}, formError: undefined, touched: {}, submitting: false };
 }
 
 function without<TValues>(errors: FieldErrors<TValues>, name: string): FieldErrors<TValues> {
@@ -84,20 +88,26 @@ export function useZodForm<TSchema extends z.ZodType, TValues extends FormValues
   initialValues: TValues,
 ) {
   const [state, setState] = useState(() => initialState(initialValues));
-  const { values, errors, formError } = state;
+  const { values, errors, formError, submitting } = state;
+  // Re-entry guard: a double tap fires twice before React re-renders with `submitting`.
+  const inFlight = useRef(false);
 
   const setValue = <K extends keyof TValues & string>(name: K, value: TValues[K]) => {
     setState((current) => ({
       ...current,
       values: { ...current.values, [name]: value },
       errors: without(current.errors, name),
+      touched: { ...current.touched, [name]: true },
     }));
   };
 
-  /** Validates one field once the user has edited it, so tabbing through stays quiet. */
+  /**
+   * Validates one field once the user has typed in it (even if they cleared it again), so
+   * tabbing through untouched fields stays quiet.
+   */
   const validateField = (name: keyof TValues & string) => {
     setState((current) => {
-      if (Object.is(current.values[name], initialValues[name])) return current;
+      if (!current.touched[name]) return current;
       const result = schema.safeParse(current.values);
       const message = result.success
         ? undefined
@@ -120,11 +130,13 @@ export function useZodForm<TSchema extends z.ZodType, TValues extends FormValues
 
   /**
    * Returns the submit handler: it validates, and only with valid values calls `onValid`
-   * with the parsed data. A rejection from `onValid` (a failed mutation) is shown with
-   * `setServerError`.
+   * with the parsed data. While `onValid` runs, `submitting` is true and further submits
+   * are ignored, so a double tap never sends the mutation twice. A rejection from `onValid`
+   * (a failed mutation) is shown with `setServerError`.
    */
   const handleSubmit =
     (onValid: (data: z.output<TSchema>) => unknown) => async (): Promise<void> => {
+      if (inFlight.current) return;
       const result = schema.safeParse(values);
       if (!result.success) {
         setState((current) => ({
@@ -133,11 +145,15 @@ export function useZodForm<TSchema extends z.ZodType, TValues extends FormValues
         }));
         return;
       }
-      setState((current) => ({ ...current, errors: {}, formError: undefined }));
+      inFlight.current = true;
+      setState((current) => ({ ...current, errors: {}, formError: undefined, submitting: true }));
       try {
         await onValid(result.data);
       } catch (error) {
         setServerError(error);
+      } finally {
+        inFlight.current = false;
+        setState((current) => ({ ...current, submitting: false }));
       }
     };
 
@@ -155,6 +171,8 @@ export function useZodForm<TSchema extends z.ZodType, TValues extends FormValues
     values,
     errors,
     formError,
+    /** True while `onValid` runs: pass it to the submit `Button`'s `loading`. */
+    submitting,
     field,
     setValue,
     setServerError,

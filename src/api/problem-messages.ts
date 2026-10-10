@@ -179,6 +179,14 @@ const STATUS_TYPES: Readonly<Record<number, string>> = {
   429: "demasiadas-solicitudes",
 };
 
+/**
+ * Own-property lookup: `type` and `code` come from the server, and a value such as
+ * "constructor" must not resolve to an inherited `Object.prototype` member.
+ */
+function lookup(table: Readonly<Record<string, string>>, key: string): string | undefined {
+  return Object.hasOwn(table, key) ? table[key] : undefined;
+}
+
 function statusMessage(status: number): string {
   const type = STATUS_TYPES[status] ?? (status >= 500 ? "error-interno" : "error");
   return problemMessages[type];
@@ -186,7 +194,7 @@ function statusMessage(status: number): string {
 
 function authMessage(error: AuthError): string {
   if (isAuthWeakPasswordError(error)) return authErrorMessages.weak_password;
-  const byCode = error.code === undefined ? undefined : authErrorMessages[error.code];
+  const byCode = error.code === undefined ? undefined : lookup(authErrorMessages, error.code);
   if (byCode) return byCode;
   // auth-js reports requests that never got an answer (offline, aborted) with status 0.
   if (isAuthRetryableFetchError(error) && !error.status) return problemMessages["sin-conexion"];
@@ -197,7 +205,7 @@ const RAW_NETWORK_FAILURE = /network request failed|failed to fetch/i;
 
 /** The Spanish message to show the user for any thrown or returned error. */
 export function messageFor(error: unknown): string {
-  if (isApiError(error)) return problemMessages[error.type] ?? statusMessage(error.status);
+  if (isApiError(error)) return lookup(problemMessages, error.type) ?? statusMessage(error.status);
   if (isAuthError(error)) return authMessage(error);
   if (error instanceof Error) {
     if (error.name === "TimeoutError") return problemMessages["tiempo-agotado"];
