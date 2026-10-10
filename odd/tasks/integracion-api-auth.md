@@ -46,8 +46,8 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 | F1-04b | Session hardening from F1-04 review: explicit storage key removal on sign-out, offline startup, Supabase fetch timeout | delegated writer (2+ non-trivial files) | [x] | `6985029` | high → granted → approved, burned (range ab1dd45..6985029); 5 suggestions |
 | F1-05 | Per-module services + query keys + DTO types | delegated writer (2+ non-trivial files) | [x] | `f25eeb3` + `cc19f97` | high → granted → approved, burned (6985029..f25eeb3); 3 warnings fixed inline in `cc19f97` → granted → approved, burned (f25eeb3..cc19f97) |
 | F1-06 | Mappers (dates, units, refrigeration, statuses, donation view) + tests | delegated writer (2+ non-trivial files) | [x] | `e1055a5` | high → granted → approved, burned (cc19f97..e1055a5); 1 warning (one bad row throws for the whole list) → F1-10 |
-| F1-07 | Feedback components, problem messages, Field/Button, useZodForm | delegated writer (2+ non-trivial files) | [x] | `1e8385b` + fix (see log) | high → granted → approved, burned (e1055a5..1e8385b); 2 warnings (no submit guard; blur skips a field cleared back) fixed inline |
-| F1-08 | Root layout guards + splash | delegated writer | [ ] | | |
+| F1-07 | Feedback components, problem messages, Field/Button, useZodForm | delegated writer (2+ non-trivial files) | [x] | `1e8385b` + `11bc9e6` | high → granted → approved, burned (e1055a5..1e8385b); 2 warnings fixed inline in `11bc9e6` → granted → approved, burned (1e8385b..11bc9e6) |
+| F1-08 | Root layout guards + splash + import-safe config | delegated writer (2+ non-trivial files) | [x] | see log | |
 | F1-09a | Donor segment + NativeTabs | delegated writer | [ ] | | |
 | F1-09b | Volunteer segment + NativeTabs, remove BottomNav | delegated writer | [ ] | | |
 | F1-10 | Wire existing screens to services; delete mobile.ts | delegated writer | [ ] | | |
@@ -74,10 +74,10 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - F1-06: RED 5 suites → GREEN 494/494 (154 new); TZ independence proven under Asia/Tokyo and America/Bogota via PowerShell `$env:TZ` (Git Bash strips `TZ`) + a test that makes local-time `Date` getters throw (parent re-ran Tokyo: 154/154). `DonationView extends Donation` adds `code`, `estado`, `statusTone`; `id` is now the UUID.
 - F1-07: RED 4 suites → GREEN 683/683; typecheck, lint, test:render (3 PASS) ok (parent re-ran tests + render). zod `^4.6.5` direct dep. `jest.setup.ts` mocks `react-native-worklets` so component tests can load reanimated. Schemas must carry their own Spanish messages (no global zod locale). Nested server field paths (e.g. `items.0.cantidad`) go to `formError`.
 - F1-07 fix (inline): `useZodForm` gets `submitting` + a re-entry guard and touched-based blur validation; `messageFor` uses own-property lookups. RED (blur + in-flight + prototype tests) → GREEN 686/686; typecheck, lint, test:render ok.
+- F1-08: RED 6 suites → GREEN 746/746; typecheck, lint, test:render ok (parent re-ran tests + typecheck). `renderRouter` drives `Stack.Protected` (mutation check: guard forced true → exactly 2 deep-link/session-end tests fail). `env` import never throws (`configResult`); invalid config renders `ConfigErrorScreen`. `ROUTE_GROUPS` test enforces every route file is in exactly one guard group. Removed template animated-icon + its orphan assets.
 
 ## Follow-ups
 - API: assert `factor_a_kg` of ML/G in e2e; note in migration header that ON CONFLICT never corrects pre-existing rows.
-- F1-08: catch `ConfigError` at the root and render a configuration error screen instead of crashing on splash (R4-env-import-time-throw).
 - scripts/dev-env.mjs: `\uFEFF` escape (written as text) instead of a literal BOM character; reject TTL that yields exp <= iat + 60; reject positional args for `real`; add `node --test` coverage for marker/role/postman parsing (R3-dev-env-untested, WARNING).
 
 - Done: env.test.ts typed `require` cast (F1-02); client refresh hardening (F1-03); shared-refresh deadline, late abort check, supabase wiring tests (F1-04).
@@ -86,10 +86,13 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - F1-10: map list rows tolerantly — a `MappingError` in one row (bad/inverted window) must not fail the whole list (R4-donation-row-throws); rename `baseView` param to `fallbackCategory`; fix tone comment; share the `errorCode` test helper; make `fromFechaVencimiento` reject malformed suffixes.
 - F1-10: show `d.code` (not `d.id`); filter by `estado`, not labels (`DonationsScreen` compares `status === "Completada"`); list rows have no `expiresOn` (endpoint lacks it).
 - Narrow `DraftProduct.coldChain` from `string` to `ColdChain`.
+- `.expo/types/router.d.ts` only regenerates on `expo start`; new route files fail `tsc` until then.
+- Retrying `/me` from the error phase briefly returns the phase to `loading` (TanStack resets a data-less query to pending); acceptable, but the Stack remounts.
+- Tests to add: rejected `onValid` clears `submitting`; AuthError code naming a prototype member; `touched` comment should say "changed via setValue".
 - Intermittent "SessionProvider … not wrapped in act" warning seen once in a full run (session.test.tsx); investigate if it recurs.
 - F3 screens: signed URLs (`url_lectura`, `foto_url`) expire after 5 min; add refetch/expiry handling where shown.
 - Readability nits (F1-04b review): reword the fake `signOut` mock comment in supabase.test.ts; unify the two `ignore()` helpers.
 - Web build stores the session in localStorage (preview only); revisit if web ever ships to users.
 
 ## Next step
-F1-08 root guards + splash. Review boundary: `1e8385b`.
+F1-09 role segments + NativeTabs. Review boundary: `11bc9e6`.

@@ -1,7 +1,7 @@
 import { AuthRetryableFetchError } from "@supabase/supabase-js";
 import type * as ReactNative from "react-native";
 
-import type { Env } from "@/config/env";
+import type { ConfigError, ConfigResult, Env } from "@/config/env";
 
 import type * as SupabaseModule from "./supabase";
 
@@ -59,8 +59,15 @@ interface Loaded {
   emitAppState: (state: ReactNative.AppStateStatus) => void;
 }
 
-/** Evaluates ./supabase in a fresh registry with `env` and the given platform. */
-function loadSupabase(env: Env, os: "ios" | "android" | "web" = "ios"): Loaded {
+/**
+ * Evaluates ./supabase in a fresh registry with `env` and the given platform. `configResult`
+ * is the valid result for `env` unless a test passes its own.
+ */
+function loadSupabase(
+  env: Env,
+  os: "ios" | "android" | "web" = "ios",
+  configResult: ConfigResult = { ok: true, env },
+): Loaded {
   let loaded: Loaded | undefined;
   jest.isolateModules(() => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -73,7 +80,7 @@ function loadSupabase(env: Env, os: "ios" | "android" | "web" = "ios"): Loaded {
         listener = handler;
         return { remove: jest.fn() } as unknown as ReactNative.NativeEventSubscription;
       });
-    jest.doMock("@/config/env", () => ({ env }));
+    jest.doMock("@/config/env", () => ({ env, configResult }));
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const module = require("./supabase") as typeof SupabaseModule;
     loaded = { module, addAppStateListener, emitAppState: (state) => listener(state) };
@@ -96,6 +103,23 @@ describe("without Supabase configuration", () => {
     ["a missing URL", { ...REAL_ENV, supabaseUrl: undefined }],
   ])("has no client with %s", async (_label, env) => {
     const { module, addAppStateListener } = loadSupabase(env);
+
+    expect(module.supabase).toBeNull();
+    expect(mockCreateClient).not.toHaveBeenCalled();
+    expect(addAppStateListener).not.toHaveBeenCalled();
+    await expect(module.refreshAccessToken()).resolves.toBeNull();
+  });
+
+  it("has no client when the configuration is invalid", async () => {
+    const actual = jest.requireActual<{ ConfigError: typeof ConfigError }>("@/config/env");
+    const invalid: ConfigResult = {
+      ok: false,
+      error: new actual.ConfigError(["EXPO_PUBLIC_API_URL is missing."]),
+    };
+
+    // Even Supabase values that look usable are ignored: the app shows the configuration
+    // error instead of starting.
+    const { module, addAppStateListener } = loadSupabase(REAL_ENV, "ios", invalid);
 
     expect(module.supabase).toBeNull();
     expect(mockCreateClient).not.toHaveBeenCalled();

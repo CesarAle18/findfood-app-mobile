@@ -5,6 +5,10 @@
  * - `real` (default): real API + Supabase, configured in `.env.local`.
  * - `local`: findfood-api on the developer machine with a dev token, generated into
  *   `.env.development.local` by `npm run start:local`. Development builds only.
+ *
+ * Importing this module never throws: an error thrown while modules load happens before
+ * any error boundary exists and would crash the app on the splash screen. The root layout
+ * reads `configResult` and shows a configuration error screen instead.
  */
 
 export type AppEnv = "local" | "real";
@@ -151,4 +155,27 @@ const raw: RawEnv = {
   devToken: __DEV__ ? process.env.EXPO_PUBLIC_DEV_TOKEN : undefined,
 };
 
-export const env: Env = readEnv(raw, __DEV__);
+export type ConfigResult = { ok: true; env: Env } | { ok: false; error: ConfigError };
+
+/** `readEnv` as a result instead of a throw. */
+export function parseEnv(raw: RawEnv, isDev: boolean): ConfigResult {
+  try {
+    return { ok: true, env: readEnv(raw, isDev) };
+  } catch (error) {
+    if (error instanceof ConfigError) return { ok: false, error };
+    throw error;
+  }
+}
+
+/**
+ * Stand-in for an invalid configuration, so modules that read `env` while loading (the API
+ * client) still load. It holds no credentials, and `.invalid` is a reserved top-level
+ * domain (RFC 2606) that never resolves; the app does not start with it anyway.
+ */
+const INERT_ENV: Env = { appEnv: "real", apiUrl: "http://config-error.invalid" };
+
+export const configResult: ConfigResult = parseEnv(raw, __DEV__);
+
+if (!configResult.ok && __DEV__) console.error(configResult.error.message);
+
+export const env: Env = configResult.ok ? configResult.env : INERT_ENV;

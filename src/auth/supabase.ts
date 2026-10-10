@@ -3,7 +3,8 @@
  * through findfood-api.
  *
  * Null in the `local` profile without Supabase configuration: that profile authenticates
- * against the local API with a dev token.
+ * against the local API with a dev token. Also null when the configuration is invalid: the
+ * app shows the configuration error instead of starting.
  *
  * No `react-native-url-polyfill`: Expo installs a WHATWG `URL` global (expo/src/winter),
  * which is what supabase-js needs to build its endpoint URLs.
@@ -11,7 +12,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { AppState, Platform } from "react-native";
 
-import { env } from "@/config/env";
+import { configResult } from "@/config/env";
 
 import { createAccessTokenRefresher } from "./refresh";
 import { secureStorage, type AuthStorage } from "./secure-storage";
@@ -25,8 +26,10 @@ import { createSupabaseFetch } from "./supabase-fetch";
 export const AUTH_STORAGE_KEY = "findfood.auth";
 
 function createSupabaseClient(): SupabaseClient | null {
-  if (!env.supabaseUrl || !env.supabaseAnonKey) return null;
-  return createClient(env.supabaseUrl, env.supabaseAnonKey, {
+  if (!configResult.ok) return null;
+  const { supabaseUrl, supabaseAnonKey } = configResult.env;
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+  return createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       storage: secureStorage,
       storageKey: AUTH_STORAGE_KEY,

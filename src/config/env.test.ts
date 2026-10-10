@@ -74,16 +74,26 @@ function loadEnvModule(
   }
 }
 
-function expectLoadToThrowConfigError(vars: PublicVars, isDev = true) {
-  let thrown: unknown;
-  try {
-    loadEnvModule(vars, isDev);
-  } catch (error) {
-    thrown = error;
-  }
+/** The invalid half of `configResult`; fails the test when the configuration is valid. */
+function configFailure(module: typeof EnvModule): EnvModule.ConfigError {
+  const { configResult } = module;
+  if (configResult.ok) throw new Error("Expected an invalid configuration");
   // Each isolated load has its own ConfigError class, so match by name.
-  expect(thrown).toMatchObject({ name: "ConfigError" });
+  expect(configResult.error).toMatchObject({ name: "ConfigError" });
+  return configResult.error;
 }
+
+/** Real profile without Supabase: invalid in every build. */
+const MISSING_SUPABASE_VARS: PublicVars = {
+  EXPO_PUBLIC_API_URL: REAL_VARS.EXPO_PUBLIC_API_URL,
+};
+
+/** Local profile: invalid outside development. */
+const LOCAL_VARS: PublicVars = {
+  EXPO_PUBLIC_APP_ENV: "local",
+  EXPO_PUBLIC_API_URL: "http://192.168.1.10:3000",
+  EXPO_PUBLIC_DEV_TOKEN: "header.payload.signature",
+};
 
 describe("readEnv", () => {
   let readEnv: typeof EnvModule.readEnv;
@@ -263,17 +273,64 @@ describe("env", () => {
     });
   });
 
-  it("fails at import time when the configuration is invalid", () => {
-    expectLoadToThrowConfigError({
-      EXPO_PUBLIC_API_URL: REAL_VARS.EXPO_PUBLIC_API_URL,
-    });
-    expectLoadToThrowConfigError(
-      {
-        EXPO_PUBLIC_APP_ENV: "local",
-        EXPO_PUBLIC_API_URL: "http://192.168.1.10:3000",
-        EXPO_PUBLIC_DEV_TOKEN: "header.payload.signature",
-      },
-      false,
-    );
+});
+
+describe("configResult", () => {
+  let consoleError: jest.SpyInstance;
+
+  beforeEach(() => {
+    consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleError.mockRestore();
+  });
+
+  it("carries the validated env when the configuration is valid", () => {
+    const { configResult, env } = loadEnvModule(REAL_VARS);
+
+    expect(configResult).toEqual({ ok: true, env });
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it.each<[string, PublicVars, boolean]>([
+    ["a real profile without Supabase", MISSING_SUPABASE_VARS, true],
+    ["the local profile in a release build", LOCAL_VARS, false],
+  ])("reports %s instead of throwing at import", (_label, vars, isDev) => {
+    const module = loadEnvModule(vars, isDev);
+
+    expect(configFailure(module).problems.length).toBeGreaterThan(0);
+  });
+
+  it("lists every problem of an invalid configuration", () => {
+    const error = configFailure(loadEnvModule(MISSING_SUPABASE_VARS));
+
+    expect(error.problems).toHaveLength(2);
+    expect(error.message).toContain("EXPO_PUBLIC_SUPABASE_URL");
+    expect(error.message).toContain("EXPO_PUBLIC_SUPABASE_ANON_KEY");
+  });
+
+  it("falls back to an inert env that reaches no server and holds no credentials", () => {
+    const { env } = loadEnvModule(LOCAL_VARS, false);
+
+    expect(env.appEnv).toBe("real");
+    // `.invalid` is a reserved top-level domain (RFC 2606): it never resolves.
+    expect(env.apiUrl).toMatch(/^https?:\/\/[^/]+\.invalid$/);
+    expect(env.supabaseUrl).toBeUndefined();
+    expect(env.supabaseAnonKey).toBeUndefined();
+    expect(env.devToken).toBeUndefined();
+  });
+
+  it("logs the configuration error once in development", () => {
+    const error = configFailure(loadEnvModule(MISSING_SUPABASE_VARS, true));
+
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledWith(error.message);
+  });
+
+  it("does not log the configuration error in release builds", () => {
+    configFailure(loadEnvModule(MISSING_SUPABASE_VARS, false));
+
+    expect(consoleError).not.toHaveBeenCalled();
   });
 });

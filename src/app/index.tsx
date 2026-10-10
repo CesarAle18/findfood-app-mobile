@@ -1,4 +1,1 @@
-import { Redirect } from "expo-router";
-export default function Index() {
-  return <Redirect href="/login" />;
-}
+export { AccessGateScreen as default } from "@/screens/access";
