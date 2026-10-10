@@ -58,6 +58,12 @@ export interface ApiClientOptions {
   onUnauthorized: () => void;
   /** Default DEFAULT_TIMEOUT_MS. */
   timeoutMs?: number;
+  /**
+   * Deadline of the shared token refresh; default REFRESH_TIMEOUT_FACTOR × `timeoutMs`.
+   * Past it the requests still waiting fail with `tiempo-agotado` and the next 401 starts
+   * a new refresh, so a refresh that never settles cannot block every later request.
+   */
+  refreshTimeoutMs?: number;
   fetchImpl?: typeof fetch;
 }
 
@@ -77,6 +83,9 @@ export interface ApiClient {
 }
 
 export const DEFAULT_TIMEOUT_MS = 15_000;
+
+/** Default refresh deadline in multiples of the client timeout. */
+export const REFRESH_TIMEOUT_FACTOR = 2;
 
 const ACCEPT = "application/json, application/problem+json";
 
@@ -177,6 +186,8 @@ function waitShared<T>(
     }
     callerSignal?.addEventListener("abort", onAbort);
 
+    // Attached even when this waiter gives up, so a rejection of the shared promise is
+    // always handled; settling an already settled promise is a no-op.
     shared.then(
       (value) => {
         detach();
@@ -187,6 +198,9 @@ function waitShared<T>(
         reject(error);
       },
     );
+
+    // An abort fired before the listener was attached would never be heard.
+    if (callerSignal?.aborted) onAbort();
   });
 }
 
@@ -225,25 +239,44 @@ function readResult<T>({ status, contentType, text }: RawResponse): T {
 export function createApiClient(options: ApiClientOptions): ApiClient {
   const { baseUrl, getAccessToken, refreshAccessToken, onUnauthorized } = options;
   const defaultTimeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const refreshTimeoutMs =
+    options.refreshTimeoutMs ?? defaultTimeoutMs * REFRESH_TIMEOUT_FACTOR;
   // Looked up per call so a fetch installed after the client is created still applies.
   const fetchImpl: FetchFn =
     options.fetchImpl ?? ((url: string, init: RequestInit) => fetch(url, init));
 
   // Single flight: concurrent 401s wait for the same refresh. It settles with a token, null
-  // (session invalid) or a rejection (transient failure); none of them is cached.
+  // (session invalid) or a rejection (transient failure or deadline); none of them is cached.
   let refreshing: Promise<string | null> | null = null;
   // The last access token reported through onUnauthorized (undefined: none yet), so the
   // requests rejected with the same token notify once.
   let rejectedToken: string | null | undefined;
 
+  /** One refresh bounded by refreshTimeoutMs; a late result of an expired one is dropped. */
+  function startRefresh(): Promise<string | null> {
+    return new Promise<string | null>((resolve, reject) => {
+      const timer = setTimeout(() => reject(ApiError.timeout()), refreshTimeoutMs);
+      // Built with `new Promise` so a synchronous throw becomes a rejection too.
+      new Promise<string | null>((settle) => settle(refreshAccessToken())).then(
+        (token) => {
+          clearTimeout(timer);
+          resolve(token || null);
+        },
+        (error: unknown) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      );
+    });
+  }
+
   function refreshSession(): Promise<string | null> {
     if (!refreshing) {
-      // Built with `new Promise` so a synchronous throw becomes a rejection too.
-      refreshing = new Promise<string | null>((resolve) => resolve(refreshAccessToken()))
-        .then((token) => token || null)
-        .finally(() => {
-          refreshing = null;
-        });
+      const flight: Promise<string | null> = startRefresh().finally(() => {
+        // Only frees its own slot.
+        if (refreshing === flight) refreshing = null;
+      });
+      refreshing = flight;
     }
     return refreshing;
   }
@@ -251,7 +284,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   /**
    * The token to retry with after `rejected` got a 401, or null when the session is
    * invalid. Throws the caller's abort error, ApiError.timeout() when the wait exceeds the
-   * request timeout, and an ApiError for transient refresh failures.
+   * request timeout or the refresh deadline, and an ApiError for transient refresh failures.
    */
   async function renewToken(
     rejected: string | null,
@@ -261,6 +294,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     if (signal?.aborted) throw abortError(signal);
     // Another request may have rotated the token while this one was in flight.
     const current = await getAccessToken();
+    if (signal?.aborted) throw abortError(signal);
     if (current && current !== rejected) return current;
     try {
       return await waitShared(refreshSession(), signal, timeoutMs);

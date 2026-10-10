@@ -692,4 +692,135 @@ describe("waiting for a shared refresh", () => {
     });
     expect(session.refreshAccessToken).not.toHaveBeenCalled();
   });
+
+  it("does not start a refresh when the caller aborts while the token is read", async () => {
+    const { client, session } = setup(rejectsOldToken);
+    const controller = new AbortController();
+    let reads = 0;
+    session.getAccessToken.mockImplementation(() => {
+      reads += 1;
+      // The second read is the rotation check after the 401.
+      if (reads === 2) controller.abort();
+      return session.token;
+    });
+
+    await expect(client.get("/me", { signal: controller.signal })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(session.refreshAccessToken).not.toHaveBeenCalled();
+  });
+
+  it("rejects at once when the caller aborts before the wait listens", async () => {
+    const { client, session } = setup(rejectsOldToken);
+    const controller = new AbortController();
+    let settle: (token: string | null) => void = () => {};
+    session.refreshAccessToken.mockImplementation(() => {
+      // Fires the abort event before the waiter attaches its listener.
+      controller.abort();
+      return new Promise((resolve) => {
+        settle = resolve;
+      });
+    });
+    let settled = false;
+    const markSettled = () => {
+      settled = true;
+    };
+    const request = client.get("/me", { signal: controller.signal });
+    request.then(markSettled, markSettled);
+
+    await flush();
+    await flush();
+
+    expect(settled).toBe(true);
+    const error = await request.catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ name: "AbortError" });
+    settle(null);
+    await flush();
+    expect(session.onUnauthorized).not.toHaveBeenCalled();
+  });
+});
+
+describe("shared refresh deadline", () => {
+  const rejectsOldToken: Handler = (call) =>
+    call.headers.Authorization === "Bearer old-token" ? unauthorized : ok({ ok: true });
+
+  it("frees the single-flight slot after twice the client timeout", async () => {
+    jest.useFakeTimers();
+    const { client, session } = setup(rejectsOldToken, { timeoutMs: 1_000 });
+    session.refreshAccessToken.mockImplementationOnce(() => new Promise(() => {}));
+    let settled = false;
+    const markSettled = () => {
+      settled = true;
+    };
+    // Waits longer than the deadline, so only the deadline can end it.
+    const first = client.get("/a", { timeoutMs: 10_000 });
+    first.then(markSettled, markSettled);
+
+    await jest.advanceTimersByTimeAsync(1_999);
+    expect(settled).toBe(false);
+    await jest.advanceTimersByTimeAsync(1);
+    await expect(first).rejects.toMatchObject({ type: "tiempo-agotado", status: 0 });
+
+    // A later 401 starts a fresh refresh instead of joining the hung one.
+    await expect(client.get("/b")).resolves.toEqual({ ok: true });
+    expect(session.refreshAccessToken).toHaveBeenCalledTimes(2);
+    expect(session.onUnauthorized).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it("honors refreshTimeoutMs", async () => {
+    jest.useFakeTimers();
+    const { client, session } = setup(rejectsOldToken, {
+      timeoutMs: 1_000,
+      refreshTimeoutMs: 300,
+    });
+    session.refreshAccessToken.mockImplementationOnce(() => new Promise(() => {}));
+
+    const request = client.get("/a");
+    const rejects = expect(request).rejects.toMatchObject({ type: "tiempo-agotado" });
+    await jest.advanceTimersByTimeAsync(300);
+
+    await rejects;
+  });
+
+  it("keeps sharing the fresh refresh when the abandoned one settles late", async () => {
+    jest.useFakeTimers();
+    const { client, session } = setup(rejectsOldToken, { timeoutMs: 1_000 });
+    let settleHung: (token: string | null) => void = () => {};
+    let settleFresh: (token: string | null) => void = () => {};
+    session.refreshAccessToken
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            settleHung = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            settleFresh = (token) => {
+              session.token = token;
+              resolve(token);
+            };
+          }),
+      );
+
+    const first = client.get("/a", { timeoutMs: 10_000 });
+    const firstRejects = expect(first).rejects.toMatchObject({ type: "tiempo-agotado" });
+    await jest.advanceTimersByTimeAsync(2_000);
+    await firstRejects;
+
+    const second = client.get("/b", { timeoutMs: 10_000 });
+    await jest.advanceTimersByTimeAsync(0);
+    settleHung("stale-token");
+    await jest.advanceTimersByTimeAsync(0);
+    const third = client.get("/c", { timeoutMs: 10_000 });
+    await jest.advanceTimersByTimeAsync(0);
+
+    expect(session.refreshAccessToken).toHaveBeenCalledTimes(2);
+    settleFresh("new-token");
+    await expect(Promise.all([second, third])).resolves.toEqual([{ ok: true }, { ok: true }]);
+    expect(jest.getTimerCount()).toBe(0);
+  });
 });
