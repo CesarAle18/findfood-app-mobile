@@ -1,3 +1,4 @@
+import { AuthRetryableFetchError } from "@supabase/supabase-js";
 import type * as ReactNative from "react-native";
 
 import type { Env } from "@/config/env";
@@ -11,7 +12,25 @@ jest.mock("@supabase/supabase-js", () => ({
   createClient: (...args: unknown[]) => mockCreateClient(...args),
 }));
 
-jest.mock("./secure-storage", () => ({ secureStorage: { name: "secure-storage" } }));
+// Plain functions, not jest.fn: restoreAllMocks would drop their implementations.
+const mockStoredValues = new Map<string, string>();
+const mockFailingKeys = new Set<string>();
+const mockStorage = {
+  getItem: async (key: string) => mockStoredValues.get(key) ?? null,
+  setItem: async (key: string, value: string) => {
+    mockStoredValues.set(key, value);
+  },
+  removeItem: async (key: string) => {
+    if (mockFailingKeys.has(key)) throw new Error("Keychain unavailable");
+    mockStoredValues.delete(key);
+  },
+};
+
+jest.mock("./secure-storage", () => ({ secureStorage: mockStorage }));
+
+const mockSupabaseFetch = () => Promise.reject(new Error("Not used by these tests"));
+
+jest.mock("./supabase-fetch", () => ({ createSupabaseFetch: () => mockSupabaseFetch }));
 
 function fakeAuth() {
   return {
@@ -22,6 +41,8 @@ function fakeAuth() {
       error: null,
     })),
     getSession: jest.fn(async () => ({ data: { session: null }, error: null })),
+    // Like auth-js when reading the current session fails first: nothing is removed.
+    signOut: jest.fn(async (): Promise<{ error: Error | null }> => ({ error: null })),
   };
 }
 
@@ -64,6 +85,8 @@ function loadSupabase(env: Env, os: "ios" | "android" | "web" = "ios"): Loaded {
 afterEach(() => {
   jest.restoreAllMocks();
   mockCreateClient.mockReset();
+  mockStoredValues.clear();
+  mockFailingKeys.clear();
 });
 
 describe("without Supabase configuration", () => {
@@ -79,25 +102,153 @@ describe("without Supabase configuration", () => {
     expect(addAppStateListener).not.toHaveBeenCalled();
     await expect(module.refreshAccessToken()).resolves.toBeNull();
   });
+
+  it("has nothing to sign out of", async () => {
+    mockStoredValues.set("findfood.auth", "{}");
+    const { module } = loadSupabase({
+      appEnv: "local",
+      apiUrl: "http://api.test",
+      devToken: "dev",
+    });
+
+    await expect(module.signOutLocally()).resolves.toBeUndefined();
+    expect(mockStoredValues.has("findfood.auth")).toBe(true);
+  });
+});
+
+describe("signOutLocally", () => {
+  const FLOW_A = "0123456789abcdef0123456789abcdef";
+  const FLOW_B = "fedcba9876543210fedcba9876543210";
+
+  /** What auth-js 2.117.3 persists for a session with two pending PKCE flows. */
+  function seedStoredSession(flowIndex = JSON.stringify([FLOW_A, FLOW_B])) {
+    mockStoredValues.set("findfood.auth", '{"access_token":"stale"}');
+    mockStoredValues.set("findfood.auth-user", '{"id":"u-1"}');
+    mockStoredValues.set("findfood.auth-code-verifier", '"verifier-b"');
+    mockStoredValues.set("findfood.auth-flows-code-verifier", flowIndex);
+    mockStoredValues.set(`findfood.auth-flow-${FLOW_A}-code-verifier`, '"verifier-a"');
+    mockStoredValues.set(`findfood.auth-flow-${FLOW_B}-code-verifier`, '"verifier-b"');
+    mockStoredValues.set("another-key", "kept");
+  }
+
+  function loadClient() {
+    const auth = fakeAuth();
+    mockCreateClient.mockReturnValue({ auth });
+    const { module } = loadSupabase(REAL_ENV);
+    return { auth, signOutLocally: module.signOutLocally };
+  }
+
+  it("signs out on this device and removes every key auth-js stores", async () => {
+    seedStoredSession();
+    const { auth, signOutLocally } = loadClient();
+
+    await signOutLocally();
+
+    expect(auth.signOut).toHaveBeenCalledTimes(1);
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect([...mockStoredValues.keys()]).toEqual(["another-key"]);
+  });
+
+  it("removes the stored session when sign-out returns an error", async () => {
+    // e.g. an expired session whose refresh fails offline: auth-js returns the error
+    // before removing anything.
+    seedStoredSession();
+    const { auth, signOutLocally } = loadClient();
+    auth.signOut.mockResolvedValue({
+      error: new AuthRetryableFetchError("Network request failed", 0),
+    });
+
+    await expect(signOutLocally()).resolves.toBeUndefined();
+
+    expect([...mockStoredValues.keys()]).toEqual(["another-key"]);
+  });
+
+  it("removes the stored session when sign-out throws", async () => {
+    seedStoredSession();
+    const { auth, signOutLocally } = loadClient();
+    auth.signOut.mockRejectedValue(new Error("boom"));
+
+    await expect(signOutLocally()).resolves.toBeUndefined();
+
+    expect([...mockStoredValues.keys()]).toEqual(["another-key"]);
+  });
+
+  it("removes the stored session only once sign-out has finished", async () => {
+    seedStoredSession();
+    const { auth, signOutLocally } = loadClient();
+    let finishSignOut: () => void = () => {};
+    auth.signOut.mockReturnValue(
+      new Promise((resolve) => {
+        finishSignOut = () => resolve({ error: null });
+      }),
+    );
+
+    const done = signOutLocally();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(mockStoredValues.has("findfood.auth")).toBe(true);
+
+    finishSignOut();
+    await done;
+    expect(mockStoredValues.has("findfood.auth")).toBe(false);
+  });
+
+  it("never rejects and removes every other key when one removal fails", async () => {
+    seedStoredSession();
+    mockFailingKeys.add("findfood.auth-user");
+    const { signOutLocally } = loadClient();
+
+    await expect(signOutLocally()).resolves.toBeUndefined();
+
+    expect([...mockStoredValues.keys()].sort()).toEqual(["another-key", "findfood.auth-user"]);
+  });
+
+  it.each([
+    ["not JSON", "[oops"],
+    ["not a list", '{"0":"x"}'],
+    ["invalid ids", JSON.stringify(["short", 42, "../escape-attempt", null])],
+  ])("ignores a PKCE flow index that is %s", async (_label, flowIndex) => {
+    seedStoredSession(flowIndex);
+    const { signOutLocally } = loadClient();
+
+    await expect(signOutLocally()).resolves.toBeUndefined();
+
+    expect(mockStoredValues.has("findfood.auth")).toBe(false);
+    expect(mockStoredValues.has("findfood.auth-flows-code-verifier")).toBe(false);
+    // Slots of flows the index no longer lists cannot be found (auth-js has the same limit).
+    expect(mockStoredValues.has(`findfood.auth-flow-${FLOW_A}-code-verifier`)).toBe(true);
+  });
+
+  it("still removes the slots of the valid ids next to invalid ones", async () => {
+    seedStoredSession(JSON.stringify([FLOW_A, "bad id"]));
+    const { signOutLocally } = loadClient();
+
+    await signOutLocally();
+
+    expect(mockStoredValues.has(`findfood.auth-flow-${FLOW_A}-code-verifier`)).toBe(false);
+    expect(mockStoredValues.has(`findfood.auth-flow-${FLOW_B}-code-verifier`)).toBe(true);
+  });
 });
 
 describe("with Supabase configuration", () => {
-  it("creates the auth client with secure storage and PKCE", () => {
+  it("creates the auth client with secure storage, a known key, PKCE and bounded fetch", () => {
     const client = { auth: fakeAuth() };
     mockCreateClient.mockReturnValue(client);
 
     const { module } = loadSupabase(REAL_ENV);
 
     expect(module.supabase).toBe(client);
+    expect(module.AUTH_STORAGE_KEY).toBe("findfood.auth");
     expect(mockCreateClient).toHaveBeenCalledTimes(1);
     expect(mockCreateClient).toHaveBeenCalledWith("http://supabase.test", "anon-key", {
       auth: {
-        storage: { name: "secure-storage" },
+        storage: mockStorage,
+        storageKey: "findfood.auth",
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
         flowType: "pkce",
       },
+      global: { fetch: mockSupabaseFetch },
     });
   });
 

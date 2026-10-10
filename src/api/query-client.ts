@@ -20,6 +20,23 @@ export function shouldRetryQuery(failureCount: number, error: unknown): boolean 
   return failureCount < MAX_QUERY_RETRIES;
 }
 
+/**
+ * For the queries the app cannot start without (`GET /me`, which gates navigation).
+ *
+ * With TanStack's default `networkMode: 'online'` such a query stays paused (`pending`)
+ * while the device is offline, so an offline start would wait forever. These queries run
+ * anyway and, while offline, fail at once with the request's own error (`sin-conexion`)
+ * instead of retrying. They are fetched again when the connection returns, since a query
+ * without data is always stale. A query with cached data keeps it when a refetch fails.
+ */
+export const startupQueryOptions = {
+  networkMode: "always",
+  // TanStack turns the reconnect refetch off by default for `networkMode: 'always'`.
+  refetchOnReconnect: true,
+  retry: (failureCount: number, error: unknown): boolean =>
+    onlineManager.isOnline() && shouldRetryQuery(failureCount, error),
+} as const;
+
 export function createQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {

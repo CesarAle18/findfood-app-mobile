@@ -1,11 +1,12 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AuthApiError } from "@supabase/supabase-js";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import * as SecureStore from "expo-secure-store";
 import type { PropsWithChildren } from "react";
 
 import type { MeDto } from "@/api/types";
 import { sessionStore } from "@/auth/session-store";
-import { supabase } from "@/auth/supabase";
+import { signOutLocally, supabase } from "@/auth/supabase";
 import { env } from "@/config/env";
 import { queryKeys } from "@/services/query-keys";
 
@@ -15,7 +16,12 @@ jest.mock("@/config/env", () => ({
   env: { appEnv: "local", apiUrl: "http://api.test", devToken: "dev-token" },
 }));
 
+// The Supabase client is faked; the token refresh keeps the real classification
+// (`createAccessTokenRefresher`), so the API client goes through the same path as the app.
 jest.mock("@/auth/supabase", () => {
+  const { createAccessTokenRefresher } = jest.requireActual<{
+    createAccessTokenRefresher: (auth: unknown) => () => Promise<string | null>;
+  }>("@/auth/refresh");
   let listener: ((event: string, session: unknown) => void) | null = null;
   const subscription = {
     unsubscribe: jest.fn(() => {
@@ -25,17 +31,20 @@ jest.mock("@/auth/supabase", () => {
   const auth = {
     subscription,
     getSession: jest.fn(),
+    refreshSession: jest.fn(),
     onAuthStateChange: jest.fn((callback: typeof listener) => {
       listener = callback;
       return { data: { subscription } };
     }),
-    signOut: jest.fn(async () => {
-      listener?.("SIGNED_OUT", null);
-      return { error: null };
-    }),
     emit: (event: string, session: unknown) => listener?.(event, session),
   };
-  return { supabase: { auth }, refreshAccessToken: jest.fn(async () => null) };
+  return {
+    supabase: { auth },
+    refreshAccessToken: createAccessTokenRefresher(auth),
+    signOutLocally: jest.fn(async () => {
+      listener?.("SIGNED_OUT", null);
+    }),
+  };
 });
 
 const mockSecureValues = new Map<string, string>();
@@ -53,12 +62,13 @@ jest.mock("expo-secure-store", () => ({
 interface FakeAuth {
   subscription: { unsubscribe: jest.Mock };
   getSession: jest.Mock;
+  refreshSession: jest.Mock;
   onAuthStateChange: jest.Mock;
-  signOut: jest.Mock;
   emit(event: string, session: unknown): void;
 }
 
 const auth = (supabase as unknown as { auth: FakeAuth }).auth;
+const mockedSignOutLocally = jest.mocked(signOutLocally);
 const testEnv = env as { appEnv: "local" | "real"; devToken?: string };
 
 interface FetchCall {
@@ -163,7 +173,10 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = realFetch;
+  onlineManager.setOnline(true);
 });
+
+const networkFailure = () => Promise.reject(new TypeError("Network request failed"));
 
 describe("local profile", () => {
   it("signs in with the dev token and loads /me with it", async () => {
@@ -250,7 +263,7 @@ describe("cerrarSesion", () => {
     expect(queryClient.getQueryData(queryKeys.me)).toBeUndefined();
     expect(mockSecureValues.has("findfood.deviceId")).toBe(false);
     expect(mockSecureValues.has("findfood.activeRole")).toBe(false);
-    expect(auth.signOut).not.toHaveBeenCalled();
+    expect(mockedSignOutLocally).not.toHaveBeenCalled();
   });
 
   it("signs out even when the device cannot be unregistered", async () => {
@@ -341,7 +354,7 @@ describe("real profile", () => {
     await unmount();
     expect(auth.subscription.unsubscribe).toHaveBeenCalledTimes(1);
     sessionStore.notifyUnauthorized();
-    expect(auth.signOut).not.toHaveBeenCalled();
+    expect(mockedSignOutLocally).not.toHaveBeenCalled();
   });
 
   it("starts without session when Supabase has none", async () => {
@@ -355,14 +368,101 @@ describe("real profile", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("cerrarSesion signs out of Supabase on this device only", async () => {
+  it("cerrarSesion signs out of Supabase on this device and removes the stored session", async () => {
     serve(() => ({ status: 200, body: me() }));
     const { result } = await renderSession();
     await waitFor(() => expect(result.current.access.phase).toBe("app"));
 
     await act(() => result.current.actions.cerrarSesion());
 
-    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(mockedSignOutLocally).toHaveBeenCalledTimes(1);
     expect(result.current.session.status).toBe("none");
+  });
+
+  it("refreshes the token through Supabase after a 401 and retries the request", async () => {
+    auth.refreshSession.mockResolvedValueOnce({
+      data: { session: { access_token: "fresh-token" } },
+      error: null,
+    });
+    const calls = serve((call) =>
+      call.headers.Authorization === "Bearer fresh-token"
+        ? { status: 200, body: me() }
+        : { status: 401, body: { type: "token-invalido", title: "Expired", status: 401 } },
+    );
+
+    const { result } = await renderSession();
+
+    await waitFor(() => expect(result.current.access.phase).toBe("app"));
+    expect(auth.refreshSession).toHaveBeenCalledTimes(1);
+    expect(calls.map((call) => call.headers.Authorization)).toEqual([
+      "Bearer real-token",
+      "Bearer fresh-token",
+    ]);
+    expect(mockedSignOutLocally).not.toHaveBeenCalled();
+    expect(result.current.session.status).toBe("present");
+  });
+
+  it("signs out when Supabase rejects the refresh token", async () => {
+    auth.getSession.mockResolvedValue({
+      data: { session: { ...realSession, access_token: "revoked-token" } },
+      error: null,
+    });
+    auth.refreshSession.mockResolvedValueOnce({
+      data: { session: null, user: null },
+      error: new AuthApiError("Invalid Refresh Token", 400, "refresh_token_not_found"),
+    });
+    const calls = serve(() => ({
+      status: 401,
+      body: { type: "token-invalido", title: "Revoked", status: 401 },
+    }));
+
+    const { result } = await renderSession();
+
+    await waitFor(() => expect(result.current.session.status).toBe("none"));
+    expect(auth.refreshSession).toHaveBeenCalledTimes(1);
+    expect(mockedSignOutLocally).toHaveBeenCalledTimes(1);
+    expect(calls).toHaveLength(1);
+    expect(result.current.access.phase).toBe("auth");
+  });
+});
+
+describe("offline", () => {
+  it("ends an offline start in a connection error and recovers on reconnect", async () => {
+    onlineManager.setOnline(false);
+    let reachable = false;
+    const calls = serve(() =>
+      reachable ? { status: 200, body: me() } : networkFailure(),
+    );
+
+    const { result } = await renderSession();
+
+    await waitFor(() => expect(result.current.access.phase).toBe("error"));
+    expect(result.current.me.error).toMatchObject({ type: "sin-conexion" });
+    expect(calls).toHaveLength(1);
+
+    reachable = true;
+    await act(async () => {
+      onlineManager.setOnline(true);
+    });
+
+    await waitFor(() => expect(result.current.access.phase).toBe("app"));
+    expect(calls).toHaveLength(2);
+  });
+
+  it("keeps a cached account usable while offline", async () => {
+    let reachable = true;
+    serve(() => (reachable ? { status: 200, body: me() } : networkFailure()));
+    const { result, queryClient } = await renderSession();
+    await waitFor(() => expect(result.current.access.phase).toBe("app"));
+
+    reachable = false;
+    await act(async () => {
+      onlineManager.setOnline(false);
+      void queryClient.refetchQueries({ queryKey: queryKeys.me });
+    });
+
+    await waitFor(() => expect(result.current.me.error).toMatchObject({ type: "sin-conexion" }));
+    expect(result.current.access.phase).toBe("app");
+    expect(result.current.me.data).toEqual(me());
   });
 });

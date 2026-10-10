@@ -46,6 +46,12 @@ function ignore() {
   // The handler failure must not reach the request that reported the 401.
 }
 
+// Not `instanceof Promise`: a promise from another implementation (a polyfill, another
+// realm) would escape it and its rejection would go unhandled.
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return typeof (value as { then?: unknown } | null | undefined)?.then === "function";
+}
+
 export function createSessionStore(
   initial: SessionSnapshot = INITIAL_SNAPSHOT,
 ): SessionStore {
@@ -78,7 +84,7 @@ export function createSessionStore(
       if (!handler) return;
       try {
         const result = handler();
-        if (result instanceof Promise) result.catch(ignore);
+        if (isThenable(result)) result.then(undefined, ignore);
       } catch {
         ignore();
       }

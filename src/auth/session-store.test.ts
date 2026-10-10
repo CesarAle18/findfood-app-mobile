@@ -144,4 +144,33 @@ describe("unauthorized handler", () => {
     await new Promise<void>((resolve) => setImmediate(resolve));
     expect(rejected).toHaveBeenCalledTimes(1);
   });
+
+  it("handles the rejection of a thenable that is not a native promise", () => {
+    // e.g. a promise from another Promise implementation, where `instanceof Promise` fails.
+    const store = createSessionStore();
+    let onRejected: ((reason: unknown) => unknown) | undefined;
+    const thenable = {
+      then: jest.fn((_onFulfilled: unknown, rejectHandler?: (reason: unknown) => unknown) => {
+        onRejected = rejectHandler;
+      }),
+    };
+    store.setUnauthorizedHandler(() => thenable);
+
+    expect(() => store.notifyUnauthorized()).not.toThrow();
+
+    expect(thenable.then).toHaveBeenCalledTimes(1);
+    expect(onRejected).toEqual(expect.any(Function));
+    expect(() => onRejected?.(new Error("async failure"))).not.toThrow();
+  });
+
+  it("survives a thenable whose then throws", () => {
+    const store = createSessionStore();
+    store.setUnauthorizedHandler(() => ({
+      then() {
+        throw new Error("broken thenable");
+      },
+    }));
+
+    expect(() => store.notifyUnauthorized()).not.toThrow();
+  });
 });

@@ -14,13 +14,22 @@ import { AppState, Platform } from "react-native";
 import { env } from "@/config/env";
 
 import { createAccessTokenRefresher } from "./refresh";
-import { secureStorage } from "./secure-storage";
+import { secureStorage, type AuthStorage } from "./secure-storage";
+import { createSupabaseFetch } from "./supabase-fetch";
+
+/**
+ * auth-js `storageKey`: the session is stored under this key and every other auth key
+ * starts with it. Fixed (instead of the default `sb-<project>-auth-token`) so sign-out can
+ * remove them all (see signOutLocally).
+ */
+export const AUTH_STORAGE_KEY = "findfood.auth";
 
 function createSupabaseClient(): SupabaseClient | null {
   if (!env.supabaseUrl || !env.supabaseAnonKey) return null;
   return createClient(env.supabaseUrl, env.supabaseAnonKey, {
     auth: {
       storage: secureStorage,
+      storageKey: AUTH_STORAGE_KEY,
       autoRefreshToken: true,
       persistSession: true,
       // Android and iOS have no URL to read a session from: deep links are exchanged by the
@@ -29,6 +38,8 @@ function createSupabaseClient(): SupabaseClient | null {
       detectSessionInUrl: false,
       flowType: "pkce",
     },
+    // Bounds every Supabase request, so a hung token refresh cannot block later ones.
+    global: { fetch: createSupabaseFetch() },
   });
 }
 
@@ -54,4 +65,64 @@ const refresher = supabase ? createAccessTokenRefresher(supabase.auth) : null;
  */
 export function refreshAccessToken(): Promise<string | null> {
   return refresher ? refresher() : Promise.resolve(null);
+}
+
+// PKCE keys of auth-js 2.117.3 (lib/helpers.js): an index of pending flow ids, one
+// verifier slot per indexed flow and a fixed verifier key. Flow ids are validated like
+// auth-js does before they become storage keys.
+const PKCE_FLOW_INDEX_KEY = `${AUTH_STORAGE_KEY}-flows-code-verifier`;
+const PKCE_FLOW_ID = /^[a-zA-Z0-9_-]{8,64}$/;
+const pkceSlotKey = (flowId: string) => `${AUTH_STORAGE_KEY}-flow-${flowId}-code-verifier`;
+
+function ignore() {
+  // Removal is best effort; see removeStoredSession.
+}
+
+async function readPkceFlowIds(storage: AuthStorage): Promise<string[]> {
+  try {
+    const raw = await storage.getItem(PKCE_FLOW_INDEX_KEY);
+    const index: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(index)) return [];
+    return index.filter((id): id is string => typeof id === "string" && PKCE_FLOW_ID.test(id));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Removes every key auth-js 2.117.3 persists under AUTH_STORAGE_KEY, the same set as its
+ * `_removeSession`: the session, the user (`-user`), the fixed PKCE verifier, the PKCE
+ * flow index and each indexed verifier slot. Never rejects; a key that cannot be removed
+ * does not stop the others.
+ */
+async function removeStoredSession(storage: AuthStorage): Promise<void> {
+  const flowIds = await readPkceFlowIds(storage);
+  const keys = [
+    AUTH_STORAGE_KEY,
+    `${AUTH_STORAGE_KEY}-user`,
+    `${AUTH_STORAGE_KEY}-code-verifier`,
+    PKCE_FLOW_INDEX_KEY,
+    ...flowIds.map(pkceSlotKey),
+  ];
+  await Promise.all(keys.map((key) => storage.removeItem(key).catch(ignore)));
+}
+
+/**
+ * Signs out on this device and removes the stored session. Never rejects; does nothing
+ * without a Supabase client.
+ *
+ * auth-js `signOut` returns early, without removing the stored session, when reading the
+ * current session fails first (e.g. an expired session whose refresh fails offline), and
+ * that session would be restored on the next start. So the keys are removed here once
+ * `signOut` has settled, whatever it returned; waiting for it means no refresh it started
+ * can store the session again afterwards.
+ */
+export async function signOutLocally(): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.auth.signOut({ scope: "local" });
+  } catch {
+    // The stored session is removed below either way.
+  }
+  await removeStoredSession(secureStorage);
 }

@@ -27,6 +27,7 @@ import {
 import { Platform } from "react-native";
 
 import { api } from "@/api";
+import { startupQueryOptions } from "@/api/query-client";
 import type { MeDto } from "@/api/types";
 import {
   resolveAccess,
@@ -35,7 +36,7 @@ import {
   type MobileRole,
 } from "@/auth/access";
 import { sessionStore, type SessionSnapshot, type SessionStatus } from "@/auth/session-store";
-import { supabase } from "@/auth/supabase";
+import { signOutLocally, supabase } from "@/auth/supabase";
 import { env } from "@/config/env";
 import { queryKeys } from "@/services/query-keys";
 
@@ -66,6 +67,9 @@ function meQuery(enabled: boolean) {
     queryKey: queryKeys.me,
     queryFn: ({ signal }) => api.get<MeDto>("/me", { signal }),
     enabled,
+    // The access gate waits on /me: offline it fails with `sin-conexion` (phase `error`)
+    // and is fetched again on reconnect, instead of staying paused in `loading`.
+    ...startupQueryOptions,
   });
 }
 
@@ -134,14 +138,8 @@ async function unregisterDevice(): Promise<void> {
 }
 
 async function endSession(): Promise<void> {
-  if (env.appEnv === "real" && supabase) {
-    try {
-      // Removes the stored session even when the server call fails; emits SIGNED_OUT.
-      await supabase.auth.signOut({ scope: "local" });
-    } catch {
-      // The store is cleared below either way.
-    }
-  }
+  // Never rejects, and removes the stored session even when Supabase's sign-out fails.
+  if (env.appEnv === "real") await signOutLocally();
   // The local profile's dev session only lives in memory: it stays signed out until the
   // app restarts.
   sessionStore.setSession(SIGNED_OUT);
@@ -278,15 +276,25 @@ function useRequired<T>(context: Context<T | null>, hook: string): T {
   return value;
 }
 
+/**
+ * For hooks that read the session store or the /me query instead of a context: that data
+ * is only kept up to date by a mounted SessionProvider (it feeds the store and handles
+ * 401s), so they still fail fast outside it. Checked through the actions context because
+ * its value never changes: reading it adds no re-renders.
+ */
+function useAssertSessionProvider(hook: string): void {
+  useRequired(SessionActionsContext, hook);
+}
+
 export function useSession(): { status: SessionStatus; email?: string } {
-  useRequired(SessionActionsContext, "useSession");
+  useAssertSessionProvider("useSession");
   const status = useSessionStatus();
   const email = useSyncExternalStore(sessionStore.subscribe, selectEmail, selectEmail);
   return { status, email };
 }
 
 export function useMe() {
-  useRequired(SessionActionsContext, "useMe");
+  useAssertSessionProvider("useMe");
   const status = useSessionStatus();
   return useQuery(meQuery(status === "present"));
 }

@@ -1,11 +1,16 @@
-import { MutationObserver, QueryClient } from "@tanstack/react-query";
+import {
+  MutationObserver,
+  onlineManager,
+  QueryClient,
+  QueryObserver,
+} from "@tanstack/react-query";
 import type * as TanStackQuery from "@tanstack/react-query";
 import type * as ExpoNetwork from "expo-network";
 import type * as ReactNative from "react-native";
 
 import { ApiError } from "./errors";
 import type * as QueryClientModule from "./query-client";
-import { createQueryClient, shouldRetryQuery } from "./query-client";
+import { createQueryClient, shouldRetryQuery, startupQueryOptions } from "./query-client";
 
 jest.mock("expo-network", () => ({
   addNetworkStateListener: jest.fn(),
@@ -79,6 +84,93 @@ describe("query retries", () => {
     expect(mutationFn).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("startup queries", () => {
+  const offline = () => ApiError.network(new TypeError("Network request failed"));
+  let client: QueryClient;
+
+  beforeEach(() => {
+    client = createQueryClient();
+  });
+
+  afterEach(() => {
+    client.clear();
+    onlineManager.setOnline(true);
+  });
+
+  it("run while offline and fail at once instead of waiting paused", async () => {
+    onlineManager.setOnline(false);
+    const queryFn = jest.fn(async () => {
+      throw offline();
+    });
+
+    await expect(
+      client.fetchQuery({ queryKey: ["startup"], queryFn, ...startupQueryOptions }),
+    ).rejects.toMatchObject({ type: "sin-conexion" });
+    expect(queryFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("keep the default retries while online", async () => {
+    let failures = 2;
+    const queryFn = jest.fn(async () => {
+      if (failures-- > 0) throw offline();
+      return "ok";
+    });
+
+    await expect(
+      client.fetchQuery({
+        queryKey: ["startup"],
+        queryFn,
+        ...startupQueryOptions,
+        retryDelay: 0,
+      }),
+    ).resolves.toBe("ok");
+    expect(queryFn).toHaveBeenCalledTimes(3);
+  });
+
+  it("never retry a 4xx", () => {
+    const forbidden = new ApiError({ type: "prohibido", status: 403, title: "x" });
+
+    expect(startupQueryOptions.retry(0, forbidden)).toBe(false);
+  });
+
+  it("are fetched again when the connection returns", async () => {
+    client.mount();
+    onlineManager.setOnline(false);
+    let reachable = false;
+    const queryFn = jest.fn(async () => {
+      if (!reachable) throw offline();
+      return "ok";
+    });
+    const observer = new QueryObserver(client, {
+      queryKey: ["startup"],
+      queryFn,
+      ...startupQueryOptions,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    try {
+      await waitFor(() => observer.getCurrentResult().status === "error");
+
+      reachable = true;
+      onlineManager.setOnline(true);
+
+      await waitFor(() => observer.getCurrentResult().status === "success");
+      expect(queryFn).toHaveBeenCalledTimes(2);
+    } finally {
+      unsubscribe();
+      client.unmount();
+    }
+  });
+});
+
+/** Polls `condition` on macrotasks (TanStack notifies observers on a timeout). */
+async function waitFor(condition: () => boolean, attempts = 50): Promise<void> {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (condition()) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error("Condition not met");
+}
 
 interface LoadedManagers {
   setupQueryManagers: typeof QueryClientModule.setupQueryManagers;
