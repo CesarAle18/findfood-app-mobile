@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { TextInput, View } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, type Href } from "expo-router";
+import type { MobileRole } from "@/auth/access";
 import {
   Badge,
   Chip,
@@ -26,6 +27,7 @@ import {
 } from "@/components/findfood/motion";
 import { Metrics } from "./donor";
 import { useMobile } from "@/state/mobile-context";
+import { useAccess } from "@/state/session";
 import { colors, fonts } from "@/design/tokens";
 
 export function ProfileScreen({ volunteer = false }: { volunteer?: boolean }) {
@@ -35,11 +37,9 @@ export function ProfileScreen({ volunteer = false }: { volunteer?: boolean }) {
   const p = volunteer ? data.volunteer : data.donor;
   return (
     <Screen
-      viewRole={volunteer ? "volunteer" : "donor"}
       title="Perfil"
       subtitle={volunteer ? "Vista voluntario" : "Vista donante"}
       badge={<Badge>{volunteer ? "Voluntario" : "Donante"}</Badge>}
-      tabs="user"
     >
       <Card>
         <Row>
@@ -113,10 +113,20 @@ export function ProfileScreen({ volunteer = false }: { volunteer?: boolean }) {
     </Screen>
   );
 }
+/** The views an account can switch between, one per mobile role it has. */
+const VIEWS = [
+  { role: "DONANTE", label: "Ver como donante", home: "/donante" },
+  { role: "VOLUNTARIO", label: "Ver como voluntario", home: "/voluntario" },
+] as const satisfies readonly { role: MobileRole; label: string; home: Href }[];
+
 export function AccountScreen() {
-  const { data, role, setRole } = useMobile();
+  const { data } = useMobile();
+  const { activeRole, canDonor, canVolunteer, setActiveRole } = useAccess();
+  const views = VIEWS.filter(({ role }) =>
+    role === "DONANTE" ? canDonor : canVolunteer,
+  );
   return (
-    <Screen title="Perfil" subtitle="Acciones de cuenta" tabs="user" back>
+    <Screen title="Perfil" subtitle="Acciones de cuenta" back>
       <Card>
         <Copy weight="bold" style={{ fontSize: 20 }}>
           Cuenta
@@ -124,16 +134,17 @@ export function AccountScreen() {
         <Copy weight="semibold">{data.donor.name}</Copy>
         <Copy tone="secondary">{data.donor.email}</Copy>
         <Section title="Cambiar vista">
-          {(["donor", "volunteer"] as const).map((value) => (
+          {views.map(({ role, label, home }) => (
             <Pressing
-              key={value}
+              key={role}
               accessibilityRole="radio"
-              accessibilityState={{ checked: role === value }}
+              accessibilityState={{ checked: activeRole === role }}
               onPress={() => {
-                setRole(value);
-                router.replace(
-                  value === "donor" ? "/inicio-donante" : "/inicio",
-                );
+                setActiveRole(role);
+                // Only the chosen view stays in the history: back never returns to the
+                // other role's screens.
+                router.dismissAll();
+                router.replace(home);
               }}
               scale={1}
               surface={{
@@ -151,18 +162,15 @@ export function AccountScreen() {
                   borderWidth: 1,
                   borderColor: colors.primary,
                   backgroundColor:
-                    role === value ? colors.primary : colors.surface,
+                    activeRole === role ? colors.primary : colors.surface,
                 }}
               />
-              <Copy>
-                Ver como {value === "donor" ? "donante" : "voluntario"}
-              </Copy>
+              <Copy>{label}</Copy>
             </Pressing>
           ))}
         </Section>
         <TextLink href="/login">Cerrar sesión</TextLink>
       </Card>
-      <TextLink href="/pantallas">Ver todas las pantallas</TextLink>
     </Screen>
   );
 }
@@ -254,11 +262,9 @@ export function RatingScreen({ donor = false }: { donor?: boolean }) {
   }
   return (
     <Screen
-      viewRole={donor ? "volunteer" : "donor"}
       title={donor ? "Calificar donante" : "Calificar voluntario"}
       subtitle={donor ? "Experiencia durante la recogida" : "Tu donación fue entregada"}
       back
-      tabs="route"
     >
       <Card>
         <Copy weight="bold">{donor ? data.donor.name : data.volunteer.name}</Copy>
@@ -312,7 +318,7 @@ export function RatingScreen({ donor = false }: { donor?: boolean }) {
       />
       {submitted ? <Animated.View entering={enterItem} layout={itemLayout} style={{ gap: 24 }}>
         <Copy tone="primary">Calificación guardada en esta sesión de demostración.</Copy>
-        <NavButton href={donor ? "/registrar-recogida" : { pathname: "/detalle-donacion", params: { id: donation.id } }} showArrow={false}>{donor ? "Volver a recogida" : "Volver al detalle de donación"}</NavButton>
+        <NavButton href={donor ? "/voluntario/registrar-recogida" : { pathname: "/donante/detalle-donacion", params: { id: donation.id } }} dismissTo showArrow={false}>{donor ? "Volver a recogida" : "Volver al detalle de donación"}</NavButton>
       </Animated.View> : <Pressing accessibilityRole="button" onPress={() => { addRating(donor ? "donor" : "volunteer", rating); setSubmitted(true); }} surface={{ minHeight: 52, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}><Copy style={{ color: colors.surface }} weight="bold">Enviar calificación</Copy></Pressing>}
       <Copy tone="secondary">
         Tu opinión ayuda a mejorar futuras asignaciones.

@@ -114,8 +114,24 @@ Module._load = function (name, parent, isMain) {
           { href: typeof href === "string" ? href : href.pathname },
           children,
         ),
-      router: { canGoBack: () => false, replace() {}, back() {} },
+      router: {
+        canGoBack: () => false,
+        replace() {},
+        back() {},
+        dismissAll() {},
+      },
       useLocalSearchParams: () => routeParams,
+    };
+  // The account menu reads the roles; the real session needs Supabase and SecureStore.
+  if (name === "@/state/session")
+    return {
+      useAccess: () => ({
+        phase: "app",
+        activeRole: "DONANTE",
+        canDonor: true,
+        canVolunteer: true,
+        setActiveRole() {},
+      }),
     };
   if (name === "@/state/mobile-context")
     return {
@@ -208,8 +224,8 @@ try {
   assert.equal(calendarDays(2026, 8)[0], null);
   const { WaitingScreen } = require("../src/screens/donations.tsx");
   const waitingHtml = renderToStaticMarkup(React.createElement(WaitingScreen));
-  assert(waitingHtml.includes('href="/voluntario-asignado"'));
-  assert(waitingHtml.includes('href="/inicio-donante"'));
+  assert(waitingHtml.includes('href="/donante/voluntario-asignado"'));
+  assert(waitingHtml.includes('href="/donante"'));
   assert.equal(initialDonationDraft.products.length, 1);
   assert.equal(new Set(expanded.products.map((p) => p.id)).size, 3);
   draft = {
@@ -233,10 +249,22 @@ try {
   );
   assert(reviewHtml.includes("Producto prueba 3") && reviewHtml.includes("ML"));
   routeParams = { id: "DON-1058" };
+  const donorDetailHtml = renderToStaticMarkup(
+    React.createElement(DonationDetailScreen),
+  );
+  assert(donorDetailHtml.includes('href="/donante/calificar-voluntario"'));
+  assert(donorDetailHtml.includes('href="/donante/donaciones"'));
+  // Volunteers open the same detail from their route, without the donor actions.
+  const volunteerDetailHtml = renderToStaticMarkup(
+    React.createElement(DonationDetailScreen, { asVolunteer: true }),
+  );
+  assert(!volunteerDetailHtml.includes("Calificar voluntario"));
+  assert(volunteerDetailHtml.includes('href="/voluntario/rutas"'));
+  const { AccountScreen } = require("../src/screens/account.tsx");
+  const accountHtml = renderToStaticMarkup(React.createElement(AccountScreen));
   assert(
-    renderToStaticMarkup(React.createElement(DonationDetailScreen)).includes(
-      'href="/calificar-voluntario"',
-    ),
+    accountHtml.includes("Ver como donante") &&
+      accountHtml.includes("Ver como voluntario"),
   );
   const { VerifyEmailScreen } = require("../src/screens/account.tsx");
   assert(
@@ -250,7 +278,7 @@ try {
   assert(
     renderToStaticMarkup(
       React.createElement(VolunteerRegistrationScreen),
-    ).includes('href="/inicio-donante"'),
+    ).includes('href="/donante"'),
   );
   const {
     LoadingState,
@@ -375,7 +403,7 @@ try {
   );
   assert.deepEqual(invalid, [], "React rendering warnings");
   console.log(
-    `PASS: ${count} screen components rendered; identification/license fields, selected donation, preview navigation and Slot/DOM regressions checked.`,
+    `PASS: ${count} screen components rendered; identification/license fields, selected donation, segment links, account views and Slot/DOM regressions checked.`,
   );
   if (warnings.length) console.log("Other renderer notices:", warnings.length);
 } finally {

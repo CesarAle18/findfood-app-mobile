@@ -1,6 +1,7 @@
 /**
  * Root layout: keeps the native splash until the fonts and the session's access phase are
- * known, then lets the access phase decide which screens exist (`Stack.Protected`). A
+ * known, then lets the access phase and the account's roles decide which screens exist
+ * (`Stack.Protected`): the donor segment needs DONANTE, the volunteer one VOLUNTARIO. A
  * screen whose guard is off is removed from the navigator: links and deep links to it fall
  * back to the gate (`index`), and a user on it when the guard closes is sent there too.
  */
@@ -24,6 +25,7 @@ import { LoadingState, OfflineBanner } from "@/components/findfood/feedback";
 import { configResult, type ConfigError } from "@/config/env";
 import { colors } from "@/design/tokens";
 import { guardsFor, ROUTE_GROUPS, type RouteGroup } from "@/navigation/access-route";
+import { STACK_SCREEN_OPTIONS } from "@/navigation/stack-options";
 import { ConfigErrorScreen } from "@/screens/access";
 import { MobileProvider } from "@/state/mobile-context";
 import { SessionProvider, useAccess } from "@/state/session";
@@ -48,7 +50,7 @@ function screensOf(group: RouteGroup) {
 }
 
 function RootNavigator({ fontsLoaded, fontError }: { fontsLoaded: boolean; fontError: Error | null }) {
-  const { phase } = useAccess();
+  const { phase, canDonor, canVolunteer } = useAccess();
   const ready = (fontsLoaded || fontError !== null) && phase !== "loading";
   useHideSplash(ready);
 
@@ -63,24 +65,15 @@ function RootNavigator({ fontsLoaded, fontError }: { fontsLoaded: boolean; fontE
     );
   }
 
-  const guards = guardsFor(phase);
+  const guards = guardsFor({ phase, canDonor, canVolunteer });
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        // Fundido corto: lo ejecuta react-native-screens en el hilo nativo.
-        // "push" es necesario porque la barra inferior navega con replace y el
-        // valor por omisión animaría la transición hacia atrás.
-        animation: "fade",
-        animationDuration: 200,
-        animationTypeForReplace: "push",
-        contentStyle: { backgroundColor: colors.background },
-      }}
-    >
+    <Stack screenOptions={STACK_SCREEN_OPTIONS}>
       <Stack.Screen name="index" />
       <Stack.Protected guard={guards.auth}>{screensOf("auth")}</Stack.Protected>
       <Stack.Protected guard={guards.verifyEmail}>{screensOf("verifyEmail")}</Stack.Protected>
       <Stack.Protected guard={guards.noAccess}>{screensOf("noAccess")}</Stack.Protected>
+      <Stack.Protected guard={guards.donor}>{screensOf("donor")}</Stack.Protected>
+      <Stack.Protected guard={guards.volunteer}>{screensOf("volunteer")}</Stack.Protected>
       <Stack.Protected guard={guards.app}>{screensOf("app")}</Stack.Protected>
     </Stack>
   );

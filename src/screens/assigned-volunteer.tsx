@@ -8,7 +8,7 @@ import { colors } from "@/design/tokens";
 export const assignmentPreview = { vehicle: "Camioneta", eta: "15–20 minutos", status: "En camino al punto de recogida" };
 export function AssignedVolunteerScreen() {
   const { data, draft } = useMobile();
-  return <Screen title="Voluntario asignado" subtitle="Un voluntario aceptó tu donación." viewRole="donor" back>
+  return <Screen title="Voluntario asignado" subtitle="Un voluntario aceptó tu donación." back>
     <Card soft><Row><Icon name="check" /><Copy weight="semibold">Tu recogida ya tiene voluntario</Copy></Row><Copy>{data.volunteer.name} se encargará de recoger tus productos.</Copy></Card>
     <Section title="Tu voluntario"><Card><Copy weight="bold">{data.volunteer.name}</Copy><Copy>{assignmentPreview.vehicle}</Copy><Copy tone="primary">{assignmentPreview.status}</Copy><Copy>Llegada estimada: {assignmentPreview.eta}</Copy></Card></Section>
     <Section title="Ubicación del voluntario">
@@ -24,6 +24,6 @@ export function AssignedVolunteerScreen() {
       <Copy>V · Voluntario     D · Tu punto de recogida</Copy>
     </Section>
     <Section title="Recogida"><Copy>{draft.products.map(product => product.name || "Producto pendiente").join(", ")}</Copy><Copy>Horario: {draft.pickupFrom}–{draft.pickupUntil}</Copy></Section>
-    <NavButton href="/inicio-donante" showArrow={false}>Volver al inicio</NavButton>
+    <NavButton href="/donante" dismissTo showArrow={false}>Volver al inicio</NavButton>
   </Screen>;
 }

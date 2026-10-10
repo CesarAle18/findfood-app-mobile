@@ -40,13 +40,21 @@ El token dura 24 h (`DEV_TOKEN_TTL_HOURS`); al vencer, ejecutar de nuevo `npm ru
 
 La aplicación abre `/login`. Iniciar sesión y Google navegan a `/inicio-donante` sin autenticar. El enlace de registro lleva a `/registro`, después a `/verificar-correo` y al inicio de sesión; el código editable no se verifica contra ningún servicio.
 
-Desde el menú de cuenta (`/cuenta`), seleccionar «Ver como voluntario» abre `/inicio`; «Ver como donante» vuelve a `/inicio-donante`. Este cambio solo afecta a la demostración local. Los perfiles, las donaciones, el seguimiento, la revisión y la calificación tienen rutas propias. El menú de tres puntos abre la cuenta; su enlace «Ver todas las pantallas» lleva a `/pantallas`, la galería de revisión con las 22 pantallas.
+## Navegación
+
+La raíz (`src/app/_layout.tsx`) mantiene el splash hasta resolver la sesión y `GET /me`, y protege cada grupo de rutas con `Stack.Protected` según la fase de acceso: sin sesión solo se alcanzan las rutas de autenticación; una cuenta sin rol móvil o bloqueada va a `/sin-acceso`. El índice redirige al inicio del rol activo.
+
+- `/donante`: pestañas nativas Inicio, Donaciones, Alertas y Perfil; requiere el rol `DONANTE`.
+- `/voluntario`: pestañas nativas Inicio, Rutas, Alertas y Perfil; requiere el rol `VOLUNTARIO`.
+
+Un donante sin rol voluntario no puede abrir `/voluntario/*`, ni siquiera por enlace profundo: la ruta bloqueada se descarta y vuelve al índice. El menú de tres puntos abre `/cuenta`, donde «Cambiar vista» solo ofrece los roles que tiene la cuenta.
 
 El formulario `/registro-voluntario` tiene scroll, tipo de identificación, datos personales y de vehículo, y espacios para fotos de documento, vehículo y licencia. Los campos y selectores habilitados actualizan estado local; «Enviar» vuelve al inicio donante como navegación de demostración.
 
 ## Organización
 
-- `src/app`: rutas de Expo Router, layout y galería auxiliar.
+- `src/app`: rutas de Expo Router; segmentos `donante/` y `voluntario/` con sus pestañas.
+- `src/navigation`: grupos de rutas, guards por fase y rol, y barra de pestañas.
 - `src/screens`: composición de pantallas por contexto.
 - `src/components/findfood`: componentes nativos, controles e iconos SVG.
 - `src/design/tokens.ts`: colores, tipografía y espaciado.
@@ -54,7 +62,7 @@ El formulario `/registro-voluntario` tiene scroll, tipo de identificación, dato
 - `src/services/mobile-repository.ts`: puerto asíncrono de lectura y repositorio de demostración.
 - `src/data/mobile.ts`: fixtures de perfiles y donaciones; quedan otros fixtures visuales locales en pantallas.
 - `src/state/mobile-context.tsx`: proveedor de datos, rol local e inyección del repositorio.
-- `src/data/preview.ts`: inventario de pantallas de revisión.
+- `src/data/preview.ts`: fixtures visuales de actividad y avisos, pendientes de sus endpoints.
 - `assets/brand`: logotipo conservado del diseño proporcionado.
 - `docs/integracion-backend.md`: límites y próximos pasos de integración.
 

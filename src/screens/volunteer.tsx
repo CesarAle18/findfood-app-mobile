@@ -120,7 +120,7 @@ export function VolunteerRegistrationScreen() {
           </Section>
         </Stack>
       </Section>
-      <NavButton href="/inicio-donante" showArrow={false}>
+      <NavButton href="/donante" dismissTo showArrow={false}>
         Enviar
       </NavButton>
     </Screen>
@@ -131,8 +131,6 @@ export function OfferScreen() {
     <Screen
       title="Nueva oferta"
       subtitle="Voluntario"
-      tabs="home"
-      viewRole="volunteer"
       badge={<Badge warning>10:00 min</Badge>}
     >
       <Card>
@@ -158,7 +156,7 @@ export function OfferScreen() {
           <Button variant="outline">Rechazar</Button>
         </View>
         <View style={{ flex: 1 }}>
-          <NavButton href="/ruta-activa" showArrow={false}>
+          <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
             Aceptar
           </NavButton>
         </View>
@@ -182,8 +180,8 @@ export function CollectionScreen() {
         <PhotoPlaceholder label="Evidencia fotográfica" />
       </Section>
       <Field label="Observaciones" value={notes} onChangeText={setNotes} placeholder="Describe el estado del producto" multiline />
-      <NavButton href={{ pathname: "/calificar-donante", params: { id: data.donations[0]?.id } }} showArrow={false}>Calificar donante</NavButton>
-      <NavButton href="/ruta-activa" showArrow={false}>
+      <NavButton href={{ pathname: "/voluntario/calificar-donante", params: { id: data.donations[0]?.id } }} showArrow={false}>Calificar donante</NavButton>
+      <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
         Confirmar recogida
       </NavButton>
     </Screen>

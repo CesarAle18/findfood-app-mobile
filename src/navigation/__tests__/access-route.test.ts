@@ -1,6 +1,6 @@
 import { getMockContext } from "expo-router/testing-library";
 
-import type { AccessPhase, MobileRole } from "@/auth/access";
+import { resolveActiveRole, type Access, type AccessPhase, type MobileRole } from "@/auth/access";
 
 import {
   guardsFor,
@@ -25,11 +25,23 @@ const PHASES: readonly AccessPhase[] = [
 
 const ROLES: readonly (MobileRole | null)[] = [null, "DONANTE", "VOLUNTARIO"];
 
+/** The mobile roles an account can have. */
+const ACCOUNTS: readonly (readonly MobileRole[])[] = [
+  [],
+  ["DONANTE"],
+  ["VOLUNTARIO"],
+  ["DONANTE", "VOLUNTARIO"],
+];
+
 const GROUPS = Object.keys(ROUTE_GROUPS) as RouteGroup[];
 
-/** The group that guards a route name, or undefined for the gate. */
+/** The group that guards a top-level route name, or undefined for the gate. */
 function groupOf(name: string): RouteGroup | undefined {
   return GROUPS.find((group) => (ROUTE_GROUPS[group] as readonly string[]).includes(name));
+}
+
+function accessOf(phase: AccessPhase, roles: readonly MobileRole[]): Access {
+  return { phase, canDonor: roles.includes("DONANTE"), canVolunteer: roles.includes("VOLUNTARIO") };
 }
 
 describe("routeForAccess", () => {
@@ -38,8 +50,8 @@ describe("routeForAccess", () => {
     ["verify-email", null, "/verificar-correo"],
     ["no-mobile-role", null, "/sin-acceso"],
     ["account-blocked", null, "/sin-acceso"],
-    ["app", "DONANTE", "/inicio-donante"],
-    ["app", "VOLUNTARIO", "/inicio"],
+    ["app", "DONANTE", "/donante"],
+    ["app", "VOLUNTARIO", "/voluntario"],
   ])("sends %s with role %s to %s", (phase, role, route) => {
     expect(routeForAccess(phase, role)).toBe(route);
   });
@@ -66,7 +78,14 @@ describe("routeForAccess", () => {
 });
 
 describe("guardsFor", () => {
-  const NONE: RouteGuards = { auth: false, verifyEmail: false, noAccess: false, app: false };
+  const NONE: RouteGuards = {
+    auth: false,
+    verifyEmail: false,
+    noAccess: false,
+    donor: false,
+    volunteer: false,
+    app: false,
+  };
 
   it.each<[AccessPhase, Partial<RouteGuards>]>([
     ["loading", {}],
@@ -78,36 +97,59 @@ describe("guardsFor", () => {
     ["verify-email", { verifyEmail: true }],
     ["no-mobile-role", { noAccess: true }],
     ["account-blocked", { noAccess: true }],
-    ["app", { app: true }],
-  ])("opens the right groups in %s", (phase, open) => {
-    expect(guardsFor(phase)).toEqual({ ...NONE, ...open });
+  ])("opens the right groups in %s, whatever the roles", (phase, open) => {
+    for (const roles of ACCOUNTS) {
+      expect(guardsFor(accessOf(phase, roles))).toEqual({ ...NONE, ...open });
+    }
+  });
+
+  it.each<[string, readonly MobileRole[], Partial<RouteGuards>]>([
+    ["a donor", ["DONANTE"], { app: true, donor: true }],
+    ["a volunteer", ["VOLUNTARIO"], { app: true, volunteer: true }],
+    ["a donor and volunteer", ["DONANTE", "VOLUNTARIO"], { app: true, donor: true, volunteer: true }],
+  ])("opens only the segments of %s in the app phase", (_who, roles, open) => {
+    expect(guardsFor(accessOf("app", roles))).toEqual({ ...NONE, ...open });
+  });
+
+  it("never opens a role segment outside the app phase", () => {
+    for (const phase of PHASES.filter((p) => p !== "app")) {
+      const guards = guardsFor(accessOf(phase, ["DONANTE", "VOLUNTARIO"]));
+      expect([phase, guards.donor, guards.volunteer]).toEqual([phase, false, false]);
+    }
   });
 });
 
 describe("route groups", () => {
-  it("never redirects to a screen that its own phase blocks", () => {
+  it("never redirects to a screen that its own access blocks", () => {
     // A blocked target falls back to the gate, which would redirect to it again.
     const blocked: string[] = [];
     for (const phase of PHASES) {
-      for (const role of ROLES) {
-        const route = routeForAccess(phase, role);
-        if (route === null) continue;
-        const group = groupOf(route.slice(1));
-        if (!group || !guardsFor(phase)[group]) blocked.push(`${phase} (${role}) -> ${route}`);
+      for (const roles of ACCOUNTS) {
+        for (const stored of ROLES) {
+          const access = accessOf(phase, roles);
+          const route = routeForAccess(phase, resolveActiveRole(roles, stored));
+          if (route === null) continue;
+          const group = groupOf(route.split("/")[1]);
+          if (!group || !guardsFor(access)[group]) {
+            blocked.push(`${phase} [${roles.join(",")}] (${stored}) -> ${route}`);
+          }
+        }
       }
     }
     expect(blocked).toEqual([]);
   });
 
-  it("guards every route file except the gate, each exactly once", () => {
-    // The route files expo-router finds (`./login.tsx`), relative to the project root.
-    const routes = getMockContext("./src/app")
+  it("guards every route file except the gate, each segment exactly once", () => {
+    // The route files expo-router finds (`./donante/(tabs)/index.tsx`), relative to the
+    // project root. The root Stack guards top-level names: a file or a segment directory.
+    const topLevel = getMockContext("./src/app")
       .keys()
       .map((key) => key.replace(/^\.\//, "").replace(/\.[tj]sx?$/, ""))
       // Layouts and special files (`+not-found`, `+html`) are not screens.
-      .filter((name) => !/(^|\/)[_+]/.test(name) && name !== "index");
+      .filter((name) => !/(^|\/)[_+]/.test(name) && name !== "index")
+      .map((name) => name.split("/")[0]);
     const guarded = GROUPS.flatMap((group) => ROUTE_GROUPS[group]);
 
-    expect([...guarded].sort()).toEqual(routes.sort());
+    expect([...guarded].sort()).toEqual([...new Set(topLevel)].sort());
   });
 });

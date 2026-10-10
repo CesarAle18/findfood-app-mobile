@@ -17,8 +17,6 @@ export function ActiveRouteScreen() {
       title="Ruta activa"
       subtitle="R-045"
       badge={<Badge warning>En progreso</Badge>}
-      tabs="route"
-      viewRole="volunteer"
     >
       <RouteMap />
       <Section title="Próxima parada">
@@ -35,19 +33,19 @@ export function ActiveRouteScreen() {
           </Row>
         </Card>
       </Section>
-      <NavButton href="/registrar-recogida" showArrow={false}>
+      <NavButton href="/voluntario/registrar-recogida" showArrow={false}>
         Llegué al destino
       </NavButton>
       <TextLink
         href={{
-          pathname: "/detalle-donacion",
-          params: { id: "DON-1058", view: "volunteer" },
+          pathname: "/voluntario/detalle-donacion",
+          params: { id: "DON-1058" },
         }}
       >
         Ver detalle
       </TextLink>
       <Button variant="outline">Contactar al donante</Button>
-      <NavButton href="/entrega-voluntario" showArrow={false}>
+      <NavButton href="/voluntario/entrega-voluntario" showArrow={false}>
         Finalizar viaje
       </NavButton>
     </Screen>

@@ -35,7 +35,7 @@ export function LoginScreen() {
           ¿Olvidaste tu contraseña?
         </TextLink>
       </View>
-      <NavButton href="/inicio-donante" showArrow={false}>
+      <NavButton href="/donante" showArrow={false}>
         Iniciar sesión
       </NavButton>
       <View
@@ -49,7 +49,7 @@ export function LoginScreen() {
         <Copy tone="secondary" style={{ fontSize: 11, textAlign: "center" }}>
           o continúa con
         </Copy>
-        <NavButton href="/inicio-donante" variant="outline" showArrow={false}>
+        <NavButton href="/donante" variant="outline" showArrow={false}>
           Google
         </NavButton>
       </View>

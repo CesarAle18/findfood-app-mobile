@@ -21,8 +21,6 @@ export function HomeScreen() {
       title="Inicio"
       subtitle="Vista voluntario"
       badge={<Badge>{available ? "Disponible" : "No disponible"}</Badge>}
-      tabs="home"
-      viewRole="volunteer"
     >
       <Choices values={["Disponible", "No disponible"]} selected={available ? 0 : 1} onChange={i => setAvailable(i === 0)} />
       <Card soft>
@@ -58,7 +56,7 @@ export function HomeScreen() {
           </Row>
           <Copy tone="secondary">Inicio 16:00 · 4 paradas</Copy>
           <Copy tone="secondary">Peso estimado: 120 kg</Copy>
-          <NavButton href="/ruta-activa">Ver ruta</NavButton>
+          <NavButton href="/voluntario/rutas">Ver ruta</NavButton>
         </Card>
       </Section>
       <Section title="Actividad reciente">

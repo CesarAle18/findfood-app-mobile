@@ -49,12 +49,12 @@ function DonationLinks({ donation }: { donation: Donation }) {
   return (
     <>
       <NavButton
-        href={{ pathname: "/seguimiento", params: { id: donation.id } }}
+        href={{ pathname: "/donante/seguimiento", params: { id: donation.id } }}
       >
         Hacer seguimiento
       </NavButton>
       <TextLink
-        href={{ pathname: "/detalle-donacion", params: { id: donation.id } }}
+        href={{ pathname: "/donante/detalle-donacion", params: { id: donation.id } }}
       >
         Ver detalle
       </TextLink>
@@ -66,11 +66,9 @@ export function DonorHomeScreen() {
   const donation = data.donations[0];
   return (
     <Screen
-      viewRole="donor"
       title="Inicio"
       subtitle="Usuario donante"
       badge={<Badge>Donante</Badge>}
-      tabs="home"
     >
       <Card soft>
         <Copy weight="semibold">Resumen de donaciones</Copy>
@@ -82,11 +80,11 @@ export function DonorHomeScreen() {
           ]}
         />
       </Card>
-      <NavButton href="/nueva-donacion" showArrow={false}>
+      <NavButton href="/donante/nueva-donacion" showArrow={false}>
         Realiza una donación
       </NavButton>
       <NavButton
-        href="/registro-voluntario"
+        href="/donante/registro-voluntario"
         variant="outline"
         showArrow={false}
       >
@@ -136,10 +134,8 @@ export function DonationsScreen() {
   );
   return (
     <Screen
-      viewRole="donor"
       title="Mis donaciones"
       subtitle="Historial y estado de tus envíos"
-      tabs="route"
       badge={<Badge>3 activas</Badge>}
     >
       <Choices
@@ -173,7 +169,7 @@ export function DonationsScreen() {
               </Copy>
               {d.status === "Completada" ? (
                 <TextLink
-                  href={{ pathname: "/detalle-donacion", params: { id: d.id } }}
+                  href={{ pathname: "/donante/detalle-donacion", params: { id: d.id } }}
                 >
                   Ver detalle
                 </TextLink>
@@ -199,16 +195,14 @@ export function TrackingScreen() {
   const { donation: d, volunteer } = useDonation();
   if (!d)
     return (
-      <Screen viewRole="donor" title="Seguimiento" back>
+      <Screen title="Seguimiento" back>
         <Copy>Donación no encontrada.</Copy>
       </Screen>
     );
   return (
     <Screen
-      viewRole="donor"
       title="Seguimiento"
       subtitle="Sigue el avance de tu donación"
-      tabs="route"
       back
     >
       <Row style={{ justifyContent: "space-between" }}>
@@ -287,28 +281,26 @@ export function TrackingScreen() {
         </Stack>
       </Section>
       <Button variant="outline">Contactar voluntario</Button>
-      <NavButton href={{ pathname: "/detalle-donacion", params: { id: d.id } }}>
+      <NavButton href={{ pathname: "/donante/detalle-donacion", params: { id: d.id } }}>
         Ver detalle completo
       </NavButton>
     </Screen>
   );
 }
-export function DonationDetailScreen() {
-  const { view } = useLocalSearchParams<{ view?: string }>();
+/** Also opened by volunteers from their route (`asVolunteer`), without the donor actions. */
+export function DonationDetailScreen({ asVolunteer = false }: { asVolunteer?: boolean }) {
   const { donation: d, volunteer } = useDonation();
   if (!d)
     return (
-      <Screen viewRole="donor" title="Detalle de donación" back>
+      <Screen title="Detalle de donación" back>
         <Copy>Donación no encontrada.</Copy>
       </Screen>
     );
   return (
     <Screen
-      viewRole={view === "volunteer" ? "volunteer" : "donor"}
       title="Detalle de donación"
       subtitle="Información completa del envío"
       back
-      tabs="route"
     >
       <Row style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
         <Copy weight="bold">{d.id}</Copy>
@@ -358,14 +350,17 @@ export function DonationDetailScreen() {
       <Section title="Ubicación en tiempo real">
         <RouteMap />
       </Section>
-      <NavButton
-        href={{ pathname: "/calificar-voluntario", params: { id: d.id } }}
-        showArrow={false}
-      >
-        Calificar voluntario
-      </NavButton>
+      {asVolunteer ? null : (
+        <NavButton
+          href={{ pathname: "/donante/calificar-voluntario", params: { id: d.id } }}
+          showArrow={false}
+        >
+          Calificar voluntario
+        </NavButton>
+      )}
       <TextLink
-        href={view === "volunteer" ? "/ruta-activa" : "/mis-donaciones"}
+        href={asVolunteer ? "/voluntario/rutas" : "/donante/donaciones"}
+        dismissTo
       >
         Regresar
       </TextLink>
@@ -376,7 +371,6 @@ export function ReviewDonationScreen() {
   const { draft } = useMobile();
   return (
     <Screen
-      viewRole="donor"
       title="Revisar donación"
       subtitle="Confirma la información antes de publicar"
       back
@@ -404,11 +398,11 @@ export function ReviewDonationScreen() {
               Vence: {product.expiresOn || "Pendiente"}
             </Copy>
             <Badge>{product.coldChain}</Badge>
-            <TextLink href="/nueva-donacion">Editar información</TextLink>
+            <TextLink href="/donante/nueva-donacion">Editar información</TextLink>
           </Card>
         ))}
       </Section>
-      <NavButton href="/espera-voluntario" showArrow={false}>
+      <NavButton href="/donante/espera-voluntario" showArrow={false}>
         Confirmar
       </NavButton>
     </Screen>

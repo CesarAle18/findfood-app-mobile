@@ -1,11 +1,11 @@
 import { colors, fonts } from "@/design/tokens";
-import { useMobile } from "@/state/mobile-context";
 import { Link, router, type Href } from "expo-router";
 import { useState, type PropsWithChildren, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Image,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,7 +16,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, type Edges } from "react-native-safe-area-context";
 import { Icon, type IconName } from "./icon";
 import {
   Animated,
@@ -57,47 +57,49 @@ export function Copy({
   );
 }
 
+/**
+ * Safe-area edges of the screen frame. On iOS the bottom edge is left to the scroll view
+ * (`contentInsetAdjustmentBehavior`), so content scrolls behind the home indicator and the
+ * translucent native tab bar. Android native tabs already lay their screens out above the
+ * tab bar, where this edge measures nothing; on stack screens it clears the navigation bar.
+ */
+const SAFE_AREA_EDGES: Edges =
+  Platform.OS === "ios"
+    ? ["top", "left", "right"]
+    : ["top", "left", "right", "bottom"];
+
 export function Screen({
   children,
   title,
   subtitle,
-  tabs,
   badge,
   back = false,
   center = false,
-  viewRole,
 }: PropsWithChildren<{
   title?: string;
   subtitle?: string;
-  tabs?: "home" | "route" | "bell" | "user";
   badge?: ReactNode;
   back?: boolean;
   center?: boolean;
-  viewRole?: "donor" | "volunteer";
 }>) {
-  const { role, setRole } = useMobile();
   return (
-    <SafeAreaView
-      style={styles.safe}
-      edges={["top", "left", "right", "bottom"]}
-    >
+    <SafeAreaView style={styles.safe} edges={SAFE_AREA_EDGES}>
       <View style={styles.frame}>
         <View style={styles.header}>
-          {back && (
+          {back ? (
             <Pressing
               accessibilityRole="button"
               accessibilityLabel="Volver"
               hitSlop={6}
               surface={styles.iconButton}
+              // Without history (a cold deep link), the gate opens the right home.
               onPress={() =>
-                router.canGoBack()
-                  ? router.back()
-                  : router.replace("/pantallas")
+                router.canGoBack() ? router.back() : router.replace("/")
               }
             >
               <Icon name="back" />
             </Pressing>
-          )}
+          ) : null}
           <View style={styles.brand}>
             <Image
               source={require("../../../assets/brand/findfood-logo.png")}
@@ -113,7 +115,6 @@ export function Screen({
             <Pressing
               accessibilityRole="link"
               accessibilityLabel="Abrir menú de cuenta"
-              onPress={() => setRole(viewRole ?? role)}
               surface={styles.iconButton}
             >
               <Icon name="menu" size={32} />
@@ -126,107 +127,30 @@ export function Screen({
             styles.content,
             center && styles.centerContent,
           ]}
+          contentInsetAdjustmentBehavior="automatic"
           showsVerticalScrollIndicator
           keyboardShouldPersistTaps="handled"
           automaticallyAdjustKeyboardInsets
         >
-          {title && (
+          {title ? (
             <View style={styles.heading}>
               <View style={styles.headingText}>
                 <Copy weight="bold" style={styles.title}>
                   {title}
                 </Copy>
-                {subtitle && (
+                {subtitle ? (
                   <Copy tone="secondary" style={styles.subtitle}>
                     {subtitle}
                   </Copy>
-                )}
+                ) : null}
               </View>
               {badge}
             </View>
-          )}
+          ) : null}
           {children}
         </ScrollView>
-        {tabs && <BottomNav active={tabs} viewRole={viewRole} />}
       </View>
     </SafeAreaView>
-  );
-}
-
-function BottomNav({
-  active,
-  viewRole,
-}: {
-  viewRole?: "donor" | "volunteer";
-  active: "home" | "route" | "bell" | "user";
-}) {
-  const { role: currentRole, setRole } = useMobile();
-  const role = viewRole ?? currentRole;
-  const items: { title: string; icon: IconName; href?: Href }[] = [
-    {
-      title: "Inicio",
-      icon: "home",
-      href: role === "donor" ? "/inicio-donante" : "/inicio",
-    },
-    {
-      title: role === "donor" ? "Donaciones" : "Rutas",
-      icon: "route",
-      href: role === "donor" ? "/mis-donaciones" : "/ruta-activa",
-    },
-    { title: "Alertas", icon: "bell", href: "/notificaciones" },
-    {
-      title: "Perfil",
-      icon: "user",
-      href: role === "donor" ? "/perfil-donante" : "/perfil-voluntario",
-    },
-  ];
-  return (
-    <View style={styles.nav}>
-      {items.map((item) => {
-        const selected = item.icon === active;
-        const content = (
-          <>
-            <View style={[styles.navIcon, selected && styles.navSelected]}>
-              <Icon
-                name={item.icon}
-                size={21}
-                color={selected ? colors.primary : colors.secondary}
-              />
-            </View>
-            <Copy
-              style={styles.navLabel}
-              tone={selected ? "primary" : "secondary"}
-              weight={selected ? "semibold" : "regular"}
-            >
-              {item.title}
-            </Copy>
-          </>
-        );
-        return item.href ? (
-          <Link key={item.title} href={item.href} replace asChild>
-            <Pressing
-              accessibilityRole="link"
-              accessibilityState={{ selected }}
-              onPress={() => setRole(role)}
-              style={styles.navItem}
-              surface={styles.navSurface}
-            >
-              {content}
-            </Pressing>
-          </Link>
-        ) : (
-          <View
-            key={item.title}
-            accessible
-            accessibilityLabel="Perfil, pendiente de diseño"
-            accessibilityState={{ disabled: true }}
-            style={styles.navItem}
-          >
-            {content}
-          </View>
-        );
-      })}
-    </View>
   );
 }
 
@@ -314,13 +238,24 @@ export function Button({
   );
 }
 
+/**
+ * Link options shared by TextLink and NavButton. `dismissTo` goes back down the stack to
+ * `href` (a tab of the segment, or an earlier screen) instead of pushing another copy; use it
+ * from stacked screens to return to a tab.
+ */
+interface LinkOptions {
+  href: Href;
+  dismissTo?: boolean;
+}
+
 export function TextLink({
   children,
   href,
+  dismissTo = false,
   align = "center",
-}: PropsWithChildren<{ href: Href; align?: "left" | "center" | "right" }>) {
+}: PropsWithChildren<LinkOptions & { align?: "left" | "center" | "right" }>) {
   return (
-    <Link href={href} asChild>
+    <Link href={href} dismissTo={dismissTo} asChild>
       <Pressing
         accessibilityRole="link"
         scale={1}
@@ -347,16 +282,18 @@ export function TextLink({
 export function NavButton({
   children,
   href,
+  dismissTo = false,
   variant = "primary",
   showArrow = true,
-}: PropsWithChildren<{
-  href: Href;
-  variant?: "primary" | "outline";
-  showArrow?: boolean;
-}>) {
+}: PropsWithChildren<
+  LinkOptions & {
+    variant?: "primary" | "outline";
+    showArrow?: boolean;
+  }
+>) {
   const foreground = variant === "primary" ? colors.surface : colors.primary;
   return (
-    <Link href={href} asChild>
+    <Link href={href} dismissTo={dismissTo} asChild>
       <Pressing
         accessibilityRole="link"
         surface={StyleSheet.flatten([
@@ -773,25 +710,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  nav: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingTop: 8,
-    paddingBottom: 8,
-  },
-  navItem: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 54,
-    gap: 2,
-  },
-  navSurface: { alignItems: "center", gap: 2 },
-  navIcon: { paddingHorizontal: 18, paddingVertical: 5, borderRadius: 16 },
-  navSelected: { backgroundColor: colors.soft },
-  navLabel: { fontSize: 10, lineHeight: 16 },
 });
 
 /** Selector local reutilizable; su valor pertenece al formulario, sin persistencia. */
