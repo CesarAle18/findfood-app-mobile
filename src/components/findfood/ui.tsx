@@ -3,6 +3,7 @@ import { useMobile } from "@/state/mobile-context";
 import { Link, router, type Href } from "expo-router";
 import { useState, type PropsWithChildren, type ReactNode } from "react";
 import {
+  ActivityIndicator,
   Image,
   Modal,
   ScrollView,
@@ -11,6 +12,7 @@ import {
   TextInput,
   View,
   type StyleProp,
+  type TextInputProps,
   type TextStyle,
   type ViewStyle,
 } from "react-native";
@@ -228,33 +230,43 @@ function BottomNav({
   );
 }
 
-/** Un botón visual sin onPress: nunca ejecuta acciones de negocio. */
+/**
+ * Action button. Without `onPress` it is visual only and stays disabled, as in the
+ * prototype. `loading` shows an indicator and blocks repeated presses.
+ */
 export function Button({
   children,
   variant = "primary",
   icon,
+  onPress,
+  loading = false,
+  disabled = false,
 }: PropsWithChildren<{
   variant?: "primary" | "outline" | "danger";
   icon?: IconName;
+  onPress?: () => void;
+  loading?: boolean;
+  disabled?: boolean;
 }>) {
-  return (
-    <View
-      accessible
-      accessibilityRole="button"
-      accessibilityState={{ disabled: true }}
-      style={[
-        styles.button,
-        variant !== "primary" && styles.outline,
-        variant === "danger" && styles.danger,
-      ]}
-    >
-      {icon && (
+  const surface = [
+    styles.button,
+    variant !== "primary" && styles.outline,
+    variant === "danger" && styles.danger,
+  ];
+  const content = (
+    <>
+      {loading ? (
+        <ActivityIndicator
+          color={variant === "primary" ? colors.surface : colors.primary}
+          size="small"
+        />
+      ) : icon ? (
         <Icon
           name={icon}
           color={variant === "primary" ? colors.surface : colors.primary}
           size={19}
         />
-      )}
+      ) : null}
       <Copy
         weight="bold"
         style={[
@@ -271,7 +283,34 @@ export function Button({
       >
         {children}
       </Copy>
-    </View>
+    </>
+  );
+  if (!onPress) {
+    return (
+      <View
+        accessible
+        accessibilityRole="button"
+        accessibilityState={{ disabled: true }}
+        style={surface}
+      >
+        {content}
+      </View>
+    );
+  }
+  const inactive = disabled || loading;
+  return (
+    <Pressing
+      accessibilityRole="button"
+      accessibilityState={{ disabled: inactive }}
+      // aria-busy instead of accessibilityState.busy: react-native-web only reads aria-*.
+      aria-busy={loading}
+      disabled={inactive}
+      onPress={onPress}
+      opacity={disabled && !loading ? 0.45 : 1}
+      surface={surface}
+    >
+      {content}
+    </Pressing>
   );
 }
 
@@ -343,6 +382,16 @@ export function Field({
   grow = false,
   onChangeText,
   placeholder,
+  error,
+  accessibilityHint,
+  onBlur,
+  onSubmitEditing,
+  keyboardType,
+  autoComplete,
+  textContentType,
+  autoCapitalize,
+  returnKeyType,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -352,9 +401,24 @@ export function Field({
   grow?: boolean;
   onChangeText?: (value: string) => void;
   placeholder?: string;
-}) {
+  /** Validation message: shown below the input and announced with it. */
+  error?: string;
+  accessibilityHint?: string;
+  onBlur?: () => void;
+  onSubmitEditing?: () => void;
+} & Pick<
+  TextInputProps,
+  | "keyboardType"
+  | "autoComplete"
+  | "textContentType"
+  | "autoCapitalize"
+  | "returnKeyType"
+  | "maxLength"
+>) {
   const [focused, setFocused] = useState(false);
   const focusBorder = useActiveStyle(focused, { border: true });
+  const hint =
+    [error, accessibilityHint].filter(Boolean).join(" ") || undefined;
   return (
     <View style={[styles.field, grow && { flex: 1 }]}>
       <Copy style={styles.label} weight="bold">
@@ -369,15 +433,27 @@ export function Field({
       >
         <TextInput
           accessibilityLabel={label}
+          accessibilityHint={hint}
+          aria-invalid={error ? true : undefined}
           editable={!!onChangeText}
           selectTextOnFocus={false}
           value={value}
           onChangeText={onChangeText}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={() => {
+            setFocused(false);
+            onBlur?.();
+          }}
+          onSubmitEditing={onSubmitEditing}
           placeholder={placeholder}
           secureTextEntry={secure}
           multiline={multiline}
+          keyboardType={keyboardType}
+          autoComplete={autoComplete}
+          textContentType={textContentType}
+          autoCapitalize={autoCapitalize}
+          returnKeyType={returnKeyType}
+          maxLength={maxLength}
           style={[
             styles.input,
             multiline && { minHeight: 62, textAlignVertical: "top" },
@@ -391,6 +467,11 @@ export function Field({
           />
         )}
       </Animated.View>
+      {error ? (
+        <View accessibilityLiveRegion="polite">
+          <Copy style={styles.fieldError}>{error}</Copy>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -614,6 +695,7 @@ const styles = StyleSheet.create({
   copy: { fontSize: 13, lineHeight: 20 },
   field: { gap: 9 },
   label: { fontSize: 11, lineHeight: 18 },
+  fieldError: { fontSize: 11, lineHeight: 16, color: colors.danger },
   inputRow: {
     minHeight: 48,
     borderWidth: 1,

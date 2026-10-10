@@ -12,3 +12,8 @@ const TEST_ENV = {
 for (const [name, value] of Object.entries(TEST_ENV)) {
   if (process.env[name] === undefined) process.env[name] = value;
 }
+
+// Reanimated needs react-native-worklets, whose native module does not exist under Jest.
+// Worklets ships a JS double for this; Reanimated itself stays real and runs its own Jest
+// mode (animations jump to their final values, layout animations are skipped).
+jest.mock("react-native-worklets", () => require("react-native-worklets/src/mock"));

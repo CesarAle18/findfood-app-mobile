@@ -252,6 +252,46 @@ try {
       React.createElement(VolunteerRegistrationScreen),
     ).includes('href="/inicio-donante"'),
   );
+  const {
+    LoadingState,
+    EmptyState,
+    ErrorState,
+    OfflineBanner,
+  } = require("../src/components/findfood/feedback.tsx");
+  const { Button, Field } = require("../src/components/findfood/ui.tsx");
+  const noop = () => {};
+  const feedbackHtml = renderToStaticMarkup(
+    React.createElement(
+      React.Fragment,
+      null,
+      React.createElement(LoadingState, { label: "Cargando donaciones" }),
+      React.createElement(EmptyState, { title: "Aún no tienes donaciones" }),
+      React.createElement(ErrorState, {
+        error: null,
+        onRetry: noop,
+        secondaryAction: { label: "Cerrar sesión", onPress: noop },
+      }),
+      React.createElement(OfflineBanner),
+      React.createElement(Field, {
+        label: "Correo electrónico",
+        value: "",
+        onChangeText: noop,
+        error: "Ingresa tu correo electrónico.",
+      }),
+      React.createElement(Button, { onPress: noop, loading: true }, "Ingresar"),
+    ),
+  );
+  assert(feedbackHtml.includes("Cargando donaciones"));
+  assert(feedbackHtml.includes("Aún no tienes donaciones"));
+  assert(feedbackHtml.includes("Reintentar") && feedbackHtml.includes("Cerrar sesión"));
+  assert(feedbackHtml.includes("Ingresa tu correo electrónico."));
+  assert(feedbackHtml.includes('aria-invalid="true"'));
+  assert(feedbackHtml.includes('aria-busy="true"'));
+  // Server rendering has no connection state, so the offline banner stays hidden.
+  assert(!feedbackHtml.includes("Sin conexión"));
+  console.log(
+    "PASS: loading, empty and error states, field error and busy button rendered.",
+  );
   // Exercise local handlers without requiring a native device or browser.
   const realUseState = React.useState;
   function harness(Component, props = {}) {
