@@ -111,11 +111,16 @@ async function deleteItem(key: string): Promise<void> {
 
 /**
  * Id of this install's push registration (`POST /me/dispositivos`), kept so sign-out can
- * unregister it. Written by `@/services/perfil`; never rejects.
+ * unregister it. Written by `@/services/perfil`. `read` and `clear` never reject; `save`
+ * does, because a lost id would leave the device registered after sign-out and the caller
+ * has to roll the registration back.
  */
 export const deviceIdStorage = {
   read: (): Promise<string | null> => readItem(DEVICE_ID_KEY),
-  save: (id: string): Promise<void> => writeItem(DEVICE_ID_KEY, id),
+  save: async (id: string): Promise<void> => {
+    if (Platform.OS === "web") return;
+    await SecureStore.setItemAsync(DEVICE_ID_KEY, id);
+  },
   clear: (): Promise<void> => deleteItem(DEVICE_ID_KEY),
 };
 

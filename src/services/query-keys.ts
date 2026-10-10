@@ -10,6 +10,7 @@
  *   ["donaciones", "list", { estado }]          list(filters)
  *   ["donaciones", "detail"]                    details()
  *   ["donaciones", "detail", id]                detail(id)
+ *   ["donaciones", "historial"]                 historiales()
  *   ["donaciones", "historial", id]             historial(id)
  *
  * Roots never nest: `me` (GET /me) does not reach `perfil` (impact) or `notificaciones`,
@@ -51,6 +52,8 @@ export const queryKeys = {
   },
   donaciones: {
     ...donaciones,
+    /** Every donation history, for changes whose response does not name the donation. */
+    historiales: () => ["donaciones", "historial"] as const,
     historial: (id: string) => ["donaciones", "historial", id] as const,
   },
   asignaciones: {

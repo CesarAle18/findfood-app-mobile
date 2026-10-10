@@ -1,4 +1,5 @@
 import { waitFor } from "@testing-library/react-native";
+import * as SecureStore from "expo-secure-store";
 
 import { api } from "@/api";
 import { queryKeys } from "@/services/query-keys";
@@ -132,6 +133,28 @@ describe("push device", () => {
       },
     ]);
     expect(mockSecureValues.get(DEVICE_ID_KEY)).toBe("dev-1");
+  });
+
+  it("rolls the registration back when its id cannot be stored", async () => {
+    mockedApi.post.mockResolvedValueOnce(device);
+    jest
+      .mocked(SecureStore.setItemAsync)
+      .mockRejectedValueOnce(new Error("keychain unavailable"));
+
+    await expect(
+      registrarDispositivo({ token_push: "ExponentPushToken[abc]", plataforma: "ANDROID" }),
+    ).rejects.toThrow("keychain unavailable");
+
+    // Without the stored id sign-out could not unregister it, so the device is deleted now.
+    expect(sentRequests(mockedApi)).toEqual([
+      {
+        method: "post",
+        path: "/me/dispositivos",
+        options: { body: { token_push: "ExponentPushToken[abc]", plataforma: "ANDROID" } },
+      },
+      { method: "delete", path: "/me/dispositivos/dev-1" },
+    ]);
+    expect(mockSecureValues.has(DEVICE_ID_KEY)).toBe(false);
   });
 
   it("forgets the stored id when that device is deleted", async () => {

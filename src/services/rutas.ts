@@ -244,7 +244,7 @@ const invalidates = {
     asignaciones.ofertas(),
     donaciones.all,
   ],
-  /** Only the stop changes. */
+  /** The stop changes; a pickup stop also shows in its donation's history. */
   llegada: (parada: ParadaDto) => [rutas.detail(parada.ruta_id), ...historialDe(parada)],
   /**
    * A pickup moves its donation to EN_TRANSITO; a delivery completes the route, its

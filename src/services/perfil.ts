@@ -115,12 +115,21 @@ export function actualizarPerfil(body: ActualizarPerfilBody): Promise<MeDto> {
   return api.patch<MeDto>("/me", { body });
 }
 
-/** Registers this install for push and stores its id, so sign-out can unregister it. */
+/**
+ * Registers this install for push and stores its id, so sign-out can unregister it. If the
+ * id cannot be stored the registration is deleted again and the error surfaces, so a later
+ * attempt retries instead of leaving a device that sign-out cannot unregister.
+ */
 export async function registrarDispositivo(
   body: RegistrarDispositivoBody,
 ): Promise<DispositivoDto> {
   const device = await api.post<DispositivoDto>("/me/dispositivos", { body });
-  await deviceIdStorage.save(device.id);
+  try {
+    await deviceIdStorage.save(device.id);
+  } catch (error) {
+    await api.delete(`/me/dispositivos/${encodeURIComponent(device.id)}`).catch(() => undefined);
+    throw error;
+  }
   return device;
 }
 

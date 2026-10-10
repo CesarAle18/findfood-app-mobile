@@ -76,15 +76,19 @@ describe("mutations invalidate exactly the queries they change", () => {
       asignaciones.ofertas(),
       donaciones.all,
     ]),
-    // The donation stays PUBLICADA, but its detail no longer shows this offer.
+    // The donation stays PUBLICADA, but its detail no longer shows this offer and its history
+    // records the rejected assignment (the response carries no donation id).
     mutationCase("POST /asignaciones/:id/rechazar", useRechazarOfertaMutation, { id: "a-1", body: motivo }, [
       asignaciones.ofertas(),
       donaciones.details(),
+      donaciones.historiales(),
     ]),
-    // The donation is published again (or expires) and its stop leaves the route.
+    // The donation is published again (or expires) and its stop leaves the route, which
+    // changes the route's stop count and weight in lists too.
     mutationCase("POST /asignaciones/:id/abandonar", useAbandonarAsignacionMutation, { id: "a-1", body: motivo }, [
       asignaciones.ofertas(),
       donaciones.all,
+      rutas.lists(),
       rutas.details(),
     ]),
     // Ratings only change the other party's averages, which no query of this user shows.

@@ -136,10 +136,16 @@ const { asignaciones, donaciones, rutas } = queryKeys;
 const invalidates = {
   /** The donation becomes ASIGNADA: its lists, detail and history change. */
   aceptar: () => [asignaciones.ofertas(), donaciones.all],
-  /** The donation stays PUBLICADA, but its detail no longer shows this offer. */
-  rechazar: () => [asignaciones.ofertas(), donaciones.details()],
-  /** The donation is published again (or expires) and its stop leaves the route. */
-  abandonar: () => [asignaciones.ofertas(), donaciones.all, rutas.details()],
+  /**
+   * The donation stays PUBLICADA, but its detail no longer shows this offer and its history
+   * records the rejected assignment. The response carries no donation id, so every history.
+   */
+  rechazar: () => [asignaciones.ofertas(), donaciones.details(), donaciones.historiales()],
+  /**
+   * The donation is published again (or expires) and its stop leaves the route, which also
+   * changes the stop count and weight shown in route lists.
+   */
+  abandonar: () => [asignaciones.ofertas(), donaciones.all, rutas.lists(), rutas.details()],
   /** Ratings only change the other party's averages, which no query of this user shows. */
   calificar: () => [],
 } satisfies Record<string, Invalidation<never, never>>;
