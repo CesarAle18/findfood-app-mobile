@@ -41,7 +41,7 @@ import { env } from "@/config/env";
 import { queryKeys } from "@/services/query-keys";
 
 const ACTIVE_ROLE_KEY = "findfood.activeRole";
-/** Written by the push registration; unregistered on sign-out. */
+/** Written by the push registration (see deviceIdStorage); unregistered on sign-out. */
 const DEVICE_ID_KEY = "findfood.deviceId";
 const DEVICE_UNREGISTER_TIMEOUT_MS = 3_000;
 
@@ -109,6 +109,16 @@ async function deleteItem(key: string): Promise<void> {
   }
 }
 
+/**
+ * Id of this install's push registration (`POST /me/dispositivos`), kept so sign-out can
+ * unregister it. Written by `@/services/perfil`; never rejects.
+ */
+export const deviceIdStorage = {
+  read: (): Promise<string | null> => readItem(DEVICE_ID_KEY),
+  save: (id: string): Promise<void> => writeItem(DEVICE_ID_KEY, id),
+  clear: (): Promise<void> => deleteItem(DEVICE_ID_KEY),
+};
+
 function toSnapshot(session: Session | null): SessionSnapshot {
   if (!session) return SIGNED_OUT;
   return {
@@ -121,7 +131,7 @@ function toSnapshot(session: Session | null): SessionSnapshot {
 
 /** Best effort and bounded: signing out never waits on the network for long. */
 async function unregisterDevice(): Promise<void> {
-  const deviceId = await readItem(DEVICE_ID_KEY);
+  const deviceId = await deviceIdStorage.read();
   if (!deviceId || !sessionStore.getAccessToken()) return;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DEVICE_UNREGISTER_TIMEOUT_MS);
@@ -225,7 +235,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
           await unregisterDevice();
           await endSession();
           queryClient.clear();
-          await Promise.all([deleteItem(DEVICE_ID_KEY), deleteItem(ACTIVE_ROLE_KEY)]);
+          await Promise.all([deviceIdStorage.clear(), deleteItem(ACTIVE_ROLE_KEY)]);
           setStoredRole(null);
           setRecovering(false);
         } finally {

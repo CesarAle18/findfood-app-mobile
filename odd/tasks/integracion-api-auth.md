@@ -43,8 +43,8 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 | F1-02 | HTTP client + problem+json errors + jest setupFiles with test env | delegated writer (2+ non-trivial files) | [x] | `9f320ef` | high → granted → approved, burned (range c66b1e6..9f320ef); 3 warnings (refresh without timeout, transient refresh failure signs out, repeated onUnauthorized) → folded into F1-03 |
 | F1-03 | Supabase client + chunked SecureStore + client hardening (F1-02 review warnings) | delegated writer (2+ non-trivial files) | [x] | `c9c5d5e` | high → granted → approved, burned (range 9f320ef..c9c5d5e); 2 lenses: shared refresh never expires if it hangs (WARNING) → folded into F1-04 |
 | F1-04 | QueryClient + SessionProvider + resolveAccess + shared-refresh deadline | delegated writer (2+ non-trivial files) | [x] | `ab1dd45` | high → granted → approved, burned (range c9c5d5e..ab1dd45); 3 warnings → F1-04b |
-| F1-04b | Session hardening from F1-04 review: explicit storage key removal on sign-out, offline startup, Supabase fetch timeout | delegated writer (2+ non-trivial files) | [x] | see log | |
-| F1-05 | Per-module services + query keys + DTO types | delegated writer | [ ] | | |
+| F1-04b | Session hardening from F1-04 review: explicit storage key removal on sign-out, offline startup, Supabase fetch timeout | delegated writer (2+ non-trivial files) | [x] | `6985029` | high → granted → approved, burned (range ab1dd45..6985029); 5 suggestions |
+| F1-05 | Per-module services + query keys + DTO types | delegated writer (2+ non-trivial files) | [x] | see log | |
 | F1-06 | Mappers (dates, units, refrigeration, statuses) + tests | delegated writer | [ ] | | |
 | F1-07 | Feedback components, problem messages, Field/Button, useZodForm | delegated writer | [ ] | | |
 | F1-08 | Root layout guards + splash | delegated writer | [ ] | | |
@@ -69,6 +69,7 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - F1-03: RED (missing auth modules, 11 new client tests) → GREEN 139/139; typecheck, lint, test:render ok (parent re-ran `npm test`: 139/139). Storage uses two alternating chunk slots so a failed write keeps the previous session readable; keys escaped without collisions. No URL polyfill: Expo 57 installs a WHATWG `URL` global (`expo/src/winter/runtime.native.ts:21`). Refresh rejection = transient (no sign-out); `null` = invalid session.
 - F1-04: RED (4 missing modules + 5 client tests) → GREEN 230/230; typecheck, lint, test:render ok (parent re-ran `npm test` 230/230 and typecheck). `resolveAccess` keeps cached `me` usable when a background refetch fails; `useAccess` stays `loading` until the stored role is read. RNTL 14 (+ `test-renderer` peer) added for provider tests.
 - F1-04b: RED 8 tests/5 suites → GREEN 259/259; typecheck, lint, test:render ok (parent re-ran `npm test` 259/259). Explicit storage key `findfood.auth`; `signOutLocally()` removes `K`, `K-user`, `K-code-verifier`, `K-flows-code-verifier`, `K-flow-<id>-code-verifier` (auth-js `GoTrueClient.js:4429-4433`, `lib/helpers.js:241-365`). Supabase fetch timeout 10 s (`createSupabaseFetch`). `me` query uses `networkMode: "always"` + explicit `refetchOnReconnect` (TanStack defaults it to false under `always`).
+- F1-05: RED 8 suites → GREEN 339/339 (services 80/80); typecheck, lint, test:render ok (parent re-ran `npm test` 339/339 + typecheck). DTOs typed from the API source; one `invalidates` map per module; invalidation not awaited (mutations settle on server answer). Unread count = `no_leidas` of `GET /me/notificaciones?solo_no_leidas=true&limite=1` (no count endpoint).
 
 ## Follow-ups
 - API: assert `factor_a_kg` of ML/G in e2e; note in migration header that ON CONFLICT never corrects pre-existing rows.
@@ -76,8 +77,11 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - scripts/dev-env.mjs: `\uFEFF` escape (written as text) instead of a literal BOM character; reject TTL that yields exp <= iat + 60; reject positional args for `real`; add `node --test` coverage for marker/role/postman parsing (R3-dev-env-untested, WARNING).
 
 - Done: env.test.ts typed `require` cast (F1-02); client refresh hardening (F1-03); shared-refresh deadline, late abort check, supabase wiring tests (F1-04).
-- F2-06: offline sign-out with an expired session can take ~25-30 s (auth-js retries the refresh inside `signOut`); show a blocking "Cerrando sesión…" state. Old `sb-*` SecureStore entries from earlier dev builds stay orphaned (users sign in once more).
+- F2-06: offline sign-out with an expired session can take ~25-30 s (auth-js retries the refresh inside `signOut`); give `signOutLocally` an overall deadline (then remove keys anyway) and show a blocking "Cerrando sesión…" state; add an end-to-end offline sign-out test. Old `sb-*` SecureStore entries from earlier dev builds stay orphaned (users sign in once more) — optional one-time cleanup.
+- Intermittent "SessionProvider … not wrapped in act" warning seen once in a full run (session.test.tsx); investigate if it recurs.
+- F3 screens: signed URLs (`url_lectura`, `foto_url`) expire after 5 min; add refetch/expiry handling where shown.
+- Readability nits (F1-04b review): reword the fake `signOut` mock comment in supabase.test.ts; unify the two `ignore()` helpers.
 - Web build stores the session in localStorage (preview only); revisit if web ever ships to users.
 
 ## Next step
-F1-05 services per module. Review boundary: `ab1dd45`.
+F1-06 mappers. Review boundary: `6985029`.
