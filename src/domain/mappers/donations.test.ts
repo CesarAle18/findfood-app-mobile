@@ -10,7 +10,7 @@ import {
   donationFromDetalle,
   donationFromResumen,
   donationRowFromResumen,
-  donationViewFromDetalle,
+  tolerantDonationFromDetalle,
 } from "./donations";
 import { MappingError } from "./errors";
 
@@ -261,16 +261,16 @@ describe("donationFromDetalle", () => {
   });
 });
 
-describe("donationViewFromDetalle", () => {
+describe("tolerantDonationFromDetalle", () => {
   it("maps a valid detail exactly like donationFromDetalle", () => {
-    expect(donationViewFromDetalle(detalle(), NOW)).toEqual(donationFromDetalle(detalle(), NOW));
+    expect(tolerantDonationFromDetalle(detalle(), NOW)).toEqual(donationFromDetalle(detalle(), NOW));
   });
 
   it.each([
     ["an inverted window", { ventana_recogida_fin: "2026-09-23T20:00:00.000Z" }],
     ["a window without offset", { ventana_recogida_inicio: "2026-09-23T21:00:00" }],
   ])("keeps a detail with %s, showing a neutral window", (_case, overrides) => {
-    expect(donationViewFromDetalle(detalle(overrides), NOW)).toMatchObject({
+    expect(tolerantDonationFromDetalle(detalle(overrides), NOW)).toMatchObject({
       code: "DON-1058",
       pickupWindow: UNKNOWN_PICKUP_WINDOW,
       expiresOn: "16/09/2026",
@@ -281,13 +281,18 @@ describe("donationViewFromDetalle", () => {
     "leaves an unreadable expiry (%p) empty and keeps the window",
     (fecha) => {
       expect(
-        donationViewFromDetalle(detalle({ fecha_vencimiento_min: fecha }), NOW),
+        tolerantDonationFromDetalle(detalle({ fecha_vencimiento_min: fecha }), NOW),
       ).toMatchObject({ pickupWindow: "Hoy · 16:00–18:00", expiresOn: "" });
     },
   );
 
-  it("does not hide errors other than mapping errors", () => {
-    const broken = { ...detalle(), items: null } as unknown as DonacionDetalleDto;
-    expect(() => donationViewFromDetalle(broken, NOW)).toThrow(TypeError);
+  it("does not hide errors other than mapping errors inside the tolerated fields", () => {
+    // A Symbol makes the window parser itself throw a TypeError inside the fallback wrapper:
+    // only a MappingError may turn into "Ventana por confirmar".
+    const broken = {
+      ...detalle(),
+      ventana_recogida_inicio: Symbol("not a string"),
+    } as unknown as DonacionDetalleDto;
+    expect(() => tolerantDonationFromDetalle(broken, NOW)).toThrow(TypeError);
   });
 });

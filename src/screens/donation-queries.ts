@@ -1,7 +1,7 @@
 /**
  * Donation queries shaped for the donor and volunteer screens: requests come from
  * `@/services/donaciones`, and `select` maps them to the presentation model. A field the app
- * cannot read falls back on its own (see `donationRowFromResumen`, `donationViewFromDetalle`);
+ * cannot read falls back on its own (see `donationRowFromResumen`, `tolerantDonationFromDetalle`);
  * any other mapping failure surfaces as the query's error (ErrorState) instead of crashing
  * the screen.
  */
@@ -12,7 +12,7 @@ import type { EstadoDonacion, Paged } from "@/api/types";
 import { fromIsoToBogota } from "@/domain/mappers/dates";
 import {
   donationRowFromResumen,
-  donationViewFromDetalle,
+  tolerantDonationFromDetalle,
   type DonationView,
 } from "@/domain/mappers/donations";
 import { MappingError } from "@/domain/mappers/errors";
@@ -113,7 +113,7 @@ export interface DonationDetail {
 function selectDetail(dto: DonacionDetalleDto): DonationDetail {
   // Tolerant field by field, like the list: an unreadable window or expiry never hides the
   // donation the list already shows.
-  return { dto, view: donationViewFromDetalle(dto, Date.now()) };
+  return { dto, view: tolerantDonationFromDetalle(dto, Date.now()) };
 }
 
 /** The `?id=` (donation UUID) of the current route, or undefined when absent or empty. */

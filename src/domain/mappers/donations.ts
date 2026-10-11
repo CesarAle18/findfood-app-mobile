@@ -144,7 +144,7 @@ export function donationFromDetalle(dto: DonacionDetalleDto, now?: number): Dona
  * as the list row does. The window shows `UNKNOWN_PICKUP_WINDOW` and the expiry is left
  * empty (screens show their placeholder). Other errors still throw.
  */
-export function donationViewFromDetalle(dto: DonacionDetalleDto, now?: number): DonationView {
+export function tolerantDonationFromDetalle(dto: DonacionDetalleDto, now?: number): DonationView {
   return detalleView(
     dto,
     orIfUnreadable(() => expiryDisplay(dto), ""),

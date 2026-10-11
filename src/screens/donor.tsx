@@ -181,8 +181,11 @@ export function DonorHomeScreen() {
   );
 }
 
+/** The unfiltered view: the only one that loads the next page when the list end is reached. */
+const UNFILTERED: DonationFilter = "todas";
+
 const FILTERS: readonly { value: DonationFilter; label: string }[] = [
-  { value: "todas", label: "Todas" },
+  { value: UNFILTERED, label: "Todas" },
   { value: "seguimiento", label: "En seguimiento" },
   { value: "entregadas", label: "Entregadas" },
 ];
@@ -255,7 +258,7 @@ export function DonationsScreen() {
                 ListFooterComponent={footer}
                 // A filter can match few rows, so the end is reached at once and every page
                 // would load on its own: with a filter, only "Cargar más" loads more.
-                onEndReached={filterValue === "todas" ? loadMore : undefined}
+                onEndReached={filterValue === UNFILTERED ? loadMore : undefined}
                 onEndReachedThreshold={0.5}
                 contentContainerStyle={styles.listContent}
                 contentInsetAdjustmentBehavior="automatic"
