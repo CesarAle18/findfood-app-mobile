@@ -131,28 +131,30 @@ describe("LoginScreen", () => {
     expect(await screen.findByText("El correo o la contraseña no son correctos.")).toBeOnTheScreen();
   });
 
-  it("resends the code and opens the verification for an unconfirmed email", async () => {
+  it("opens the verification for an unconfirmed email, which sends a fresh code once", async () => {
     mockAuth.signInWithPassword.mockResolvedValue(authError("email_not_confirmed"));
     await renderAt("/login");
 
     await signInAs("ana@correo.com", "secreta123");
 
-    expect(mockAuth.resend).toHaveBeenCalledWith({ type: "signup", email: "ana@correo.com" });
     expect(await screen.findByText("ana@correo.com")).toBeOnTheScreen();
     expect(pathname()).toBe("/verificar-correo");
-    expect(searchParams()).toEqual({ email: "ana@correo.com" });
+    expect(searchParams()).toEqual({ email: "ana@correo.com", enviar: "1" });
+    expect(await screen.findByText("Te enviamos un código nuevo.")).toBeOnTheScreen();
+    expect(mockAuth.resend).toHaveBeenCalledTimes(1);
+    expect(mockAuth.resend).toHaveBeenCalledWith({ type: "signup", email: "ana@correo.com" });
     // The account exists: no sign-up note.
     expect(screen.queryByText(NEUTRAL_NOTE)).toBeNull();
   });
 
-  it("still opens the verification when the resend fails", async () => {
+  it("never waits for the code to be sent before opening the verification", async () => {
     mockAuth.signInWithPassword.mockResolvedValue(authError("email_not_confirmed"));
-    mockAuth.resend.mockResolvedValue(authError("over_email_send_rate_limit", 429));
+    mockAuth.resend.mockReturnValue(new Promise(() => {}));
     await renderAt("/login");
 
     await signInAs("ana@correo.com", "secreta123");
 
-    expect(await screen.findByText("ana@correo.com")).toBeOnTheScreen();
+    expect(await screen.findByText("Enviando un código a tu correo…")).toBeOnTheScreen();
     expect(pathname()).toBe("/verificar-correo");
   });
 
@@ -274,6 +276,7 @@ describe("RegisterScreen", () => {
 
 describe("VerifyEmailScreen", () => {
   const verifyUrl = "/verificar-correo?email=maria%40correo.com";
+  const signUpUrl = `${verifyUrl}&origen=registro`;
   const CODE_LABEL = "Código de verificación de seis dígitos";
 
   it("asks to start over without an email param or a session", async () => {
@@ -285,7 +288,7 @@ describe("VerifyEmailScreen", () => {
   });
 
   it("links a sign-up to login and password recovery in its neutral note", async () => {
-    await renderAt(`${verifyUrl}&origen=registro`);
+    await renderAt(signUpUrl);
 
     expect(screen.getByText(NEUTRAL_NOTE)).toBeOnTheScreen();
     await fireEvent.press(screen.getByText("Recuperar contraseña"));
@@ -293,7 +296,7 @@ describe("VerifyEmailScreen", () => {
   });
 
   it("links the neutral note to login", async () => {
-    await renderAt(`${verifyUrl}&origen=registro`);
+    await renderAt(signUpUrl);
 
     await fireEvent.press(screen.getByText("Iniciar sesión"));
 
@@ -322,6 +325,13 @@ describe("VerifyEmailScreen", () => {
       });
       // `/me` still lists CONFIRMAR_CORREO until it is fetched again.
       expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.me });
+    });
+
+    it("allows a resend right away: nothing was sent from this screen", async () => {
+      await renderAt("/verificar-correo");
+
+      expect(screen.getByRole("button", { name: "Reenviar código" })).toBeEnabled();
+      expect(mockAuth.resend).not.toHaveBeenCalled();
     });
 
     it("prefers the email param over the session's", async () => {
@@ -363,9 +373,51 @@ describe("VerifyEmailScreen", () => {
     expect(mockAuth.verifyOtp).not.toHaveBeenCalled();
   });
 
+  describe("asked to send a code (enviar=1, after an unconfirmed sign-in)", () => {
+    const sendUrl = `${verifyUrl}&enviar=1`;
+
+    it("sends once on mount and starts the cooldown only after it was sent", async () => {
+      jest.useFakeTimers();
+      let finishSend: (value: typeof ok) => void = () => {};
+      mockAuth.resend.mockReturnValue(new Promise((resolve) => (finishSend = resolve)));
+      await renderAt(sendUrl);
+
+      expect(screen.getByText("Enviando un código a tu correo…")).toBeOnTheScreen();
+      expect(screen.getByRole("button", { name: "Reenviar código" })).toBeDisabled();
+      // Time spent sending does not count towards the cooldown.
+      await act(async () => jest.advanceTimersByTime(30_000));
+
+      await act(async () => finishSend(ok));
+
+      expect(screen.getByText("Te enviamos un código nuevo.")).toBeOnTheScreen();
+      expect(screen.queryByText("Enviando un código a tu correo…")).toBeNull();
+      expect(screen.getByRole("button", { name: "Reenviar código en 01:00" })).toBeDisabled();
+      expect(mockAuth.resend).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows a failed send and leaves resend available, without a cooldown", async () => {
+      mockAuth.resend.mockResolvedValue(authError("over_email_send_rate_limit", 429));
+      await renderAt(sendUrl);
+
+      expect(
+        await screen.findByText(
+          "Ya enviamos varios correos. Espera unos minutos antes de solicitar otro.",
+        ),
+      ).toBeOnTheScreen();
+      expect(screen.getByRole("button", { name: "Reenviar código" })).toBeEnabled();
+    });
+  });
+
+  it("allows a resend right away for an email param alone", async () => {
+    await renderAt(verifyUrl);
+
+    expect(screen.getByRole("button", { name: "Reenviar código" })).toBeEnabled();
+    expect(mockAuth.resend).not.toHaveBeenCalled();
+  });
+
   it("lets the user resend right away once the code expired", async () => {
     mockAuth.verifyOtp.mockResolvedValue(authError("otp_expired", 403));
-    await renderAt(verifyUrl);
+    await renderAt(signUpUrl);
     expect(screen.getByRole("button", { name: /Reenviar código en/ })).toBeDisabled();
 
     await type(CODE_LABEL, "123456");
@@ -378,9 +430,9 @@ describe("VerifyEmailScreen", () => {
     expect(mockAuth.resend).toHaveBeenCalledWith({ type: "signup", email: "maria@correo.com" });
   });
 
-  it("counts 60 seconds down before allowing a resend, then restarts", async () => {
+  it("counts 60 seconds down after a sign-up (Supabase already sent a code), then restarts", async () => {
     jest.useFakeTimers();
-    await renderAt(verifyUrl);
+    await renderAt(signUpUrl);
 
     expect(screen.getByRole("button", { name: "Reenviar código en 01:00" })).toBeDisabled();
 
@@ -399,10 +451,8 @@ describe("VerifyEmailScreen", () => {
   });
 
   it("shows a failed resend and keeps it available", async () => {
-    jest.useFakeTimers();
     mockAuth.resend.mockResolvedValue(authError("over_email_send_rate_limit", 429));
     await renderAt(verifyUrl);
-    await act(async () => jest.advanceTimersByTime(60_000));
 
     await press("Reenviar código");
 
@@ -416,7 +466,7 @@ describe("VerifyEmailScreen", () => {
 
   it("runs a single countdown interval per code and clears it on unmount", async () => {
     jest.useFakeTimers();
-    await renderAt(verifyUrl);
+    await renderAt(signUpUrl);
     // Spied after rendering: the router's test renderer installs its own fake timers.
     const setIntervalSpy = jest.spyOn(globalThis, "setInterval");
     const clearIntervalSpy = jest.spyOn(globalThis, "clearInterval");

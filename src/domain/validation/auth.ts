@@ -84,5 +84,7 @@ export type RegisterData = z.output<typeof registerSchema>;
 export const OTP_LENGTH = 6;
 
 export const otpSchema = z.object({
-  token: z.string().regex(/^\d{6}$/, "Ingresa los 6 dígitos del código."),
+  token: z
+    .string()
+    .regex(new RegExp(`^\\d{${OTP_LENGTH}}$`), `Ingresa los ${OTP_LENGTH} dígitos del código.`),
 });

@@ -428,15 +428,15 @@ export function Field({
 }
 
 /**
- * A message about the whole form (an error that belongs to no single field, or a
- * confirmation), announced when it appears. Renders nothing without a message.
+ * A message about the whole form (an error that belongs to no single field, a progress note
+ * or a confirmation), announced when it appears. Renders nothing without a message.
  */
 export function FormMessage({
   message,
   tone = "error",
 }: {
   message: string | undefined;
-  tone?: "error" | "success";
+  tone?: "error" | "info" | "success";
 }) {
   if (!message) return null;
   return (
@@ -444,11 +444,18 @@ export function FormMessage({
       accessible
       accessibilityRole={tone === "error" ? "alert" : "text"}
       accessibilityLiveRegion="polite"
-      style={[styles.formMessage, tone === "success" && styles.formMessageSuccess]}
+      style={[
+        styles.formMessage,
+        tone === "info" && styles.formMessageInfo,
+        tone === "success" && styles.formMessageSuccess,
+      ]}
     >
       <Copy
         weight="medium"
-        style={{ color: tone === "error" ? colors.danger : colors.primary }}
+        style={{
+          color:
+            tone === "error" ? colors.danger : tone === "info" ? colors.secondary : colors.primary,
+        }}
       >
         {message}
       </Copy>
@@ -680,10 +687,11 @@ const styles = StyleSheet.create({
   formMessage: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E7CACA",
+    borderColor: colors.danger,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
+  formMessageInfo: { borderColor: colors.border, backgroundColor: colors.muted },
   formMessageSuccess: { borderColor: colors.soft, backgroundColor: colors.soft },
   inputRow: {
     minHeight: 48,

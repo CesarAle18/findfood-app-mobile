@@ -1,4 +1,10 @@
-import { loginSchema, normalizeColombianMobile, otpSchema, registerSchema } from "./auth";
+import {
+  OTP_LENGTH,
+  loginSchema,
+  normalizeColombianMobile,
+  otpSchema,
+  registerSchema,
+} from "./auth";
 
 /** The first message per field, as useZodForm shows them. */
 function errorsOf(result: { success: boolean; error?: { issues: { path: PropertyKey[]; message: string }[] } }) {
@@ -134,6 +140,13 @@ describe("registerSchema", () => {
 });
 
 describe("otpSchema", () => {
+  it("follows OTP_LENGTH in its rule and its message", () => {
+    expect(otpSchema.safeParse({ token: "7".repeat(OTP_LENGTH) }).success).toBe(true);
+    expect(errorsOf(otpSchema.safeParse({ token: "7".repeat(OTP_LENGTH + 1) })).token).toBe(
+      `Ingresa los ${OTP_LENGTH} dígitos del código.`,
+    );
+  });
+
   it("accepts exactly six digits", () => {
     expect(otpSchema.parse({ token: "012345" })).toEqual({ token: "012345" });
   });

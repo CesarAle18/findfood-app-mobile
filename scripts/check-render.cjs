@@ -389,13 +389,20 @@ try {
   routeParams = { email: "maria@correo.com" };
   const verifyHtml = renderToStaticMarkup(React.createElement(VerifyEmailScreen));
   assert(verifyHtml.includes("maria@correo.com"));
-  assert(verifyHtml.includes("Reenviar código en 01:00"));
+  // Nothing was sent from this screen: no cooldown.
+  assert(!verifyHtml.includes("Reenviar código en"));
   // Only a sign-up shows the neutral note, which never says whether the address existed.
   assert(!verifyHtml.includes('href="/recuperar-contrasena"'));
   routeParams = { email: "maria@correo.com", origen: "registro" };
   const signUpVerifyHtml = renderToStaticMarkup(React.createElement(VerifyEmailScreen));
   assert(signUpVerifyHtml.includes("Si el correo es nuevo, te enviamos un código."));
   assert(signUpVerifyHtml.includes('href="/recuperar-contrasena"'));
+  // Supabase just sent the sign-up code: the cooldown runs from the start.
+  assert(signUpVerifyHtml.includes("Reenviar código en 01:00"));
+  routeParams = { email: "maria@correo.com", enviar: "1" };
+  const sendVerifyHtml = renderToStaticMarkup(React.createElement(VerifyEmailScreen));
+  assert(sendVerifyHtml.includes("Enviando un código a tu correo…"));
+  assert(!sendVerifyHtml.includes("Reenviar código en"));
   routeParams = {};
   // The auth forms no longer link into the app: the guards open it after signing in.
   const { LoginScreen, RegisterScreen } = require("../src/screens/auth.tsx");

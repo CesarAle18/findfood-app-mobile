@@ -3,12 +3,7 @@ import { router } from "expo-router";
 import { View } from "react-native";
 
 import { authErrorMessages } from "@/api/problem-messages";
-import {
-  isEmailAuthAvailable,
-  resendSignupOtp,
-  signIn,
-  signUp,
-} from "@/auth/email-auth";
+import { isEmailAuthAvailable, signIn, signUp } from "@/auth/email-auth";
 import {
   Button,
   Card,
@@ -26,20 +21,35 @@ import { colors } from "@/design/tokens";
 import { loginSchema, registerSchema } from "@/domain/validation/auth";
 import { useZodForm } from "@/hooks/use-zod-form";
 
-/** `origen` param of `/verificar-correo` when a sign-up opens it. */
+/**
+ * `/verificar-correo` params. `origen=registro`: a sign-up just made Supabase send a code
+ * (the screen also shows the neutral note). `enviar=1`: no code was sent yet, the screen
+ * sends one when it opens.
+ */
 export const SIGN_UP_ORIGIN = "registro";
+export const SEND_CODE = "1";
 
 /**
- * Opens the code verification for `email`; after a sign-up it also explains, without saying
- * which case applies, what to do if the address already had an account. After a successful
- * sign-in or sign-up with a session, the screens never navigate: the session change closes
- * the auth screens and the root guards open the account's home.
+ * Opens the code verification for `email`, right away: after a sign-up Supabase already sent
+ * the code; after a sign-in with an unconfirmed email the verification sends a fresh one
+ * itself and shows how that went. After a successful sign-in or sign-up with a session, the
+ * screens never navigate: the session change closes the auth screens and the root guards open
+ * the account's home.
  */
-function openVerification(email: string, { afterSignUp = false } = {}) {
+function openVerification(email: string, after: "sign-in" | "sign-up") {
   router.push({
     pathname: "/verificar-correo",
-    params: afterSignUp ? { email, origen: SIGN_UP_ORIGIN } : { email },
+    params:
+      after === "sign-up" ? { email, origen: SIGN_UP_ORIGIN } : { email, enviar: SEND_CODE },
   });
+}
+
+/** Field props that stay read-only (no onChangeText) while email auth is unavailable. */
+function editableIf<TProps extends { onChangeText: (text: string) => void }>(
+  available: boolean,
+  props: TProps,
+): Omit<TProps, "onChangeText"> & { onChangeText?: (text: string) => void } {
+  return available ? props : { ...props, onChangeText: undefined };
 }
 
 /** Shown instead of a working form in the local profile (no Supabase, dev token). */
@@ -63,17 +73,11 @@ export function LoginScreen() {
       await signIn(credentials);
     } catch (error) {
       if (!isAuthError(error) || error.code !== "email_not_confirmed") throw error;
-      // The first code may have expired: send a fresh one. A failed resend (a rate limit)
-      // still opens the verification, which offers its own resend.
-      await resendSignupOtp(credentials.email).catch(() => undefined);
-      openVerification(credentials.email);
+      // The first code may have expired: the verification sends a fresh one.
+      openVerification(credentials.email, "sign-in");
     }
   });
-  // Without onChangeText a Field is read-only.
-  const input = (name: keyof typeof LOGIN_INITIAL) => {
-    const props = form.field(name);
-    return available ? props : { ...props, onChangeText: undefined };
-  };
+  const input = (name: keyof typeof LOGIN_INITIAL) => editableIf(available, form.field(name));
 
   return (
     <Screen center>
@@ -214,16 +218,14 @@ export function RegisterScreen() {
   const submit = form.handleSubmit(async (data) => {
     try {
       const { confirmationPending } = await signUp(data);
-      if (confirmationPending) openVerification(data.email, { afterSignUp: true });
+      if (confirmationPending) openVerification(data.email, "sign-up");
     } catch (error) {
       if (!isAuthError(error) || !error.code || !EMAIL_TAKEN.has(error.code)) throw error;
-      openVerification(data.email, { afterSignUp: true });
+      openVerification(data.email, "sign-up");
     }
   });
-  const input = (name: Exclude<keyof typeof REGISTER_INITIAL, "acepto_terminos">) => {
-    const props = form.field(name);
-    return available ? props : { ...props, onChangeText: undefined };
-  };
+  const input = (name: Exclude<keyof typeof REGISTER_INITIAL, "acepto_terminos">) =>
+    editableIf(available, form.field(name));
   // Document type and number wait for API support (API-01); they are not sent yet.
   return (
     <Screen

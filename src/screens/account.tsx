@@ -1,4 +1,4 @@
-import { useEffect, useState, type PropsWithChildren } from "react";
+import { useCallback, useEffect, useRef, useState, type PropsWithChildren } from "react";
 import { StyleSheet, TextInput, View } from "react-native";
 import { isAuthError } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
@@ -48,7 +48,7 @@ import { queryKeys } from "@/services/query-keys";
 import { useAccess, useMe, useSession } from "@/state/session";
 import { colors, fonts } from "@/design/tokens";
 
-import { SIGN_UP_ORIGIN } from "./auth";
+import { SEND_CODE, SIGN_UP_ORIGIN } from "./auth";
 
 import {
   useDonationDetail,
@@ -302,7 +302,10 @@ export function AccountScreen() {
     </Screen>
   );
 }
-/** Seconds before another code can be requested; Supabase limits sends per address too. */
+/**
+ * Milliseconds after a successful send before another code can be requested; Supabase also
+ * limits sends per address (60 s by default).
+ */
 export const RESEND_COOLDOWN_MS = 60_000;
 
 const twoDigits = (n: number) => String(n).padStart(2, "0");
@@ -314,13 +317,14 @@ function formatCountdown(seconds: number): string {
 
 /**
  * Seconds left before a resend, derived from when the last code was sent (null: a resend is
- * allowed now). A single interval ticks while the cooldown lasts and is cleared when it ends,
- * when the code is sent again, or on unmount.
+ * allowed now). `codeJustSent` starts the cooldown at mount (a sign-up just sent a code).
+ * A single interval ticks while the cooldown lasts and is cleared when it ends, when the code
+ * is sent again, or on unmount.
  */
-function useResendCooldown() {
+function useResendCooldown(codeJustSent: boolean) {
   const [clock, setClock] = useState<{ sentAt: number | null; now: number }>(() => {
     const now = Date.now();
-    return { sentAt: now, now };
+    return { sentAt: codeJustSent ? now : null, now };
   });
   const { sentAt } = clock;
   useEffect(() => {
@@ -334,14 +338,12 @@ function useResendCooldown() {
   }, [sentAt]);
   const remaining =
     sentAt === null ? 0 : Math.max(0, Math.ceil((sentAt + RESEND_COOLDOWN_MS - clock.now) / 1_000));
-  return {
-    remaining,
-    restart: () => {
-      const now = Date.now();
-      setClock({ sentAt: now, now });
-    },
-    allowNow: () => setClock((current) => ({ ...current, sentAt: null })),
-  };
+  const restart = useCallback(() => {
+    const now = Date.now();
+    setClock({ sentAt: now, now });
+  }, []);
+  const allowNow = useCallback(() => setClock((current) => ({ ...current, sentAt: null })), []);
+  return { remaining, restart, allowNow };
 }
 
 function CodeBoxes({
@@ -426,13 +428,47 @@ function SignUpNote() {
   );
 }
 
-function VerifyEmailForm({ email, afterSignUp }: { email: string; afterSignUp: boolean }) {
+interface SendState {
+  sending: boolean;
+  error?: string;
+  sent?: boolean;
+}
+
+/**
+ * How the screen was opened: right after a sign-up (Supabase sent a code: the cooldown runs
+ * from the start), asked to send a code (`enviar=1`: sent on mount, the cooldown only starts
+ * once it was sent), or with nothing sent (a resend is allowed right away).
+ */
+type Opening = "after-sign-up" | "send-code" | "nothing-sent";
+
+function VerifyEmailForm({ email, opening }: { email: string; opening: Opening }) {
   const queryClient = useQueryClient();
   const form = useZodForm(otpSchema, { token: "" });
-  const cooldown = useResendCooldown();
-  const [resend, setResend] = useState<{ sending: boolean; error?: string; sent?: boolean }>({
-    sending: false,
-  });
+  const cooldown = useResendCooldown(opening === "after-sign-up");
+  const { restart } = cooldown;
+  const [resend, setResend] = useState<SendState>({ sending: opening === "send-code" });
+  // Sends on mount at most once, even if the effect runs twice (Strict Mode in development).
+  const sentOnMount = useRef(false);
+
+  /** Sends a code; only a successful send starts the cooldown. */
+  const send = useCallback(
+    (): Promise<void> =>
+      resendSignupOtp(email).then(
+        () => {
+          restart();
+          setResend({ sending: false, sent: true });
+        },
+        (error: unknown) => setResend({ sending: false, error: messageFor(error) }),
+      ),
+    [email, restart],
+  );
+
+  useEffect(() => {
+    if (opening !== "send-code" || sentOnMount.current) return;
+    sentOnMount.current = true;
+    // `sending` already starts true for this opening; state only changes once it settles.
+    void send();
+  }, [opening, send]);
 
   // On success Supabase stores the session: the guards close this screen and open the app.
   const submit = form.handleSubmit(async ({ token }) => {
@@ -449,16 +485,10 @@ function VerifyEmailForm({ email, afterSignUp }: { email: string; afterSignUp: b
     }
   });
 
-  const resendCode = async () => {
+  const resendCode = () => {
     if (resend.sending) return;
     setResend({ sending: true });
-    try {
-      await resendSignupOtp(email);
-      cooldown.restart();
-      setResend({ sending: false, sent: true });
-    } catch (error) {
-      setResend({ sending: false, error: messageFor(error) });
-    }
+    void send();
   };
 
   const waiting = cooldown.remaining > 0;
@@ -466,10 +496,10 @@ function VerifyEmailForm({ email, afterSignUp }: { email: string; afterSignUp: b
     <>
       <View style={{ alignItems: "center", gap: 18 }}>
         <Icon name="mail" size={40} />
-        <Copy>Ingresa el código de 6 dígitos enviado a</Copy>
+        <Copy>{`Ingresa el código de ${OTP_LENGTH} dígitos enviado a`}</Copy>
         <Copy weight="bold">{email}</Copy>
       </View>
-      {afterSignUp ? <SignUpNote /> : null}
+      {opening === "after-sign-up" ? <SignUpNote /> : null}
       <CodeBoxes
         code={form.values.token}
         error={form.errors.token}
@@ -490,6 +520,7 @@ function VerifyEmailForm({ email, afterSignUp }: { email: string; afterSignUp: b
       >
         {waiting ? `Reenviar código en ${formatCountdown(cooldown.remaining)}` : "Reenviar código"}
       </Button>
+      <FormMessage message={resend.sending ? "Enviando un código a tu correo…" : undefined} tone="info" />
       <FormMessage message={resend.error} />
       <FormMessage
         message={resend.sent ? "Te enviamos un código nuevo." : undefined}
@@ -499,12 +530,19 @@ function VerifyEmailForm({ email, afterSignUp }: { email: string; afterSignUp: b
   );
 }
 
+function openingFor(params: { origen?: string; enviar?: string }, fromParam: boolean): Opening {
+  if (fromParam && params.origen === SIGN_UP_ORIGIN) return "after-sign-up";
+  if (fromParam && params.enviar === SEND_CODE) return "send-code";
+  return "nothing-sent";
+}
+
 /**
- * `/verificar-correo?email=…[&origen=registro]`. Without the param (the gate opens it in the
- * verify-email phase), the signed-in session's email is verified instead.
+ * `/verificar-correo?email=…[&origen=registro | &enviar=1]` (see openVerification). Without
+ * the param (the gate opens it in the verify-email phase), the signed-in session's email is
+ * verified instead, and nothing was sent for it.
  */
 export function VerifyEmailScreen() {
-  const params = useLocalSearchParams<{ email?: string; origen?: string }>();
+  const params = useLocalSearchParams<{ email?: string; origen?: string; enviar?: string }>();
   const session = useSession();
   const paramEmail = typeof params.email === "string" ? params.email.trim() : "";
   const sessionEmail = session.status === "present" ? (session.email?.trim() ?? "") : "";
@@ -516,10 +554,7 @@ export function VerifyEmailScreen() {
       back
     >
       {email ? (
-        <VerifyEmailForm
-          email={email}
-          afterSignUp={paramEmail !== "" && params.origen === SIGN_UP_ORIGIN}
-        />
+        <VerifyEmailForm email={email} opening={openingFor(params, paramEmail !== "")} />
       ) : (
         <EmptyState
           icon="mail"
