@@ -41,6 +41,11 @@ import { env } from "@/config/env";
 import { queryKeys } from "@/services/query-keys";
 
 const ACTIVE_ROLE_KEY = "findfood.activeRole";
+/**
+ * Set while a password reset link's session exists without the new password: it survives a
+ * restart, so a cold start with that session opens the reset screen, never the app.
+ */
+const RECOVERING_KEY = "findfood.recovering";
 /** Written by the push registration (see deviceIdStorage); unregistered on sign-out. */
 const DEVICE_ID_KEY = "findfood.deviceId";
 const DEVICE_UNREGISTER_TIMEOUT_MS = 3_000;
@@ -56,7 +61,15 @@ export interface AccessState extends Access {
 export interface SessionActions {
   /** Signs out on this device. Never rejects; concurrent calls share one run. */
   cerrarSesion: () => Promise<void>;
-  setRecovering: (recovering: boolean) => void;
+  /**
+   * Marks or ends a password recovery, in state at once and in storage when the promise
+   * resolves (it never rejects).
+   */
+  setRecovering: (recovering: boolean) => Promise<void>;
+}
+
+function storeRecovering(recovering: boolean): Promise<void> {
+  return recovering ? writeItem(RECOVERING_KEY, "1") : deleteItem(RECOVERING_KEY);
 }
 
 const AccessContext = createContext<AccessState | null>(null);
@@ -163,7 +176,8 @@ async function endSession(): Promise<void> {
 export function SessionProvider({ children }: PropsWithChildren) {
   const queryClient = useQueryClient();
   const sessionStatus = useSessionStatus();
-  const [recovering, setRecovering] = useState(false);
+  // Undefined until the stored flag is read (the access phase stays `loading` meanwhile).
+  const [recovering, setRecoveringState] = useState<boolean | undefined>(undefined);
   // User intent only (undefined: not read yet, null: no choice); see resolveActiveRole.
   const [storedRole, setStoredRole] = useState<string | null | undefined>(undefined);
   const signingOut = useRef<Promise<void> | null>(null);
@@ -195,9 +209,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
       data: { subscription },
     } = client.auth.onAuthStateChange((event, session) => {
       heardEvent = true;
-      if (event === "PASSWORD_RECOVERY") setRecovering(true);
+      if (event === "PASSWORD_RECOVERY") {
+        setRecoveringState(true);
+        void storeRecovering(true);
+      }
       if (event === "SIGNED_OUT") {
-        setRecovering(false);
+        setRecoveringState(false);
+        void storeRecovering(false);
         queryClient.clear();
       }
       sessionStore.setSession(toSnapshot(session));
@@ -223,6 +241,23 @@ export function SessionProvider({ children }: PropsWithChildren) {
     };
   }, [queryClient]);
 
+  // Read once the session is known: a stored flag only counts with the session it belongs
+  // to. Without one (signed out, or the exchange never finished) it is forgotten.
+  useEffect(() => {
+    if (sessionStatus === "loading") return;
+    let active = true;
+    const signedIn = sessionStatus === "present";
+    void readItem(RECOVERING_KEY).then((value) => {
+      const stored = value === "1";
+      if (stored && !signedIn) void storeRecovering(false);
+      // A change made meanwhile (a recovery link, a sign-out) wins over the stored flag.
+      if (active) setRecoveringState((current) => current ?? (stored && signedIn));
+    });
+    return () => {
+      active = false;
+    };
+  }, [sessionStatus]);
+
   useEffect(() => {
     let active = true;
     void readItem(ACTIVE_ROLE_KEY).then((value) => {
@@ -246,14 +281,22 @@ export function SessionProvider({ children }: PropsWithChildren) {
           await unregisterDevice();
           await endSession();
           queryClient.clear();
-          await Promise.all([deviceIdStorage.clear(), deleteItem(ACTIVE_ROLE_KEY)]);
+          await Promise.all([
+            deviceIdStorage.clear(),
+            deleteItem(ACTIVE_ROLE_KEY),
+            storeRecovering(false),
+          ]);
           setStoredRole(null);
-          setRecovering(false);
+          setRecoveringState(false);
         } finally {
           signingOut.current = null;
         }
       })();
       return signingOut.current;
+    }
+    function setRecovering(value: boolean): Promise<void> {
+      setRecoveringState(value);
+      return storeRecovering(value);
     }
     return { cerrarSesion, setRecovering };
   }, [queryClient]);

@@ -374,6 +374,66 @@ describe("real profile", () => {
     expect(calls).toHaveLength(3);
   });
 
+  describe("password recovery flag", () => {
+    const RECOVERING_KEY = "findfood.recovering";
+
+    it("restores a recovery in progress on a cold start instead of opening the app", async () => {
+      mockSecureValues.set(RECOVERING_KEY, "1");
+      serve(() => ({ status: 200, body: me() }));
+
+      const { result } = await renderSession();
+
+      await waitFor(() => expect(result.current.session.status).toBe("present"));
+      await waitFor(() => expect(result.current.access.phase).toBe("recovering"));
+    });
+
+    it("never reports the app before the flag is read", async () => {
+      mockSecureValues.set(RECOVERING_KEY, "1");
+      serve(() => ({ status: 200, body: me() }));
+      const phases: string[] = [];
+
+      const { result } = await renderSession();
+      phases.push(result.current.access.phase);
+      await waitFor(() => {
+        phases.push(result.current.access.phase);
+        expect(result.current.access.phase).toBe("recovering");
+      });
+
+      expect(phases).not.toContain("app");
+    });
+
+    it("forgets a stored flag whose recovery session is gone", async () => {
+      mockSecureValues.set(RECOVERING_KEY, "1");
+      auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
+
+      const { result } = await renderSession();
+
+      await waitFor(() => expect(result.current.access.phase).toBe("auth"));
+      await waitFor(() => expect(mockSecureValues.has(RECOVERING_KEY)).toBe(false));
+    });
+
+    it("persists the flag, and clears it when the recovery ends or the session does", async () => {
+      serve(() => ({ status: 200, body: me() }));
+      const { result } = await renderSession();
+      await waitFor(() => expect(result.current.access.phase).toBe("app"));
+
+      await act(() => result.current.actions.setRecovering(true));
+      expect(mockSecureValues.get(RECOVERING_KEY)).toBe("1");
+      expect(result.current.access.phase).toBe("recovering");
+
+      await act(() => result.current.actions.setRecovering(false));
+      expect(mockSecureValues.has(RECOVERING_KEY)).toBe(false);
+      expect(result.current.access.phase).toBe("app");
+
+      await act(async () => auth.emit("PASSWORD_RECOVERY", realSession));
+      await waitFor(() => expect(mockSecureValues.get(RECOVERING_KEY)).toBe("1"));
+
+      await act(() => result.current.actions.cerrarSesion());
+      expect(mockSecureValues.has(RECOVERING_KEY)).toBe(false);
+      expect(result.current.access.phase).toBe("auth");
+    });
+  });
+
   it("starts without session when Supabase has none", async () => {
     auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
     const calls = serve(() => ({ status: 200, body: me() }));

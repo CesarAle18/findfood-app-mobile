@@ -46,6 +46,11 @@ describe("resolveAccess", () => {
     ).toEqual({ phase: "loading", canDonor: false, canVolunteer: false });
   });
 
+  it("waits until the stored recovery flag is read", () => {
+    // A cold start with a stored recovery session must never open the app first.
+    expect(resolveAccess(signedIn({ recovering: undefined })).phase).toBe("loading");
+  });
+
   it("keeps a password recovery on its screen even when signed in", () => {
     expect(resolveAccess(signedIn({ recovering: true })).phase).toBe("recovering");
     expect(

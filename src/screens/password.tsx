@@ -10,7 +10,7 @@ import { messageFor } from "@/api/problem-messages";
 import { exchangeRecoveryCode, updatePassword } from "@/auth/email-auth";
 import { EmptyState, LoadingState } from "@/components/findfood/feedback";
 import { NewPasswordForm } from "@/components/findfood/new-password-form";
-import { Button, Card, Copy, NavButton, Screen } from "@/components/findfood/ui";
+import { Button, Card, Copy, FormMessage, NavButton, Screen } from "@/components/findfood/ui";
 import { queryKeys } from "@/services/query-keys";
 import { useAccess, useSessionActions } from "@/state/session";
 
@@ -47,7 +47,12 @@ type Outcome = { code: string; failed: false } | { code: string; failed: true; e
  * effect running twice, and the code is removed from the params once settled so a remount
  * never reuses it (it is single use, and its verifier is gone after the first attempt).
  */
-function useRecoveryExchange(code: string | undefined, flowId: string | undefined) {
+function useRecoveryExchange(
+  code: string | undefined,
+  flowId: string | undefined,
+  /** A recovery from an earlier link is in progress: a failure here must not end it. */
+  recoveringAlready: boolean,
+) {
   const { setRecovering } = useSessionActions();
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const started = useRef<string | null>(null);
@@ -63,15 +68,17 @@ function useRecoveryExchange(code: string | undefined, flowId: string | undefine
   useEffect(() => {
     if (!code || started.current === code) return;
     started.current = code;
-    // Before the exchange: its session must never reach the gate as an ordinary sign-in
-    // (it exists before the new password does).
-    setRecovering(true);
-    void exchangeRecoveryCode(code, flowId)
+    const setByThisLink = !recoveringAlready;
+    // Stored before the exchange: its session must never reach the gate as an ordinary
+    // sign-in (it exists before the new password does), not even after a restart.
+    void setRecovering(true)
+      .then(() => exchangeRecoveryCode(code, flowId))
       .then(
         (): Outcome => ({ code, failed: false }),
-        (error: unknown): Outcome => {
+        async (error: unknown): Promise<Outcome> => {
           // auth-js only stores a session after a successful exchange: nothing to sign out.
-          setRecovering(false);
+          // An earlier link's recovery session is still there: only this link's flag ends.
+          if (setByThisLink) await setRecovering(false);
           return { code, failed: true, error };
         },
       )
@@ -80,14 +87,16 @@ function useRecoveryExchange(code: string | undefined, flowId: string | undefine
         setOutcome(settled);
         router.setParams({ code: undefined, sb_flow_id: undefined });
       });
-  }, [code, flowId, setRecovering]);
+  }, [code, flowId, recoveringAlready, setRecovering]);
 
   return { running: code !== undefined && outcome?.code !== code, outcome };
 }
 
-const EXPIRED_LINK =
+// Explanations for the `error_code` / `error` params Supabase puts on a link it refused
+// (never its English `error_description`). A failed exchange uses messageFor instead.
+const RESET_LINK_EXPIRED =
   "El enlace para restablecer tu contraseña expiró o ya se usó. Solicita uno nuevo y ábrelo en este teléfono.";
-const INVALID_LINK =
+const RESET_LINK_REJECTED =
   "No pudimos validar el enlace para restablecer tu contraseña. Solicita uno nuevo y ábrelo en este teléfono.";
 
 function LinkProblem({ description }: { description: string }) {
@@ -115,7 +124,7 @@ function ResetForm() {
     // The recovery session is now an ordinary one: once `/me` is fresh, the gate opens the
     // account's screen. This screen is never guarded, so it has to hand over itself.
     await refreshMe(queryClient);
-    setRecovering(false);
+    await setRecovering(false);
     router.replace("/");
   };
 
@@ -140,14 +149,24 @@ function ResetContent() {
   const code = single(params.code);
   const linkError = single(params.error_code) ?? single(params.error);
   const { phase } = useAccess();
-  const exchange = useRecoveryExchange(code, single(params.sb_flow_id));
+  const recovering = phase === "recovering";
+  const exchange = useRecoveryExchange(code, single(params.sb_flow_id), recovering);
 
   if (exchange.running) return <LoadingState label="Validando el enlace…" />;
-  if (exchange.outcome?.failed) return <LinkProblem description={messageFor(exchange.outcome.error)} />;
-  if (linkError) {
-    return <LinkProblem description={linkError === "otp_expired" ? EXPIRED_LINK : INVALID_LINK} />;
+  const failure = exchange.outcome?.failed ? messageFor(exchange.outcome.error) : undefined;
+  const problem =
+    failure ??
+    (linkError ? (linkError === "otp_expired" ? RESET_LINK_EXPIRED : RESET_LINK_REJECTED) : undefined);
+  // A recovery already in progress (an earlier link) goes on: a bad new link only says why.
+  if (recovering) {
+    return (
+      <>
+        <FormMessage message={problem} />
+        <ResetForm />
+      </>
+    );
   }
-  if (phase === "recovering") return <ResetForm />;
+  if (problem) return <LinkProblem description={problem} />;
   return (
     <EmptyState
       icon="mail"

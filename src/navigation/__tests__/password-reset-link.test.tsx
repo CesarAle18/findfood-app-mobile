@@ -47,7 +47,7 @@ jest.mock("@/state/session", () => {
   };
   const getState = () => mockSessionStore.state;
   const actions = {
-    setRecovering: (recovering: boolean) => mockSessionStore.set({ recovering }),
+    setRecovering: async (recovering: boolean) => mockSessionStore.set({ recovering }),
     cerrarSesion: async () => mockSessionStore.set({ present: false, recovering: false }),
   };
   return {

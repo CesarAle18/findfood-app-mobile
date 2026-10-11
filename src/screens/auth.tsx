@@ -313,13 +313,35 @@ export function RegisterScreen() {
     </Screen>
   );
 }
-/** Errors that say nothing about the account, so they can be shown: limits and connectivity. */
 const RESET_RATE_LIMITS = new Set(["over_email_send_rate_limit", "over_request_rate_limit"]);
 
+/**
+ * Whether a failed reset request is shown as an error. Shown: anything that is not a
+ * Supabase AuthError (an app bug), connectivity failures and 502/503/504
+ * (AuthRetryableFetchError), rate limits (429 or their codes) and the local profile without
+ * Supabase. None of them depends on the address. Every other AuthError gets the neutral
+ * confirmation instead (see ForgotPasswordScreen).
+ */
 function isShownResetError(error: unknown): boolean {
   if (!isAuthError(error)) return true;
   if (isAuthRetryableFetchError(error) || error.status === 429) return true;
   return error.code === AUTH_UNAVAILABLE_CODE || (!!error.code && RESET_RATE_LIMITS.has(error.code));
+}
+
+/**
+ * Development-only trace of an error hidden behind the neutral confirmation: its kind, code
+ * and status, never the address (nor Supabase's message, which may echo it).
+ */
+function reportHiddenResetError(error: unknown) {
+  if (!__DEV__) return;
+  const { name, code, status } = isAuthError(error)
+    ? error
+    : { name: error instanceof Error ? error.name : typeof error, code: undefined, status: undefined };
+  console.warn("Password reset request failed; the neutral confirmation was shown.", {
+    name,
+    code,
+    status,
+  });
 }
 
 const RESET_SENT =
@@ -336,10 +358,12 @@ export function ForgotPasswordScreen() {
     try {
       await requestPasswordReset(email);
     } catch (error) {
-      // Supabase sends nothing to an unknown address and answers as if it did, so any other
-      // failure (an SMTP error, say) can only come from a registered one: it gets the same
-      // confirmation, and the screen never reveals which addresses have an account.
       if (isShownResetError(error)) throw error;
+      // Hidden on purpose, 5xx included. Supabase answers an unknown address with success and
+      // sends nothing, so a failure to send (SMTP down, a 500 from the mailer) only happens
+      // for a registered address: showing it would tell anyone which addresses have an
+      // account. The user gets the same confirmation; developers get a trace.
+      reportHiddenResetError(error);
     }
     setSent(true);
   });

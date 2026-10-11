@@ -24,8 +24,11 @@ export type MobileRole = Extract<Rol, "DONANTE" | "VOLUNTARIO">;
 
 export interface AccessInput {
   sessionStatus: SessionStatus;
-  /** A password reset is in progress (its deep link creates a session first). */
-  recovering: boolean;
+  /**
+   * A password reset is in progress (its deep link creates a session first). Undefined until
+   * the stored flag is read: a cold start with a recovery session must not open the app.
+   */
+  recovering: boolean | undefined;
   me?: MeDto;
   /** TanStack Query status of `GET /me`. */
   meStatus: "pending" | "error" | "success";
@@ -59,7 +62,7 @@ function resolvePhase({
   meStatus,
   meError,
 }: AccessInput): AccessPhase {
-  if (sessionStatus === "loading") return "loading";
+  if (sessionStatus === "loading" || recovering === undefined) return "loading";
   if (recovering) return "recovering";
   if (sessionStatus === "none") return "auth";
   if (meStatus === "pending") return "loading";

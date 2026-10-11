@@ -37,7 +37,7 @@ const mockSession = {
   },
 };
 
-const mockSetRecovering = jest.fn((recovering: boolean) => {
+const mockSetRecovering = jest.fn(async (recovering: boolean) => {
   // Like resolveAccess: `recovering` wins; without it the session decides.
   mockSession.set({
     phase: recovering ? "recovering" : mockSession.state.status === "present" ? "app" : "auth",
@@ -200,14 +200,37 @@ describe("ForgotPasswordScreen", () => {
 
   // A failure to send can only happen for a registered address (Supabase sends nothing to an
   // unknown one), so it gets the same answer: the screen never reveals which addresses exist.
-  it("answers other Supabase errors with the same neutral confirmation", async () => {
-    mockAuth.resetPasswordForEmail.mockResolvedValue(authError("unexpected_failure", 500));
-    await renderAt("/recuperar-contrasena");
+  it("answers other Supabase errors with the same neutral confirmation, reporting them in development", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      mockAuth.resetPasswordForEmail.mockResolvedValue(authError("unexpected_failure", 500));
+      await renderAt("/recuperar-contrasena");
 
-    await requestFor("ana@correo.com");
+      await requestFor("ana@correo.com");
 
-    expect(await screen.findByText(NEUTRAL)).toBeOnTheScreen();
-    expect(screen.queryByRole("alert")).toBeNull();
+      expect(await screen.findByText(NEUTRAL)).toBeOnTheScreen();
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(warn).toHaveBeenCalledTimes(1);
+      const reported = JSON.stringify(warn.mock.calls[0]);
+      expect(reported).toContain("unexpected_failure");
+      expect(reported).not.toContain("ana@correo.com");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("reports nothing when the request succeeds", async () => {
+    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      await renderAt("/recuperar-contrasena");
+
+      await requestFor("ana@correo.com");
+
+      expect(await screen.findByText(NEUTRAL)).toBeOnTheScreen();
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("shows a rate limit as an error", async () => {
@@ -334,6 +357,27 @@ describe("ResetPasswordScreen", () => {
     expect(screen.queryByLabelText("Nueva contraseña")).toBeNull();
     expect(screen.getByText("Solicitar un enlace nuevo")).toBeOnTheScreen();
     expect(searchParams()).toEqual({});
+  });
+
+  it("keeps a recovery already in progress when another link fails", async () => {
+    // The first link's recovery session is active; an old or foreign link must not end it.
+    mockSession.state = { phase: "recovering", status: "present" };
+    mockAuth.exchangeCodeForSession.mockResolvedValue(authError("pkce_code_verifier_not_found"));
+    await renderAt(linkUrl);
+
+    expect(await screen.findByText(/mismo teléfono/)).toBeOnTheScreen();
+    expect(mockSetRecovering).not.toHaveBeenCalledWith(false);
+    expect(mockSession.state.phase).toBe("recovering");
+    expect(screen.getByLabelText("Nueva contraseña")).toBeOnTheScreen();
+    expect(searchParams()).toEqual({});
+  });
+
+  it("keeps a recovery already in progress when an expired link is opened", async () => {
+    mockSession.state = { phase: "recovering", status: "present" };
+    await renderAt("/restablecer-contrasena?error=access_denied&error_code=otp_expired");
+
+    expect(screen.getByText(/expiró o ya se usó/)).toBeOnTheScreen();
+    expect(screen.getByLabelText("Nueva contraseña")).toBeOnTheScreen();
   });
 
   it("asks to open the link on the phone that requested it when the verifier is missing", async () => {
