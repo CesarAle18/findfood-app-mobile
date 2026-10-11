@@ -6,7 +6,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Slot } from "expo-router";
-import { fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
+import { act, fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
 
 import { api } from "@/api";
 import { ApiError } from "@/api/errors";
@@ -182,6 +182,104 @@ describe("DonationsScreen", () => {
     expect(await screen.findByText("DON-1")).toBeOnTheScreen();
     expect(getsTo("/donaciones")).toHaveLength(2);
   });
+
+  describe("paging", () => {
+    /** 25 donations: only the first one is delivered. */
+    const history = Array.from({ length: 25 }, (_, i) =>
+      resumenFixture({
+        id: `uuid-p${i}`,
+        codigo: `DON-P${i}`,
+        estado: i === 0 ? "RECIBIDA" : "PUBLICADA",
+      }),
+    );
+    let failNextPages = false;
+    /** Rows the fake API returns per page, at most `limite`. */
+    let servedPageSize = 20;
+
+    /** Serves `history` by `limite`/`desplazamiento`; later pages fail while `failNextPages`. */
+    function answerHistory() {
+      mockApi.get.mockImplementation(
+        async (path: string, { query }: { query: { limite: number; desplazamiento: number } }) => {
+          if (path !== "/donaciones") throw new Error(`unexpected GET ${path}`);
+          const { limite, desplazamiento } = query;
+          if (desplazamiento > 0 && failNextPages) {
+            throw ApiError.network(new TypeError("Network request failed"));
+          }
+          const end = desplazamiento + Math.min(limite, servedPageSize);
+          return pageFixture(history.slice(desplazamiento, end), history.length, desplazamiento);
+        },
+      );
+    }
+
+    const offsets = () =>
+      getsTo("/donaciones").map(([, options]) => options.query.desplazamiento as number);
+
+    beforeEach(() => {
+      failNextPages = false;
+      servedPageSize = 20;
+      answerHistory();
+    });
+
+    it("loads the next page on its own when the unfiltered list reaches its end", async () => {
+      // Five rows are shorter than the screen, so the list starts at its end.
+      servedPageSize = 5;
+
+      await renderScreen(DonationsScreen);
+      await screen.findByText("DON-P0");
+
+      await waitFor(() => expect(offsets().slice(0, 2)).toEqual([0, 5]));
+    });
+
+    it("asks for the next page after the first 20 donations", async () => {
+      await renderScreen(DonationsScreen);
+      expect(await screen.findByText("DON-P0")).toBeOnTheScreen();
+      expect(screen.getByText("25 donaciones")).toBeOnTheScreen();
+      expect(offsets()).toEqual([0]);
+
+      await fireEvent.press(screen.getByRole("button", { name: "Cargar más" }));
+
+      await waitFor(() => expect(offsets()).toEqual([0, 20]));
+      expect(mockApi.get).toHaveBeenLastCalledWith("/donaciones", {
+        query: { limite: 20, desplazamiento: 20 },
+        signal: expect.any(AbortSignal),
+      });
+      // The last page leaves nothing else to load.
+      await waitFor(() => expect(screen.queryByRole("button", { name: "Cargar más" })).toBeNull());
+    });
+
+    it("does not page through the history on its own while a filter is active", async () => {
+      await renderScreen(DonationsScreen);
+      await screen.findByText("DON-P0");
+
+      // One delivered row is far shorter than the screen: the list reaches its end at once.
+      await fireEvent.press(screen.getByRole("radio", { name: "Entregadas" }));
+      expect(screen.getByText("DON-P0")).toBeOnTheScreen();
+      await act(async () => {});
+      expect(offsets()).toEqual([0]);
+
+      await fireEvent.press(screen.getByRole("button", { name: "Cargar más" }));
+
+      await waitFor(() => expect(offsets()).toEqual([0, 20]));
+    });
+
+    it("explains a failed next page and retries it", async () => {
+      failNextPages = true;
+      await renderScreen(DonationsScreen);
+      await screen.findByText("DON-P0");
+
+      await fireEvent.press(screen.getByRole("button", { name: "Cargar más" }));
+
+      expect(await screen.findByText("No pudimos cargar más donaciones")).toBeOnTheScreen();
+      // The loaded rows stay on screen.
+      expect(screen.getByText("DON-P0")).toBeOnTheScreen();
+
+      failNextPages = false;
+      await fireEvent.press(screen.getByRole("button", { name: "Reintentar" }));
+
+      await waitFor(() => expect(screen.queryByText("No pudimos cargar más donaciones")).toBeNull());
+      expect(offsets()).toEqual([0, 20, 20]);
+    });
+  });
 });
 
 describe("DonorHomeScreen", () => {
@@ -230,6 +328,22 @@ describe("DonationDetailScreen", () => {
     expect(await screen.findByText("Buscando voluntario")).toBeOnTheScreen();
     expect(screen.queryByText("Voluntario asignado")).toBeNull();
     expect(screen.queryByText("Calificar voluntario")).toBeNull();
+  });
+
+  it("keeps a donation whose pickup window and expiry cannot be read", async () => {
+    answerGets({
+      [detailPath]: detalleFixture({
+        ventana_recogida_fin: "2026-09-23T20:00:00.000Z",
+        fecha_vencimiento_min: "2026-02-30",
+      }),
+    });
+
+    await renderScreen(DonationDetailScreen, withId);
+
+    expect(await screen.findByText("DON-1058")).toBeOnTheScreen();
+    expect(screen.getByText(UNKNOWN_PICKUP_WINDOW)).toBeOnTheScreen();
+    expect(screen.getByText("Sin fecha")).toBeOnTheScreen();
+    expect(screen.getByText("Carlos Ruiz")).toBeOnTheScreen();
   });
 
   it("shows an empty state without an id, and requests nothing", async () => {
@@ -359,6 +473,20 @@ describe("RatingScreen", () => {
     expect(await screen.findByText(name)).toBeOnTheScreen();
     expect(screen.getByText(title)).toBeOnTheScreen();
     expect(screen.getByText(/DON-1058/)).toBeOnTheScreen();
+  });
+
+  it("says that sending the rating is not available yet", async () => {
+    answerGets({ [detailPath]: detalleFixture({ estado: "RECIBIDA" }) });
+    await renderScreen(rate("DONANTE"), withId);
+    await screen.findByText("Carlos Ruiz");
+
+    await fireEvent.press(screen.getByRole("button", { name: "Enviar calificación" }));
+
+    expect(
+      screen.getByText("El envío de calificaciones estará disponible próximamente."),
+    ).toBeOnTheScreen();
+    expect(screen.queryByText(/registrada/)).toBeNull();
+    expect(mockApi.post).not.toHaveBeenCalled();
   });
 
   it("cannot rate a donation without a volunteer", async () => {

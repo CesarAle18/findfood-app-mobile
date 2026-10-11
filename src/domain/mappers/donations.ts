@@ -91,14 +91,17 @@ export function donationFromResumen(dto: DonacionResumenDto, now?: number): Dona
  * list. Other errors still throw.
  */
 export function donationRowFromResumen(dto: DonacionResumenDto, now?: number): DonationView {
-  let pickupWindow: string;
+  return resumenView(dto, orIfUnreadable(() => pickupDisplay(dto, now), UNKNOWN_PICKUP_WINDOW));
+}
+
+/** `read()`, or `fallback` when the value cannot be read (a MappingError); other errors throw. */
+function orIfUnreadable(read: () => string, fallback: string): string {
   try {
-    pickupWindow = pickupDisplay(dto, now);
+    return read();
   } catch (error) {
     if (!(error instanceof MappingError)) throw error;
-    pickupWindow = UNKNOWN_PICKUP_WINDOW;
+    return fallback;
   }
-  return resumenView(dto, pickupWindow);
 }
 
 function resumenView(dto: DonacionResumenDto, pickupWindow: string): DonationView {
@@ -132,9 +135,33 @@ export function assignedVolunteerFromDetalle(
  * @param now Epoch milliseconds; when given, the window reads "Hoy"/"Mañana".
  */
 export function donationFromDetalle(dto: DonacionDetalleDto, now?: number): DonationView {
+  return detalleView(dto, expiryDisplay(dto), pickupDisplay(dto, now));
+}
+
+/**
+ * `GET /donaciones/:id` for the detail screens: like `donationFromDetalle`, but each field
+ * the app cannot read (a MappingError) falls back on its own instead of failing the screen,
+ * as the list row does. The window shows `UNKNOWN_PICKUP_WINDOW` and the expiry is left
+ * empty (screens show their placeholder). Other errors still throw.
+ */
+export function donationViewFromDetalle(dto: DonacionDetalleDto, now?: number): DonationView {
+  return detalleView(
+    dto,
+    orIfUnreadable(() => expiryDisplay(dto), ""),
+    orIfUnreadable(() => pickupDisplay(dto, now), UNKNOWN_PICKUP_WINDOW),
+  );
+}
+
+/** The earliest expiry, or empty when no product declares one. */
+function expiryDisplay(dto: Pick<DonacionDetalleDto, "fecha_vencimiento_min">): string {
+  return dto.fecha_vencimiento_min ? fromFechaVencimiento(dto.fecha_vencimiento_min) : "";
+}
+
+function detalleView(
+  dto: DonacionDetalleDto,
+  expiresOn: string,
+  pickupWindow: string,
+): DonationView {
   const foodTypes = [...new Set(dto.items.map((item) => item.tipo_alimento.nombre))];
-  const expiresOn = dto.fecha_vencimiento_min
-    ? fromFechaVencimiento(dto.fecha_vencimiento_min)
-    : "";
-  return baseView(dto, joinSpanish(foodTypes), expiresOn, pickupDisplay(dto, now));
+  return baseView(dto, joinSpanish(foodTypes), expiresOn, pickupWindow);
 }

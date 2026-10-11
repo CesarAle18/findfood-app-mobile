@@ -1,7 +1,9 @@
 /**
  * Donation queries shaped for the donor and volunteer screens: requests come from
- * `@/services/donaciones`, and `select` maps them to the presentation model, so a mapping
- * error surfaces as the query's error (ErrorState) instead of crashing the screen.
+ * `@/services/donaciones`, and `select` maps them to the presentation model. A field the app
+ * cannot read falls back on its own (see `donationRowFromResumen`, `donationViewFromDetalle`);
+ * any other mapping failure surfaces as the query's error (ErrorState) instead of crashing
+ * the screen.
  */
 import { useInfiniteQuery, useQuery, type InfiniteData } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
@@ -9,10 +11,11 @@ import { useLocalSearchParams } from "expo-router";
 import type { EstadoDonacion, Paged } from "@/api/types";
 import { fromIsoToBogota } from "@/domain/mappers/dates";
 import {
-  donationFromDetalle,
   donationRowFromResumen,
+  donationViewFromDetalle,
   type DonationView,
 } from "@/domain/mappers/donations";
+import { MappingError } from "@/domain/mappers/errors";
 import {
   donacionesQuery,
   donacionQuery,
@@ -61,13 +64,22 @@ export function nextOffset(last: Paged<unknown>): number | undefined {
   return last.datos.length > 0 && next < last.total ? next : undefined;
 }
 
-function selectPages(data: InfiniteData<Paged<DonacionResumenDto>>): DonationPages {
+/**
+ * The loaded pages as one list. Offsets shift when a donation is created between two page
+ * requests, so a row can come back on the next page: only its first copy is kept (ids are
+ * the list keys).
+ */
+export function selectPages(data: InfiniteData<Paged<DonacionResumenDto>>): DonationPages {
   const now = Date.now();
-  return {
+  const seen = new Set<string>();
+  const rows: DonationView[] = [];
+  for (const dto of data.pages.flatMap((page) => page.datos)) {
+    if (seen.has(dto.id)) continue;
+    seen.add(dto.id);
     // Tolerant: one row with a window the app cannot read never fails the whole list.
-    rows: data.pages.flatMap((page) => page.datos.map((dto) => donationRowFromResumen(dto, now))),
-    total: data.pages[0]?.total ?? 0,
-  };
+    rows.push(donationRowFromResumen(dto, now));
+  }
+  return { rows, total: data.pages[0]?.total ?? 0 };
 }
 
 /** `GET /donaciones`, newest first, one page of `DONATIONS_PAGE_SIZE` at a time. */
@@ -99,7 +111,9 @@ export interface DonationDetail {
 }
 
 function selectDetail(dto: DonacionDetalleDto): DonationDetail {
-  return { dto, view: donationFromDetalle(dto, Date.now()) };
+  // Tolerant field by field, like the list: an unreadable window or expiry never hides the
+  // donation the list already shows.
+  return { dto, view: donationViewFromDetalle(dto, Date.now()) };
 }
 
 /** The `?id=` (donation UUID) of the current route, or undefined when absent or empty. */
@@ -123,7 +137,9 @@ export function formatInstant(iso: string | null): string | null {
   try {
     const { date, time } = fromIsoToBogota(iso);
     return `${date} · ${time}`;
-  } catch {
+  } catch (error) {
+    // Only an unreadable timestamp reads as "no data"; anything else is a bug.
+    if (!(error instanceof MappingError)) throw error;
     return null;
   }
 }

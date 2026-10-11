@@ -1,7 +1,7 @@
 import type { EstadoDonacion } from "@/api/types";
-import { pageFixture } from "@/test-utils/fixtures";
+import { pageFixture, resumenFixture } from "@/test-utils/fixtures";
 
-import { formatInstant, matchesFilter, nextOffset } from "../donation-queries";
+import { formatInstant, matchesFilter, nextOffset, selectPages } from "../donation-queries";
 
 describe("nextOffset", () => {
   it("asks for the rows after the ones already loaded", () => {
@@ -44,5 +44,46 @@ describe("formatInstant", () => {
 
   it.each([null, "", "2026-09-23T18:55:00"])("is null for %p", (value) => {
     expect(formatInstant(value)).toBeNull();
+  });
+
+  it("does not hide errors other than mapping errors", () => {
+    // A Symbol cannot become a string: the parser throws a TypeError, not a MappingError.
+    expect(() => formatInstant(Symbol("not a timestamp") as unknown as string)).toThrow(TypeError);
+  });
+});
+
+describe("selectPages", () => {
+  const row = (id: string, codigo: string) => resumenFixture({ id, codigo });
+
+  it("joins the pages and reads the total from the first one", () => {
+    const data = {
+      pages: [
+        pageFixture([row("a", "DON-A"), row("b", "DON-B")], 3),
+        pageFixture([row("c", "DON-C")], 3, 2),
+      ],
+      pageParams: [0, 2],
+    };
+    const { rows, total } = selectPages(data);
+    expect(rows.map((d) => d.id)).toEqual(["a", "b", "c"]);
+    expect(total).toBe(3);
+  });
+
+  it("keeps the first copy of a donation repeated across pages", () => {
+    // A donation created between two requests shifts the offsets: the last row of page one
+    // comes back as the first row of page two.
+    const data = {
+      pages: [
+        pageFixture([row("a", "DON-A"), row("b", "DON-B")], 4),
+        pageFixture([row("b", "DON-B (repetida)"), row("c", "DON-C")], 4, 2),
+      ],
+      pageParams: [0, 2],
+    };
+    const { rows } = selectPages(data);
+    expect(rows.map((d) => d.id)).toEqual(["a", "b", "c"]);
+    expect(rows[1].code).toBe("DON-B");
+  });
+
+  it("is empty without pages", () => {
+    expect(selectPages({ pages: [], pageParams: [] })).toEqual({ rows: [], total: 0 });
   });
 });

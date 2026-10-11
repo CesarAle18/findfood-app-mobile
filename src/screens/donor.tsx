@@ -203,6 +203,7 @@ const filterEmpty = (
 export function DonationsScreen() {
   const pages = useDonationPages();
   const [filter, setFilter] = useState(0);
+  const filterValue = FILTERS[filter].value;
   const total = pages.data?.total;
   const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = pages;
   const loadMore = () => {
@@ -246,13 +247,15 @@ export function DonationsScreen() {
             <>
               <Choices values={FILTER_LABELS} selected={filter} onChange={setFilter} />
               <FlashList
-                data={rows.filter((d) => matchesFilter(d.estado, FILTERS[filter].value))}
+                data={rows.filter((d) => matchesFilter(d.estado, filterValue))}
                 renderItem={renderDonation}
                 keyExtractor={keyExtractor}
                 ItemSeparatorComponent={ItemSeparator}
                 ListEmptyComponent={filterEmpty}
                 ListFooterComponent={footer}
-                onEndReached={loadMore}
+                // A filter can match few rows, so the end is reached at once and every page
+                // would load on its own: with a filter, only "Cargar más" loads more.
+                onEndReached={filterValue === "todas" ? loadMore : undefined}
                 onEndReachedThreshold={0.5}
                 contentContainerStyle={styles.listContent}
                 contentInsetAdjustmentBehavior="automatic"

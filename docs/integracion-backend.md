@@ -15,7 +15,7 @@ La app consume `findfood-api` mediante un cliente HTTP, la sesión de Supabase y
 | `src/components/findfood/feedback.tsx` | `LoadingState`, `EmptyState`, `ErrorState` (con reintento) y `QueryContent`, que elige entre ellos según la consulta. |
 | `src/state/mobile-context.tsx` | Solo estado de interfaz: borrador de donación y conmutador de disponibilidad. |
 
-Cada pantalla con datos remotos muestra un indicador de carga, un estado de error con «Reintentar» (vuelve a ejecutar la consulta) o un estado vacío. Las pantallas de detalle reciben el UUID de la donación en `?id=`; sin él muestran un estado vacío y no hacen peticiones. Las listas muestran el código legible (`DON-1058`), filtran por `estado` y no por etiquetas, y una fila con una ventana de recogida ilegible se muestra con «Ventana por confirmar» en lugar de invalidar toda la lista. La lista de donaciones usa FlashList y carga páginas de 20.
+Cada pantalla con datos remotos muestra un indicador de carga, un estado de error con «Reintentar» (vuelve a ejecutar la consulta) o un estado vacío. Las pantallas de detalle reciben el UUID de la donación en `?id=`; sin él muestran un estado vacío y no hacen peticiones. Las listas muestran el código legible (`DON-1058`), filtran por `estado` y no por etiquetas, y una fila con una ventana de recogida ilegible se muestra con «Ventana por confirmar» en lugar de invalidar toda la lista. El detalle aplica la misma tolerancia campo por campo: una ventana ilegible muestra «Ventana por confirmar» y un vencimiento ilegible, «Sin fecha». La lista de donaciones usa FlashList y carga páginas de 20: con «Todas» pide la siguiente al llegar al final; con un filtro activo, solo con «Cargar más». Una donación que se repite entre páginas aparece una sola vez.
 
 ## Límites de los datos actuales
 
@@ -24,7 +24,7 @@ Estos contenidos aún no tienen endpoint conectado y usan datos ilustrativos mar
 - Actividad reciente del donante y del voluntario (`src/data/preview.ts`), pendiente de `GET /donaciones/:id/historial` y de `GET /rutas`.
 - Bandeja de avisos (`src/data/preview.ts`), pendiente de `GET /me/notificaciones`.
 - Inicio del voluntario, ruta activa, oferta y registro de recogida, pendientes de `GET /asignaciones/ofertas` y `GET /rutas/:id`. Mientras tanto, «Ver detalle» de la ruta activa no lleva `id` y abre el estado vacío.
-- Envío de calificaciones: la pantalla de calificación lee los nombres reales del detalle de la donación, pero la calificación solo se registra en la sesión de demostración (falta `POST /asignaciones/:id/calificacion`).
+- Envío de calificaciones: la pantalla de calificación lee los nombres reales del detalle de la donación, pero la calificación no se envía ni se guarda; al enviarla, la pantalla avisa que el envío estará disponible próximamente (falta `POST /asignaciones/:id/calificacion`).
 - Disponibilidad del voluntario: el conmutador es local (falta `PATCH /voluntario/estado`).
 
 Los formularios de nueva donación y de registro de voluntario mantienen sus datos en memoria y aún no los envían. Los mapas esquemáticos y los espacios fotográficos no usan servicios del dispositivo.

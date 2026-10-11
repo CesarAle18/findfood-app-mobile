@@ -10,6 +10,7 @@ import {
   donationFromDetalle,
   donationFromResumen,
   donationRowFromResumen,
+  donationViewFromDetalle,
 } from "./donations";
 import { MappingError } from "./errors";
 
@@ -250,5 +251,43 @@ describe("donationFromDetalle", () => {
       status: "Rechazada",
       statusTone: "danger",
     });
+  });
+
+  it.each([
+    ["an inverted window", { ventana_recogida_fin: "2026-09-23T20:00:00.000Z" }],
+    ["an expiry it cannot read", { fecha_vencimiento_min: "2026-02-30" }],
+  ])("surfaces %s as a MappingError", (_case, overrides) => {
+    expect(() => donationFromDetalle(detalle(overrides))).toThrow(MappingError);
+  });
+});
+
+describe("donationViewFromDetalle", () => {
+  it("maps a valid detail exactly like donationFromDetalle", () => {
+    expect(donationViewFromDetalle(detalle(), NOW)).toEqual(donationFromDetalle(detalle(), NOW));
+  });
+
+  it.each([
+    ["an inverted window", { ventana_recogida_fin: "2026-09-23T20:00:00.000Z" }],
+    ["a window without offset", { ventana_recogida_inicio: "2026-09-23T21:00:00" }],
+  ])("keeps a detail with %s, showing a neutral window", (_case, overrides) => {
+    expect(donationViewFromDetalle(detalle(overrides), NOW)).toMatchObject({
+      code: "DON-1058",
+      pickupWindow: UNKNOWN_PICKUP_WINDOW,
+      expiresOn: "16/09/2026",
+    });
+  });
+
+  it.each(["2026-02-30", "16/09/2026", "2026-09-16T05:00:00.000Z"])(
+    "leaves an unreadable expiry (%p) empty and keeps the window",
+    (fecha) => {
+      expect(
+        donationViewFromDetalle(detalle({ fecha_vencimiento_min: fecha }), NOW),
+      ).toMatchObject({ pickupWindow: "Hoy · 16:00–18:00", expiresOn: "" });
+    },
+  );
+
+  it("does not hide errors other than mapping errors", () => {
+    const broken = { ...detalle(), items: null } as unknown as DonacionDetalleDto;
+    expect(() => donationViewFromDetalle(broken, NOW)).toThrow(TypeError);
   });
 });

@@ -93,7 +93,7 @@ function Details({ rows }: { rows: [string, string][] }) {
   );
 }
 
-/** `GET /me/impacto` as metrics; null for a role without impact data yet. */
+/** `GET /me/impacto` as metrics; an empty state for a role without impact data yet. */
 function ImpactMetrics({ volunteer }: { volunteer: boolean }) {
   const impacto = useImpacto();
   return (
@@ -472,7 +472,8 @@ export function RatingScreen({ rater = "DONANTE" }: { rater?: Rater }) {
         multiline
       />
       {submitted ? <Animated.View entering={enterItem} layout={itemLayout} style={{ gap: 24 }}>
-        <Copy tone="primary">Calificación registrada solo en esta sesión de demostración.</Copy>
+        {/* Nothing is stored yet: the rating is only sent once the TODO(F3) below lands. */}
+        <Copy tone="primary">El envío de calificaciones estará disponible próximamente.</Copy>
         <NavButton href={rater === "VOLUNTARIO" ? { pathname: "/voluntario/registrar-recogida", params: { id: donation.id } } : { pathname: "/donante/detalle-donacion", params: { id: donation.id } }} dismissTo showArrow={false}>{rater === "VOLUNTARIO" ? "Volver a recogida" : "Volver al detalle de donación"}</NavButton>
       </Animated.View> : (
         // TODO(F3): send it with useCalificarAsignacionMutation (POST /asignaciones/:id/calificacion).

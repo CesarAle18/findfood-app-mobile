@@ -49,7 +49,8 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 | F1-07 | Feedback components, problem messages, Field/Button, useZodForm | delegated writer (2+ non-trivial files) | [x] | `1e8385b` + `11bc9e6` | high → granted → approved, burned (e1055a5..1e8385b); 2 warnings fixed inline in `11bc9e6` → granted → approved, burned (1e8385b..11bc9e6) |
 | F1-08 | Root layout guards + splash + import-safe config | delegated writer (2+ non-trivial files) | [x] | `2d7c31e` | high → granted → approved, burned (11bc9e6..2d7c31e); 2 warnings → F2-06 / tests follow-up |
 | F1-09 | Donor + volunteer segments with NativeTabs, role guards, remove BottomNav (merged a/b: one coherent route move) | delegated writer (2+ non-trivial files) | [x] | `f0caaea` | high → granted → approved, burned (2d7c31e..f0caaea); README warning fixed in docs commit; login links → F2-01; dismissTo test → F1-10 |
-| F1-10 | Wire existing screens to services; delete mobile.ts | delegated writer (2+ non-trivial files) | [x] | see log | |
+| F1-10 | Wire existing screens to services; delete mobile.ts | delegated writer (2+ non-trivial files) | [x] | `1b7c697` | high → granted → approved, burned (f0caaea..1b7c697); 5 warnings → F1-10b |
+| F1-10b | F1-10 review fixes: tolerant detail mapping, dedupe paged rows, filter auto-paging, rating copy | delegated writer (2+ non-trivial files) | [x] | see log | |
 | F1-11 | EAS dev build config | delegated writer | [ ] | | |
 | F2-01 | Login | delegated writer | [ ] | | |
 | F2-02 | Register | delegated writer | [ ] | | |
@@ -76,6 +77,7 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - F1-08: RED 6 suites → GREEN 746/746; typecheck, lint, test:render ok (parent re-ran tests + typecheck). `renderRouter` drives `Stack.Protected` (mutation check: guard forced true → exactly 2 deep-link/session-end tests fail). `env` import never throws (`configResult`); invalid config renders `ConfigErrorScreen`. `ROUTE_GROUPS` test enforces every route file is in exactly one guard group. Removed template animated-icon + its orphan assets.
 - F1-09: RED (16 access-route failures + missing layouts) → GREEN 768/768; typecheck (typed routes regenerated), lint, test:render ok; no stale `inicio-donante|mis-donaciones|/pantallas|BottomNav|viewRole` refs (parent re-ran tests + typecheck). NativeTabs render under jest-expo. Mutation checks: opening role guards → 4 tests fail. Stacked→tab links use `dismissTo` (plain navigate pushes a second `(tabs)`). Added `voluntario/detalle-donacion`. Removed template leftovers, tab icon assets and the preview gallery; README navigation section updated.
 - F1-10: GREEN 841/841; typecheck, lint, test:render ok; no `data/mobile|mobile-repository|demoRepository|useMobile().data` refs (parent re-ran tests + typecheck). RED observed for mapper changes (9 failing) and new profile mapper; screen tests written alongside code (no RED). FlashList 2.0.2 (its jestSetup is broken; only `measureLayout` mocked). Donations list uses `useInfiniteQuery` + tolerant row mapping. Remaining fixtures marked TODO(F3): donor activity (`/donaciones/:id/historial`), volunteer activity + active route (`/rutas`), notifications (`/me/notificaciones`), rating submit (`POST /asignaciones/:id/calificacion`), availability toggle (`PATCH /voluntario/estado`).
+- F1-10b: RED 13 new tests (incl. the reported auto-paging bug: offsets [0,20] instead of [0]) → GREEN 860/860; typecheck, lint, test:render ok (parent re-ran tests). Tolerant `donationViewFromDetalle`, deduped `selectPages`, filter loads only via "Cargar más", honest rating copy.
 
 ## Follow-ups
 - API: assert `factor_a_kg` of ML/G in e2e; note in migration header that ON CONFLICT never corrects pre-existing rows.
@@ -86,13 +88,10 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - Tests: font-load error branch of RootNavigator (R3-002); release builds should report invalid config to a crash reporter once one exists (R4).
 - F2-06: offline sign-out with an expired session can take ~25-30 s (auth-js retries the refresh inside `signOut`); give `signOutLocally` an overall deadline (then remove keys anyway) and show a blocking "Cerrando sesión…" state; add an end-to-end offline sign-out test. Old `sb-*` SecureStore entries from earlier dev builds stay orphaned (users sign in once more) — optional one-time cleanup.
 - Push registration (F3): log a failed rollback DELETE, reword the `registrarDispositivo` comment (it cannot guarantee no orphan when the DELETE also fails), test DELETE-also-fails, and route `deviceIdStorage.save` through a shared throwing write helper.
-- ~~F1-10 mapper/list follow-ups~~ done in F1-10.
-- (was) F1-10: map list rows tolerantly — a `MappingError` in one row (bad/inverted window) must not fail the whole list (R4-donation-row-throws); rename `baseView` param to `fallbackCategory`; fix tone comment; share the `errorCode` test helper; make `fromFechaVencimiento` reject malformed suffixes.
-- F1-10: show `d.code` (not `d.id`); filter by `estado`, not labels (`DonationsScreen` compares `status === "Completada"`); list rows have no `expiresOn` (endpoint lacks it).
+- Done in F1-10: tolerant list rows, `fallbackCategory`, tone comment, shared `errorCode` helper, strict `fromFechaVencimiento`, `dismissTo` test, RatingScreen `rater` prop.
 - Device check pending: iOS scroll behind native tab bar, Android bottom insets; consider expo-router `ThemeProvider` to avoid white flash between tabs (iOS 26 ignores tab bar backgroundColor).
 - `docs/pantallas.md` still describes the old flat routes/gallery — refresh after F1-10.
 - F2-01: login buttons still point at app routes their phase blocks (R2, F1-09 review).
-- F1-10: add a `renderRouter` test that a stacked screen link with `dismissTo` returns to the existing `(tabs)` instead of pushing a second one (R3-dismissto-untested); rename RatingScreen `donor` prop to a role-named prop.
 - Narrow `DraftProduct.coldChain` from `string` to `ColdChain`.
 - `.expo/types/router.d.ts` only regenerates on `expo start`; new route files fail `tsc` until then.
 - Retrying `/me` from the error phase briefly returns the phase to `loading` (TanStack resets a data-less query to pending); acceptable, but the Stack remounts.
@@ -103,4 +102,4 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - Web build stores the session in localStorage (preview only); revisit if web ever ships to users.
 
 ## Next step
-F1-11 EAS dev build. Review boundary: `f0caaea`.
+F1-11 EAS dev build. Review boundary: `1b7c697`.
