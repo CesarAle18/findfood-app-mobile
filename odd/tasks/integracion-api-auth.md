@@ -51,10 +51,8 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 | F1-09 | Donor + volunteer segments with NativeTabs, role guards, remove BottomNav (merged a/b: one coherent route move) | delegated writer (2+ non-trivial files) | [x] | `f0caaea` | high → granted → approved, burned (2d7c31e..f0caaea); README warning fixed in docs commit; login links → F2-01; dismissTo test → F1-10 |
 | F1-10 | Wire existing screens to services; delete mobile.ts | delegated writer (2+ non-trivial files) | [x] | `1b7c697` | high → granted → approved, burned (f0caaea..1b7c697); 5 warnings → F1-10b |
 | F1-10b | F1-10 review fixes: tolerant detail mapping, dedupe paged rows, filter auto-paging, rating copy | delegated writer (2+ non-trivial files) | [x] | `a67df98` + `0a2c6c8` | high → granted → approved, burned (1b7c697..a67df98); 2 readability warnings fixed in `0a2c6c8` → granted → approved, burned (a67df98..0a2c6c8) |
-| F1-11 | EAS dev build config | inline (config files + 1 test) | [x] | `60d581e` + `6fbe77d` + fix | high → granted → approved (0a2c6c8..60d581e); README overclaim fixed + automated release check in `6fbe77d` → approved (60d581e..6fbe77d); temp-dir leak on failure fixed (see log) |
-| F2-01 | Login | delegated writer | [ ] | | |
-| F2-02 | Register | delegated writer | [ ] | | |
-| F2-03 | OTP verification | delegated writer | [ ] | | |
+| F1-11 | EAS dev build config | inline (config files + 1 test) | [x] | `60d581e` + `6fbe77d` + fix | high → granted → approved (0a2c6c8..60d581e); README overclaim fixed + automated release check in `6fbe77d` → approved (60d581e..6fbe77d); temp-dir leak on failure fixed in `ebab8f6` → approved (6fbe77d..ebab8f6) |
+| F2-01..03 | Login + register + OTP verification (one coherent email sign-in/sign-up flow) | delegated writer | [ ] | | |
 | F2-04 | Forgot / reset password (PKCE deep link) | delegated writer | [ ] | | |
 | F2-05 | Complete profile / change password | delegated writer | [ ] | | |
 | F2-06 | Account menu (switch view, logout) | delegated writer | [ ] | | |
@@ -106,4 +104,4 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - Web build stores the session in localStorage (preview only); revisit if web ever ships to users.
 
 ## Next step
-Phase 2 — F2-01 login. Review boundary: `0a2c6c8`.
+Phase 2 — F2-01..03 email auth flow. Review boundary: `ebab8f6`.
