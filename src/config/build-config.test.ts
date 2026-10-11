@@ -1,6 +1,8 @@
 /**
  * Guards for the native build configuration: the EAS profiles the team relies on exist,
- * and the development-only token can never reach an EAS build.
+ * and eas.json never inlines the development-only token or the local profile. Remote EAS
+ * environment variables are out of reach here; the real protection is that the token is
+ * read only under `__DEV__` (proved by `npm run check:release-token`).
  */
 import appJson from "../../app.json";
 import easJson from "../../eas.json";

@@ -51,11 +51,11 @@ Perfiles de `eas.json`:
 Primera vez (requiere una cuenta de Expo):
 
 1. `npx eas-cli@latest login` y `npx eas-cli@latest init` (vincula el proyecto y agrega `extra.eas.projectId` a `app.json`).
-2. Cargar las variables públicas en cada entorno de EAS (`development`, `preview`, `production`): `npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_API_URL --value <url> --visibility plaintext`, y lo mismo para `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` y los client IDs de Google. **Nunca** `EXPO_PUBLIC_DEV_TOKEN` ni `EXPO_PUBLIC_APP_ENV=local` (lo verifica `src/config/build-config.test.ts`).
+2. Cargar las variables públicas en cada entorno de EAS (`development`, `preview`, `production`): `npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_API_URL --value <url> --visibility plaintext`, y lo mismo para `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` y los client IDs de Google. **Nunca** `EXPO_PUBLIC_DEV_TOKEN` ni `EXPO_PUBLIC_APP_ENV=local`. `src/config/build-config.test.ts` solo impide declararlos en `eas.json`; las variables remotas de EAS no las puede ver, así que revisa `npx eas-cli@latest env:list` antes de cada build.
 3. `npx eas-cli@latest build --profile development --platform android` e instalar el APK desde el enlace que entrega EAS.
 4. En el computador, `npm run start:local` o `npm run start:real` y abrir el proyecto desde el dev client.
 
-Un bundle de release no contiene el token de desarrollo aunque la variable exista en el entorno: se lee solo bajo `__DEV__` y el minificador elimina la rama.
+Aunque la variable exista en el entorno, un bundle de release no contiene el token de desarrollo: se lee solo bajo `__DEV__` y el minificador elimina esa rama. `npm run check:release-token` lo comprueba exportando el bundle de Android con un token centinela y falla si el centinela aparece. Exporta sin bytecode de Hermes para poder buscar en el JS.
 
 ## Recorrer la demostración
 

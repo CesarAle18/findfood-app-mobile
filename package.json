@@ -58,7 +58,8 @@
     "start:local": "node scripts/dev-env.mjs local",
     "start:real": "node scripts/dev-env.mjs real",
     "export:preview": "expo export --platform web",
-    "test:render": "node scripts/check-render.cjs"
+    "test:render": "node scripts/check-render.cjs",
+    "check:release-token": "node scripts/check-release-token.mjs"
   },
   "private": true
 }
