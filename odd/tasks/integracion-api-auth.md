@@ -51,7 +51,7 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 | F1-09 | Donor + volunteer segments with NativeTabs, role guards, remove BottomNav (merged a/b: one coherent route move) | delegated writer (2+ non-trivial files) | [x] | `f0caaea` | high → granted → approved, burned (2d7c31e..f0caaea); README warning fixed in docs commit; login links → F2-01; dismissTo test → F1-10 |
 | F1-10 | Wire existing screens to services; delete mobile.ts | delegated writer (2+ non-trivial files) | [x] | `1b7c697` | high → granted → approved, burned (f0caaea..1b7c697); 5 warnings → F1-10b |
 | F1-10b | F1-10 review fixes: tolerant detail mapping, dedupe paged rows, filter auto-paging, rating copy | delegated writer (2+ non-trivial files) | [x] | `a67df98` + `0a2c6c8` | high → granted → approved, burned (1b7c697..a67df98); 2 readability warnings fixed in `0a2c6c8` → granted → approved, burned (a67df98..0a2c6c8) |
-| F1-11 | EAS dev build config | inline (config files + 1 test) | [x] | `60d581e` + fix (see log) | high → granted → approved, burned (0a2c6c8..60d581e); README overclaimed the eas.json test → fixed + automated release check |
+| F1-11 | EAS dev build config | inline (config files + 1 test) | [x] | `60d581e` + `6fbe77d` + fix | high → granted → approved (0a2c6c8..60d581e); README overclaim fixed + automated release check in `6fbe77d` → approved (60d581e..6fbe77d); temp-dir leak on failure fixed (see log) |
 | F2-01 | Login | delegated writer | [ ] | | |
 | F2-02 | Register | delegated writer | [ ] | | |
 | F2-03 | OTP verification | delegated writer | [ ] | | |
@@ -81,6 +81,7 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - F1-10b fix (inline): rename tolerant detail mapper to `tolerantDonationFromDetalle`; auto-paging tied to an `UNFILTERED` constant; rethrow test now throws inside the fallback wrapper (mutation check: swallowing every error → test fails). GREEN 860/860; typecheck, lint ok.
 - F1-11: `expo-dev-client` ~57.0.19; `app.json` package/bundleIdentifier `co.findfood.app` (user decision); `eas.json` development (dev client APK), preview (APK), production (AAB, autoIncrement). RED (`eas.json` missing) → GREEN 867/867; typecheck, lint, test:render ok. **Release bundle check**: `expo export --platform android --no-bytecode` with `EXPO_PUBLIC_DEV_TOKEN=DEVTOKEN_SENTINEL_9f3a` in the environment → 0 hits; control `api.example.com` inlined. Hermes bytecode step fails locally (`spawn UNKNOWN`, Windows env), so the check ran on the JS bundle. **Pending (user, needs Expo account)**: `eas init`, EAS env variables, `eas build --profile development --platform android`, install on a device.
 - F1-11 fix: `npm run check:release-token` (export with `--clear --no-bytecode` + sentinel; control variable must be inlined). PASS on current code; mutation (token read without `__DEV__`) → FAIL. README/test header now say the test only covers `eas.json` and remote EAS env must be checked with `eas env:list`.
+- F1-11 fix 2: `check:release-token` returns an exit code instead of `process.exit` inside `try`, so the export dir is always removed; prints `result.error`. Verified: PASS exit 0, mutation FAIL exit 1, 0 leftover temp dirs.
 
 ## Follow-ups
 - API: assert `factor_a_kg` of ML/G in e2e; note in migration header that ON CONFLICT never corrects pre-existing rows.

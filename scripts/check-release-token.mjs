@@ -25,7 +25,11 @@ function filesUnder(dir) {
   });
 }
 
-try {
+/**
+ * Runs the export and the search. Returns the exit code instead of calling process.exit,
+ * so the `finally` below always removes the exported bundle.
+ */
+function check() {
   const result = spawnSync(
     process.execPath,
     // --clear: EXPO_PUBLIC values are inlined at transform time and Metro caches transforms.
@@ -42,9 +46,13 @@ try {
       },
     },
   );
+  if (result.error) {
+    console.error(`Could not start expo export: ${result.error.message}`);
+    return 1;
+  }
   if (result.status !== 0) {
     console.error("expo export failed; the release bundle could not be checked.");
-    process.exit(result.status ?? 1);
+    return result.status ?? 1;
   }
 
   const contents = filesUnder(outDir)
@@ -53,13 +61,18 @@ try {
 
   if (!contents.some((text) => text.includes(CONTROL))) {
     console.error("Control variable not found in the bundle: the check is not meaningful.");
-    process.exit(1);
+    return 1;
   }
   if (contents.some((text) => text.includes(SENTINEL))) {
     console.error("FAIL: the release bundle contains EXPO_PUBLIC_DEV_TOKEN.");
-    process.exit(1);
+    return 1;
   }
   console.log("PASS: the release bundle does not contain EXPO_PUBLIC_DEV_TOKEN.");
+  return 0;
+}
+
+try {
+  process.exitCode = check();
 } finally {
   rmSync(outDir, { recursive: true, force: true });
 }
