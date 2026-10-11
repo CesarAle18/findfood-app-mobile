@@ -52,7 +52,7 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 | F1-10 | Wire existing screens to services; delete mobile.ts | delegated writer (2+ non-trivial files) | [x] | `1b7c697` | high → granted → approved, burned (f0caaea..1b7c697); 5 warnings → F1-10b |
 | F1-10b | F1-10 review fixes: tolerant detail mapping, dedupe paged rows, filter auto-paging, rating copy | delegated writer (2+ non-trivial files) | [x] | `a67df98` + `0a2c6c8` | high → granted → approved, burned (1b7c697..a67df98); 2 readability warnings fixed in `0a2c6c8` → granted → approved, burned (a67df98..0a2c6c8) |
 | F1-11 | EAS dev build config | inline (config files + 1 test) | [x] | `60d581e` + `6fbe77d` + fix | high → granted → approved (0a2c6c8..60d581e); README overclaim fixed + automated release check in `6fbe77d` → approved (60d581e..6fbe77d); temp-dir leak on failure fixed in `ebab8f6` → approved (6fbe77d..ebab8f6) |
-| F2-01..03 | Login + register + OTP verification (one coherent email sign-in/sign-up flow) | delegated writer | [ ] | | |
+| F2-01..03 | Login + register + OTP verification (one coherent email sign-in/sign-up flow) | delegated writer (2+ non-trivial files) | [x] | see log | |
 | F2-04 | Forgot / reset password (PKCE deep link) | delegated writer | [ ] | | |
 | F2-05 | Complete profile / change password | delegated writer | [ ] | | |
 | F2-06 | Account menu (switch view, logout) | delegated writer | [ ] | | |
@@ -80,6 +80,7 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - F1-11: `expo-dev-client` ~57.0.19; `app.json` package/bundleIdentifier `co.findfood.app` (user decision); `eas.json` development (dev client APK), preview (APK), production (AAB, autoIncrement). RED (`eas.json` missing) → GREEN 867/867; typecheck, lint, test:render ok. **Release bundle check**: `expo export --platform android --no-bytecode` with `EXPO_PUBLIC_DEV_TOKEN=DEVTOKEN_SENTINEL_9f3a` in the environment → 0 hits; control `api.example.com` inlined. Hermes bytecode step fails locally (`spawn UNKNOWN`, Windows env), so the check ran on the JS bundle. **Pending (user, needs Expo account)**: `eas init`, EAS env variables, `eas build --profile development --platform android`, install on a device.
 - F1-11 fix: `npm run check:release-token` (export with `--clear --no-bytecode` + sentinel; control variable must be inlined). PASS on current code; mutation (token read without `__DEV__`) → FAIL. README/test header now say the test only covers `eas.json` and remote EAS env must be checked with `eas env:list`.
 - F1-11 fix 2: `check:release-token` returns an exit code instead of `process.exit` inside `try`, so the export dir is always removed; prints `result.error`. Verified: PASS exit 0, mutation FAIL exit 1, 0 leftover temp dirs.
+- F2-01..03: RED 23 tests → GREEN; follow-up (user decision: neutral sign-up, no account enumeration) RED 7 → GREEN; full 940/940; typecheck, lint, test:render ok (parent re-ran tests + typecheck). Existing addresses get the same response as new ones (`origen=registro` note with links). OTP screen falls back to the session email in the `verify-email` phase and invalidates `me` after `verifyOtp`. Phone required (avoids TELEFONO pending). No auto-submit on the 6th digit.
 
 ## Follow-ups
 - API: assert `factor_a_kg` of ML/G in e2e; note in migration header that ON CONFLICT never corrects pre-existing rows.
@@ -98,10 +99,12 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - `.expo/types/router.d.ts` only regenerates on `expo start`; new route files fail `tsc` until then.
 - Retrying `/me` from the error phase briefly returns the phase to `loading` (TanStack resets a data-less query to pending); acceptable, but the Stack remounts.
 - Tests to add: rejected `onValid` clears `submitting`; AuthError code naming a prototype member; `touched` comment should say "changed via setValue".
+- SessionProvider should refetch `/me` on `SIGNED_IN`/`USER_UPDATED` instead of screens invalidating it (F2-04/F2-05 touch the same need).
+- Unverified: Supabase response to `resend({type:"signup"})` for an already confirmed address.
 - Intermittent "SessionProvider … not wrapped in act" warning seen once in a full run (session.test.tsx); investigate if it recurs.
 - F3 screens: signed URLs (`url_lectura`, `foto_url`) expire after 5 min; add refetch/expiry handling where shown.
 - Readability nits (F1-04b review): reword the fake `signOut` mock comment in supabase.test.ts; unify the two `ignore()` helpers.
 - Web build stores the session in localStorage (preview only); revisit if web ever ships to users.
 
 ## Next step
-Phase 2 — F2-01..03 email auth flow. Review boundary: `ebab8f6`.
+F2-04 reset password (PKCE). Review boundary: `ebab8f6`.

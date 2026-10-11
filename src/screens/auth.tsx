@@ -1,21 +1,80 @@
-import { useState } from "react";
+import { isAuthError } from "@supabase/supabase-js";
+import { router } from "expo-router";
 import { View } from "react-native";
+
+import { authErrorMessages } from "@/api/problem-messages";
+import {
+  isEmailAuthAvailable,
+  resendSignupOtp,
+  signIn,
+  signUp,
+} from "@/auth/email-auth";
 import {
   Button,
   Card,
   Copy,
   Field,
-  NavButton,
-  SelectField,
+  FormMessage,
   Row,
   Screen,
   Stack,
   TextLink,
 } from "@/components/findfood/ui";
 import { Icon } from "@/components/findfood/icon";
+import { Pressing } from "@/components/findfood/motion";
 import { colors } from "@/design/tokens";
+import { loginSchema, registerSchema } from "@/domain/validation/auth";
+import { useZodForm } from "@/hooks/use-zod-form";
+
+/** `origen` param of `/verificar-correo` when a sign-up opens it. */
+export const SIGN_UP_ORIGIN = "registro";
+
+/**
+ * Opens the code verification for `email`; after a sign-up it also explains, without saying
+ * which case applies, what to do if the address already had an account. After a successful
+ * sign-in or sign-up with a session, the screens never navigate: the session change closes
+ * the auth screens and the root guards open the account's home.
+ */
+function openVerification(email: string, { afterSignUp = false } = {}) {
+  router.push({
+    pathname: "/verificar-correo",
+    params: afterSignUp ? { email, origen: SIGN_UP_ORIGIN } : { email },
+  });
+}
+
+/** Shown instead of a working form in the local profile (no Supabase, dev token). */
+function LocalProfileNotice() {
+  return (
+    <Card soft>
+      <Copy tone="secondary" style={{ fontSize: 12 }}>
+        {authErrorMessages.auth_unavailable}
+      </Copy>
+    </Card>
+  );
+}
+
+const LOGIN_INITIAL = { email: "", password: "" };
 
 export function LoginScreen() {
+  const available = isEmailAuthAvailable();
+  const form = useZodForm(loginSchema, LOGIN_INITIAL);
+  const submit = form.handleSubmit(async (credentials) => {
+    try {
+      await signIn(credentials);
+    } catch (error) {
+      if (!isAuthError(error) || error.code !== "email_not_confirmed") throw error;
+      // The first code may have expired: send a fresh one. A failed resend (a rate limit)
+      // still opens the verification, which offers its own resend.
+      await resendSignupOtp(credentials.email).catch(() => undefined);
+      openVerification(credentials.email);
+    }
+  });
+  // Without onChangeText a Field is read-only.
+  const input = (name: keyof typeof LOGIN_INITIAL) => {
+    const props = form.field(name);
+    return available ? props : { ...props, onChangeText: undefined };
+  };
+
   return (
     <Screen center>
       <View style={{ gap: 9, marginTop: 12, marginBottom: 12 }}>
@@ -26,85 +85,220 @@ export function LoginScreen() {
           Gestiona donaciones y rescates de alimentos.
         </Copy>
       </View>
+      {available ? null : <LocalProfileNotice />}
       <Stack gap={24}>
-        <Field label="Correo electrónico" value="usuario@correo.com" />
-        <Field label="Contraseña" value="password" secure />
+        <Field
+          label="Correo electrónico"
+          {...input("email")}
+          placeholder="tu@correo.com"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoComplete="email"
+          textContentType="emailAddress"
+          returnKeyType="next"
+        />
+        <Field
+          label="Contraseña"
+          {...input("password")}
+          secure
+          autoCapitalize="none"
+          autoComplete="current-password"
+          textContentType="password"
+          returnKeyType="go"
+          onSubmitEditing={submit}
+        />
       </Stack>
       <View style={{ marginTop: -14 }}>
         <TextLink href="/recuperar-contrasena" align="right">
           ¿Olvidaste tu contraseña?
         </TextLink>
       </View>
-      <NavButton href="/donante" showArrow={false}>
+      <FormMessage message={form.formError} />
+      <Button onPress={submit} loading={form.submitting} disabled={!available}>
         Iniciar sesión
-      </NavButton>
+      </Button>
       <View
         style={{
           borderTopWidth: 1,
           borderColor: colors.border,
           paddingTop: 20,
-          gap: 22,
+          gap: 12,
         }}
       >
         <Copy tone="secondary" style={{ fontSize: 11, textAlign: "center" }}>
           o continúa con
         </Copy>
-        <NavButton href="/donante" variant="outline" showArrow={false}>
-          Google
-        </NavButton>
+        {/* TODO(F2-07): native Google sign-in. Without onPress the button stays disabled. */}
+        <Button variant="outline">Google</Button>
+        <Copy tone="secondary" style={{ fontSize: 11, textAlign: "center" }}>
+          El acceso con Google estará disponible próximamente.
+        </Copy>
       </View>
       <TextLink href="/registro">¿No tienes cuenta? Regístrate</TextLink>
     </Screen>
   );
 }
-export function RegisterScreen() {
-  const [documentType, setDocumentType] = useState("");
+
+/**
+ * Supabase codes for an email that already has an account (sent when email confirmation is
+ * off). They get the same answer as a new address, so the form never reveals which
+ * addresses are registered.
+ */
+const EMAIL_TAKEN = new Set(["user_already_exists", "email_exists"]);
+
+const REGISTER_INITIAL = {
+  nombres: "",
+  apellidos: "",
+  email: "",
+  telefono: "",
+  password: "",
+  confirmacion: "",
+  acepto_terminos: false,
+};
+
+function TermsCheckbox({
+  checked,
+  error,
+  disabled,
+  onToggle,
+}: {
+  checked: boolean;
+  error: string | undefined;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
   return (
-    <Screen
-      title="Registrarse"
-      subtitle="Crea tu cuenta para comenzar a usar Find Food."
-      back
-    >
-      <Stack>
-        <Field label="Nombre completo *" value="María García López" />
-        <SelectField
-          label="Tipo de documento *"
-          value={documentType}
-          onChange={setDocumentType}
-          options={[
-            { label: "Cédula de ciudadanía", value: "CC" },
-            { label: "Cédula de extranjería", value: "CE" },
-            { label: "Pasaporte", value: "PA" },
-            { label: "Permiso por Protección Temporal", value: "PPT" },
-          ]}
-        />
-        <Field label="Documento *" value="1234567890" />
-        <Field label="Correo electrónico *" value="tu@correo.com" />
-        <Field label="Contraseña *" value="Mínimo 8 caracteres" />
-        <Field label="Confirmar contraseña *" value="Repite tu contraseña" />
-        <Field label="Teléfono" value="+57 300 123 4567" />
-      </Stack>
-      <Row style={{ alignItems: "flex-start" }}>
+    <View style={{ gap: 9 }}>
+      <Pressing
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked, disabled }}
+        accessibilityLabel="Acepto los Términos y Condiciones y la Política de Privacidad"
+        accessibilityHint={error}
+        disabled={disabled}
+        onPress={onToggle}
+        scale={1}
+        hitSlop={6}
+        surface={{ flexDirection: "row", alignItems: "flex-start", gap: 12, minHeight: 44 }}
+      >
         <View
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: false, disabled: true }}
-          accessibilityLabel="Aceptar términos y condiciones"
           style={{
-            width: 20,
-            height: 20,
-            borderColor: colors.border,
-            borderWidth: 1,
+            width: 22,
+            height: 22,
             borderRadius: 4,
-            marginTop: 2,
+            borderWidth: 1,
+            borderColor: error ? colors.danger : checked ? colors.primary : colors.border,
+            backgroundColor: checked ? colors.primary : colors.surface,
+            alignItems: "center",
+            justifyContent: "center",
+            marginTop: 1,
           }}
-        />
+        >
+          {checked ? <Icon name="check" size={14} color={colors.surface} /> : null}
+        </View>
         <Copy tone="secondary" style={{ flex: 1, fontSize: 11 }}>
           Acepto los Términos y Condiciones y la Política de Privacidad.
         </Copy>
-      </Row>
-      <NavButton href="/verificar-correo" showArrow={false}>
+      </Pressing>
+      {error ? (
+        <View accessibilityLiveRegion="polite">
+          <Copy style={{ fontSize: 11, lineHeight: 16, color: colors.danger }}>{error}</Copy>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+export function RegisterScreen() {
+  const available = isEmailAuthAvailable();
+  const form = useZodForm(registerSchema, REGISTER_INITIAL);
+  const submit = form.handleSubmit(async (data) => {
+    try {
+      const { confirmationPending } = await signUp(data);
+      if (confirmationPending) openVerification(data.email, { afterSignUp: true });
+    } catch (error) {
+      if (!isAuthError(error) || !error.code || !EMAIL_TAKEN.has(error.code)) throw error;
+      openVerification(data.email, { afterSignUp: true });
+    }
+  });
+  const input = (name: Exclude<keyof typeof REGISTER_INITIAL, "acepto_terminos">) => {
+    const props = form.field(name);
+    return available ? props : { ...props, onChangeText: undefined };
+  };
+  // Document type and number wait for API support (API-01); they are not sent yet.
+  return (
+    <Screen
+      title="Registrarse"
+      subtitle="Crea tu cuenta para comenzar a usar Find Food. Todos los campos son obligatorios."
+      back
+    >
+      {available ? null : <LocalProfileNotice />}
+      <Stack>
+        <Row style={{ alignItems: "flex-start" }}>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Nombres"
+              {...input("nombres")}
+              autoComplete="given-name"
+              textContentType="givenName"
+              autoCapitalize="words"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field
+              label="Apellidos"
+              {...input("apellidos")}
+              autoComplete="family-name"
+              textContentType="familyName"
+              autoCapitalize="words"
+            />
+          </View>
+        </Row>
+        <Field
+          label="Correo electrónico"
+          {...input("email")}
+          placeholder="tu@correo.com"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoComplete="email"
+          textContentType="emailAddress"
+        />
+        <Field
+          label="Celular"
+          {...input("telefono")}
+          placeholder="300 123 4567"
+          keyboardType="phone-pad"
+          autoComplete="tel"
+          textContentType="telephoneNumber"
+          accessibilityHint="Número celular de Colombia."
+        />
+        <Field
+          label="Contraseña"
+          {...input("password")}
+          secure
+          autoCapitalize="none"
+          autoComplete="new-password"
+          textContentType="newPassword"
+          accessibilityHint="Mínimo 8 caracteres, con letras y números."
+        />
+        <Field
+          label="Confirmar contraseña"
+          {...input("confirmacion")}
+          secure
+          autoCapitalize="none"
+          autoComplete="new-password"
+          textContentType="newPassword"
+        />
+      </Stack>
+      <TermsCheckbox
+        checked={form.values.acepto_terminos}
+        error={form.errors.acepto_terminos}
+        disabled={!available}
+        onToggle={() => form.setValue("acepto_terminos", !form.values.acepto_terminos)}
+      />
+      <FormMessage message={form.formError} />
+      <Button onPress={submit} loading={form.submitting} disabled={!available}>
         Crear cuenta
-      </NavButton>
+      </Button>
       <TextLink href="/login">¿Ya tienes una cuenta? Iniciar sesión</TextLink>
     </Screen>
   );

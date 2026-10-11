@@ -1,8 +1,14 @@
-import { useState, type PropsWithChildren } from "react";
+import { useEffect, useState, type PropsWithChildren } from "react";
 import { StyleSheet, TextInput, View } from "react-native";
-import { router, type Href } from "expo-router";
+import { isAuthError } from "@supabase/supabase-js";
+import { useQueryClient } from "@tanstack/react-query";
+import { router, useLocalSearchParams, type Href } from "expo-router";
+import { messageFor } from "@/api/problem-messages";
 import type { EstadoVerificacion, MeDto } from "@/api/types";
 import type { MobileRole } from "@/auth/access";
+import { resendSignupOtp, verifyEmailOtp } from "@/auth/email-auth";
+import { OTP_LENGTH, otpSchema } from "@/domain/validation/auth";
+import { useZodForm } from "@/hooks/use-zod-form";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import {
   Badge,
@@ -10,8 +16,10 @@ import {
   Choices,
   Card,
   Copy,
+  Button,
   Detail,
   Field,
+  FormMessage,
   NavButton,
   Row,
   Screen,
@@ -36,8 +44,11 @@ import {
 } from "@/domain/mappers/profile";
 import { useImpacto } from "@/services/perfil";
 import { useMobile } from "@/state/mobile-context";
-import { useAccess, useMe } from "@/state/session";
+import { queryKeys } from "@/services/query-keys";
+import { useAccess, useMe, useSession } from "@/state/session";
 import { colors, fonts } from "@/design/tokens";
+
+import { SIGN_UP_ORIGIN } from "./auth";
 
 import {
   useDonationDetail,
@@ -291,65 +302,236 @@ export function AccountScreen() {
     </Screen>
   );
 }
+/** Seconds before another code can be requested; Supabase limits sends per address too. */
+export const RESEND_COOLDOWN_MS = 60_000;
+
+const twoDigits = (n: number) => String(n).padStart(2, "0");
+
+/** `01:00`, `00:42`… */
+function formatCountdown(seconds: number): string {
+  return `${twoDigits(Math.floor(seconds / 60))}:${twoDigits(seconds % 60)}`;
+}
+
+/**
+ * Seconds left before a resend, derived from when the last code was sent (null: a resend is
+ * allowed now). A single interval ticks while the cooldown lasts and is cleared when it ends,
+ * when the code is sent again, or on unmount.
+ */
+function useResendCooldown() {
+  const [clock, setClock] = useState<{ sentAt: number | null; now: number }>(() => {
+    const now = Date.now();
+    return { sentAt: now, now };
+  });
+  const { sentAt } = clock;
+  useEffect(() => {
+    if (sentAt === null) return;
+    const timer = setInterval(() => {
+      const now = Date.now();
+      setClock((current) => ({ ...current, now }));
+      if (now >= sentAt + RESEND_COOLDOWN_MS) clearInterval(timer);
+    }, 1_000);
+    return () => clearInterval(timer);
+  }, [sentAt]);
+  const remaining =
+    sentAt === null ? 0 : Math.max(0, Math.ceil((sentAt + RESEND_COOLDOWN_MS - clock.now) / 1_000));
+  return {
+    remaining,
+    restart: () => {
+      const now = Date.now();
+      setClock({ sentAt: now, now });
+    },
+    allowNow: () => setClock((current) => ({ ...current, sentAt: null })),
+  };
+}
+
+function CodeBoxes({
+  code,
+  error,
+  onChange,
+}: {
+  code: string;
+  error: string | undefined;
+  onChange: (code: string) => void;
+}) {
+  return (
+    <Section title="Código de verificación">
+      <View style={{ position: "relative" }}>
+        <Row style={{ gap: 8 }}>
+          {Array.from({ length: OTP_LENGTH }, (_, i) => (
+            <View
+              key={i}
+              style={{
+                flex: 1,
+                height: 56,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: error ? colors.danger : colors.border,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Copy weight="bold" style={{ fontSize: 24 }}>
+                {code[i] || ""}
+              </Copy>
+            </View>
+          ))}
+        </Row>
+        <TextInput
+          accessibilityLabel="Código de verificación de seis dígitos"
+          accessibilityHint={error}
+          aria-invalid={error ? true : undefined}
+          value={code}
+          onChangeText={(v) => onChange(v.replace(/\D/g, "").slice(0, OTP_LENGTH))}
+          keyboardType="number-pad"
+          autoComplete="one-time-code"
+          textContentType="oneTimeCode"
+          maxLength={OTP_LENGTH}
+          style={{
+            position: "absolute",
+            inset: 0,
+            opacity: 0.02,
+            fontFamily: fonts.regular,
+          }}
+        />
+      </View>
+      {error ? (
+        <View accessibilityLiveRegion="polite">
+          <Copy style={{ fontSize: 11, lineHeight: 16, color: colors.danger }}>{error}</Copy>
+        </View>
+      ) : null}
+    </Section>
+  );
+}
+
+/**
+ * After a sign-up: the same words whether the address is new or already had an account
+ * (Supabase sends no code then), so the screen never reveals which addresses are registered.
+ */
+function SignUpNote() {
+  return (
+    <Card soft>
+      <Copy tone="secondary" style={{ fontSize: 12 }}>
+        Si el correo es nuevo, te enviamos un código. Si ya tienes cuenta, inicia sesión o
+        recupera tu contraseña.
+      </Copy>
+      <Row style={{ justifyContent: "space-between" }}>
+        <TextLink href="/login" align="left">
+          Iniciar sesión
+        </TextLink>
+        <TextLink href="/recuperar-contrasena" align="right">
+          Recuperar contraseña
+        </TextLink>
+      </Row>
+    </Card>
+  );
+}
+
+function VerifyEmailForm({ email, afterSignUp }: { email: string; afterSignUp: boolean }) {
+  const queryClient = useQueryClient();
+  const form = useZodForm(otpSchema, { token: "" });
+  const cooldown = useResendCooldown();
+  const [resend, setResend] = useState<{ sending: boolean; error?: string; sent?: boolean }>({
+    sending: false,
+  });
+
+  // On success Supabase stores the session: the guards close this screen and open the app.
+  const submit = form.handleSubmit(async ({ token }) => {
+    try {
+      await verifyEmailOtp(email, token);
+      // Signed in with an unconfirmed email (verify-email phase), the session keeps its
+      // status and `/me` would keep listing CONFIRMAR_CORREO: fetch it again. Without a
+      // session there is no `/me` query yet and this does nothing.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.me });
+    } catch (error) {
+      // Supabase answers a wrong or expired code alike: a new code can be requested now.
+      if (isAuthError(error) && error.code === "otp_expired") cooldown.allowNow();
+      throw error;
+    }
+  });
+
+  const resendCode = async () => {
+    if (resend.sending) return;
+    setResend({ sending: true });
+    try {
+      await resendSignupOtp(email);
+      cooldown.restart();
+      setResend({ sending: false, sent: true });
+    } catch (error) {
+      setResend({ sending: false, error: messageFor(error) });
+    }
+  };
+
+  const waiting = cooldown.remaining > 0;
+  return (
+    <>
+      <View style={{ alignItems: "center", gap: 18 }}>
+        <Icon name="mail" size={40} />
+        <Copy>Ingresa el código de 6 dígitos enviado a</Copy>
+        <Copy weight="bold">{email}</Copy>
+      </View>
+      {afterSignUp ? <SignUpNote /> : null}
+      <CodeBoxes
+        code={form.values.token}
+        error={form.errors.token}
+        onChange={(token) => form.setValue("token", token)}
+      />
+      <FormMessage message={form.formError} />
+      <Button onPress={submit} loading={form.submitting}>
+        Verificar correo
+      </Button>
+      <Copy tone="secondary" style={{ textAlign: "center" }}>
+        ¿No recibiste el código?
+      </Copy>
+      <Button
+        variant="outline"
+        onPress={resendCode}
+        loading={resend.sending}
+        disabled={waiting}
+      >
+        {waiting ? `Reenviar código en ${formatCountdown(cooldown.remaining)}` : "Reenviar código"}
+      </Button>
+      <FormMessage message={resend.error} />
+      <FormMessage
+        message={resend.sent ? "Te enviamos un código nuevo." : undefined}
+        tone="success"
+      />
+    </>
+  );
+}
+
+/**
+ * `/verificar-correo?email=…[&origen=registro]`. Without the param (the gate opens it in the
+ * verify-email phase), the signed-in session's email is verified instead.
+ */
 export function VerifyEmailScreen() {
-  const [code, setCode] = useState("482");
+  const params = useLocalSearchParams<{ email?: string; origen?: string }>();
+  const session = useSession();
+  const paramEmail = typeof params.email === "string" ? params.email.trim() : "";
+  const sessionEmail = session.status === "present" ? (session.email?.trim() ?? "") : "";
+  const email = paramEmail || sessionEmail;
   return (
     <Screen
       title="Verifica tu correo"
       subtitle="Confirma tu cuenta para completar el registro"
       back
     >
-      <View style={{ alignItems: "center", gap: 18 }}>
-        <Icon name="mail" size={40} />
-        <Copy>Enviamos un código de 6 dígitos a</Copy>
-        <Copy weight="bold">ma***@correo.com</Copy>
-      </View>
-      <Section title="Código de verificación">
-        <View style={{ position: "relative" }}>
-          <Row style={{ gap: 8 }}>
-            {Array.from({ length: 6 }, (_, i) => (
-              <View
-                key={i}
-                style={{
-                  flex: 1,
-                  height: 56,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Copy weight="bold" style={{ fontSize: 24 }}>
-                  {code[i] || ""}
-                </Copy>
-              </View>
-            ))}
-          </Row>
-          <TextInput
-            accessibilityLabel="Código de verificación de seis dígitos"
-            value={code}
-            onChangeText={(v) => setCode(v.replace(/\D/g, "").slice(0, 6))}
-            keyboardType="number-pad"
-            maxLength={6}
-            style={{
-              position: "absolute",
-              inset: 0,
-              opacity: 0.02,
-              fontFamily: fonts.regular,
-            }}
-          />
-        </View>
-      </Section>
-      <Copy tone="secondary" style={{ textAlign: "center" }}>
-        ¿No recibiste el código?
-      </Copy>
-      <Copy tone="primary" style={{ textAlign: "center" }}>
-        Reenviar código en 00:42
-      </Copy>
-      <NavButton href="/login" showArrow={false}>
-        Verificar correo
-      </NavButton>
+      {email ? (
+        <VerifyEmailForm
+          email={email}
+          afterSignUp={paramEmail !== "" && params.origen === SIGN_UP_ORIGIN}
+        />
+      ) : (
+        <EmptyState
+          icon="mail"
+          title="No sabemos qué correo verificar"
+          description="Inicia sesión con tu correo y contraseña: si aún no lo has confirmado, te enviaremos un código nuevo."
+          action={
+            <NavButton href="/login" showArrow={false}>
+              Ir a iniciar sesión
+            </NavButton>
+          }
+        />
+      )}
       <Card soft>
         <Copy weight="semibold">¿Por qué verificamos tu correo?</Copy>
         <Copy tone="secondary">

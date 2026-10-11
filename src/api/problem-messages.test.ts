@@ -132,6 +132,8 @@ const AUTH_CODES = [
   "validation_failed",
   "session_not_found",
   "refresh_token_not_found",
+  // App-defined: email auth in a profile without Supabase (see src/auth/email-auth.ts).
+  "auth_unavailable",
 ];
 
 describe("problemMessages", () => {

@@ -43,6 +43,8 @@ function settled(data) {
   };
 }
 const queryStubs = {
+  // Only read by handlers (cache invalidation), never while rendering.
+  useQueryClient: () => ({ invalidateQueries: async () => {} }),
   useQuery: (options) => {
     const raw =
       options.enabled === false ? undefined : answerFor(options.queryKey);
@@ -183,6 +185,7 @@ Module._load = function (name, parent, isMain) {
         setActiveRole() {},
       }),
       useMe: () => settled(fixtures.meFixture()),
+      useSession: () => ({ status: "none" }),
       deviceIdStorage: {},
     };
   if (name === "@/state/mobile-context")
@@ -196,6 +199,20 @@ Module._load = function (name, parent, isMain) {
     };
   // No requests leave this check: the query hooks are stubbed above.
   if (name === "@/api") return { api: {} };
+  // The real module creates the Supabase client (SecureStore, Expo config); the forms only
+  // call these actions from their handlers.
+  if (name === "@/auth/email-auth") {
+    const unused = async () => {
+      throw new Error("not available in the render check");
+    };
+    return {
+      isEmailAuthAvailable: () => true,
+      signIn: unused,
+      signUp: unused,
+      verifyEmailOtp: unused,
+      resendSignupOtp: unused,
+    };
+  }
   if (name === "@tanstack/react-query")
     return {
       ...original.call(this, name, parent, isMain),
@@ -362,12 +379,33 @@ try {
     accountHtml.includes("Ver como donante") &&
       accountHtml.includes("Ver como voluntario"),
   );
+  // Without an `email` param the verification links back to login.
   const { VerifyEmailScreen } = require("../src/screens/account.tsx");
   assert(
     renderToStaticMarkup(React.createElement(VerifyEmailScreen)).includes(
       'href="/login"',
     ),
   );
+  routeParams = { email: "maria@correo.com" };
+  const verifyHtml = renderToStaticMarkup(React.createElement(VerifyEmailScreen));
+  assert(verifyHtml.includes("maria@correo.com"));
+  assert(verifyHtml.includes("Reenviar código en 01:00"));
+  // Only a sign-up shows the neutral note, which never says whether the address existed.
+  assert(!verifyHtml.includes('href="/recuperar-contrasena"'));
+  routeParams = { email: "maria@correo.com", origen: "registro" };
+  const signUpVerifyHtml = renderToStaticMarkup(React.createElement(VerifyEmailScreen));
+  assert(signUpVerifyHtml.includes("Si el correo es nuevo, te enviamos un código."));
+  assert(signUpVerifyHtml.includes('href="/recuperar-contrasena"'));
+  routeParams = {};
+  // The auth forms no longer link into the app: the guards open it after signing in.
+  const { LoginScreen, RegisterScreen } = require("../src/screens/auth.tsx");
+  const loginHtml = renderToStaticMarkup(React.createElement(LoginScreen));
+  assert(loginHtml.includes("Iniciar sesión") && loginHtml.includes('href="/registro"'));
+  assert(!loginHtml.includes('href="/donante"'));
+  const registerHtml = renderToStaticMarkup(React.createElement(RegisterScreen));
+  assert(registerHtml.includes("Apellidos") && registerHtml.includes("Celular"));
+  assert(!/documento/i.test(registerHtml));
+  assert(!registerHtml.includes('href="/verificar-correo"'));
   const {
     VolunteerRegistrationScreen,
   } = require("../src/screens/volunteer.tsx");

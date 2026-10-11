@@ -151,7 +151,8 @@ export const authErrorMessages: Readonly<Record<string, string>> = {
   email_not_confirmed: "Confirma tu correo electrónico antes de iniciar sesión.",
   user_already_exists: EXISTING_ACCOUNT,
   email_exists: EXISTING_ACCOUNT,
-  otp_expired: "El enlace o el código expiró. Solicita uno nuevo.",
+  // Supabase also answers a wrong code with `otp_expired`.
+  otp_expired: "El enlace o el código no es válido o ya expiró. Solicita uno nuevo.",
   over_email_send_rate_limit:
     "Ya enviamos varios correos. Espera unos minutos antes de solicitar otro.",
   over_request_rate_limit: "Hiciste demasiados intentos. Espera unos minutos e inténtalo de nuevo.",
@@ -162,6 +163,9 @@ export const authErrorMessages: Readonly<Record<string, string>> = {
   validation_failed: "Algunos datos no son válidos. Revísalos e inténtalo de nuevo.",
   session_not_found: EXPIRED_SESSION,
   refresh_token_not_found: EXPIRED_SESSION,
+  // App-defined (src/auth/email-auth.ts): email auth in a profile without Supabase.
+  auth_unavailable:
+    "Este perfil local no usa Supabase: la sesión se inicia con el token de desarrollo. Usa el perfil real para iniciar sesión o registrarte.",
 };
 
 const UNEXPECTED_MESSAGE = "Ocurrió un error inesperado. Inténtalo de nuevo.";

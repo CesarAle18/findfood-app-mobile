@@ -427,6 +427,35 @@ export function Field({
   );
 }
 
+/**
+ * A message about the whole form (an error that belongs to no single field, or a
+ * confirmation), announced when it appears. Renders nothing without a message.
+ */
+export function FormMessage({
+  message,
+  tone = "error",
+}: {
+  message: string | undefined;
+  tone?: "error" | "success";
+}) {
+  if (!message) return null;
+  return (
+    <View
+      accessible
+      accessibilityRole={tone === "error" ? "alert" : "text"}
+      accessibilityLiveRegion="polite"
+      style={[styles.formMessage, tone === "success" && styles.formMessageSuccess]}
+    >
+      <Copy
+        weight="medium"
+        style={{ color: tone === "error" ? colors.danger : colors.primary }}
+      >
+        {message}
+      </Copy>
+    </View>
+  );
+}
+
 export function Section({
   title,
   children,
@@ -648,6 +677,14 @@ const styles = StyleSheet.create({
   field: { gap: 9 },
   label: { fontSize: 11, lineHeight: 18 },
   fieldError: { fontSize: 11, lineHeight: 16, color: colors.danger },
+  formMessage: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E7CACA",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  formMessageSuccess: { borderColor: colors.soft, backgroundColor: colors.soft },
   inputRow: {
     minHeight: 48,
     borderWidth: 1,
