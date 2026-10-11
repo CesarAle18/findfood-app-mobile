@@ -22,7 +22,7 @@ En la terminal de Expo, pulsar **w** para la vista previa web o escanear el **QR
 
 ## Entornos
 
-La configuración se lee de variables `EXPO_PUBLIC_*` (plantilla en `.env.example`). Si falta alguna o es inválida, la app falla al arrancar con un error que lista todas. Hay dos perfiles:
+La configuración se lee de variables `EXPO_PUBLIC_*` (plantilla en `.env.example`). Si falta alguna o es inválida, la app muestra una pantalla de configuración inválida (en desarrollo lista las variables con problemas). Hay dos perfiles:
 
 - **real** (por defecto): API desplegada y Supabase. Copiar `.env.example` a `.env.local` (no se versiona) y completar los valores. `npm run start:real` arranca Expo con este perfil y borra el `.env.development.local` generado, si existe.
 - **local** (solo desarrollo): `findfood-api` en tu computador. `npm run start:local` (o `npm run start:local -- voluntario`; por defecto `donante`) firma un token de desarrollo para el usuario de prueba y escribe `.env.development.local`, que tiene prioridad sobre `.env.local` y solo se carga en desarrollo.
@@ -35,6 +35,27 @@ Requisitos del perfil local:
 4. En Windows, permitir conexiones entrantes al puerto 3000 en el firewall para redes privadas. Por ejemplo, en PowerShell como administrador: `New-NetFirewallRule -DisplayName "findfood-api 3000" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -Profile Private`.
 
 El token dura 24 h (`DEV_TOKEN_TTL_HOURS`); al vencer, ejecutar de nuevo `npm run start:local`. `EXPO_PUBLIC_DEV_TOKEN` nunca debe ir en `.env`, `.env.local` ni en EAS. Los argumentos extra pasan a `expo start` (`npm run start:local -- donante --android`), y `--no-start` solo genera o borra el archivo.
+
+## Build de desarrollo (EAS)
+
+Las notificaciones push, los mapas y la ubicación en segundo plano no funcionan en Expo Go; la app usa `expo-dev-client`. Identificador nativo: `co.findfood.app` (Android e iOS).
+
+Perfiles de `eas.json`:
+
+| Perfil | Salida | Uso |
+|---|---|---|
+| `development` | APK con dev client (`distribution: internal`) | Instalar en el teléfono y cargar el JS desde `npm run start:local` / `start:real`. |
+| `preview` | APK interno | Probar una versión sin servidor de desarrollo. |
+| `production` | AAB para Google Play | Publicación; incrementa `versionCode` automáticamente. |
+
+Primera vez (requiere una cuenta de Expo):
+
+1. `npx eas-cli@latest login` y `npx eas-cli@latest init` (vincula el proyecto y agrega `extra.eas.projectId` a `app.json`).
+2. Cargar las variables públicas en cada entorno de EAS (`development`, `preview`, `production`): `npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_API_URL --value <url> --visibility plaintext`, y lo mismo para `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` y los client IDs de Google. **Nunca** `EXPO_PUBLIC_DEV_TOKEN` ni `EXPO_PUBLIC_APP_ENV=local` (lo verifica `src/config/build-config.test.ts`).
+3. `npx eas-cli@latest build --profile development --platform android` e instalar el APK desde el enlace que entrega EAS.
+4. En el computador, `npm run start:local` o `npm run start:real` y abrir el proyecto desde el dev client.
+
+Un bundle de release no contiene el token de desarrollo aunque la variable exista en el entorno: se lee solo bajo `__DEV__` y el minificador elimina la rama.
 
 ## Recorrer la demostración
 
