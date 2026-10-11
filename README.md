@@ -38,7 +38,7 @@ El token dura 24 h (`DEV_TOKEN_TTL_HOURS`); al vencer, ejecutar de nuevo `npm ru
 
 ## Recorrer la demostración
 
-La aplicación abre `/login`. Iniciar sesión y Google navegan a `/inicio-donante` sin autenticar. El enlace de registro lleva a `/registro`, después a `/verificar-correo` y al inicio de sesión; el código editable no se verifica contra ningún servicio.
+Sin sesión, la aplicación abre `/login`. Los formularios de inicio de sesión, registro, verificación de correo y recuperación de contraseña se conectan a Supabase Auth en la fase 2 de la integración (ver `odd/tasks/integracion-api-auth.md`); hasta entonces sus botones no autentican. Con el perfil `local` (`npm run start:local`), el token de desarrollo abre directamente la vista del rol elegido.
 
 ## Navegación
 
@@ -49,7 +49,7 @@ La raíz (`src/app/_layout.tsx`) mantiene el splash hasta resolver la sesión y 
 
 Un donante sin rol voluntario no puede abrir `/voluntario/*`, ni siquiera por enlace profundo: la ruta bloqueada se descarta y vuelve al índice. El menú de tres puntos abre `/cuenta`, donde «Cambiar vista» solo ofrece los roles que tiene la cuenta.
 
-El formulario `/registro-voluntario` tiene scroll, tipo de identificación, datos personales y de vehículo, y espacios para fotos de documento, vehículo y licencia. Los campos y selectores habilitados actualizan estado local; «Enviar» vuelve al inicio donante como navegación de demostración.
+El formulario `/donante/registro-voluntario` tiene scroll, tipo de identificación, datos personales y de vehículo, y espacios para fotos de documento, vehículo y licencia. Los campos y selectores habilitados actualizan estado local; «Enviar» vuelve al inicio donante como navegación de demostración.
 
 ## Organización
 

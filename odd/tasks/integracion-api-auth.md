@@ -48,7 +48,7 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 | F1-06 | Mappers (dates, units, refrigeration, statuses, donation view) + tests | delegated writer (2+ non-trivial files) | [x] | `e1055a5` | high → granted → approved, burned (cc19f97..e1055a5); 1 warning (one bad row throws for the whole list) → F1-10 |
 | F1-07 | Feedback components, problem messages, Field/Button, useZodForm | delegated writer (2+ non-trivial files) | [x] | `1e8385b` + `11bc9e6` | high → granted → approved, burned (e1055a5..1e8385b); 2 warnings fixed inline in `11bc9e6` → granted → approved, burned (1e8385b..11bc9e6) |
 | F1-08 | Root layout guards + splash + import-safe config | delegated writer (2+ non-trivial files) | [x] | `2d7c31e` | high → granted → approved, burned (11bc9e6..2d7c31e); 2 warnings → F2-06 / tests follow-up |
-| F1-09 | Donor + volunteer segments with NativeTabs, role guards, remove BottomNav (merged a/b: one coherent route move) | delegated writer (2+ non-trivial files) | [x] | see log | |
+| F1-09 | Donor + volunteer segments with NativeTabs, role guards, remove BottomNav (merged a/b: one coherent route move) | delegated writer (2+ non-trivial files) | [x] | `f0caaea` | high → granted → approved, burned (2d7c31e..f0caaea); README warning fixed in docs commit; login links → F2-01; dismissTo test → F1-10 |
 | F1-10 | Wire existing screens to services; delete mobile.ts | delegated writer | [ ] | | |
 | F1-11 | EAS dev build config | delegated writer | [ ] | | |
 | F2-01 | Login | delegated writer | [ ] | | |
@@ -89,7 +89,8 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - F1-10: show `d.code` (not `d.id`); filter by `estado`, not labels (`DonationsScreen` compares `status === "Completada"`); list rows have no `expiresOn` (endpoint lacks it).
 - Device check pending: iOS scroll behind native tab bar, Android bottom insets; consider expo-router `ThemeProvider` to avoid white flash between tabs (iOS 26 ignores tab bar backgroundColor).
 - `docs/pantallas.md` still describes the old flat routes/gallery — refresh after F1-10.
-- F2-01: login buttons still point at app routes their phase blocks.
+- F2-01: login buttons still point at app routes their phase blocks (R2, F1-09 review).
+- F1-10: add a `renderRouter` test that a stacked screen link with `dismissTo` returns to the existing `(tabs)` instead of pushing a second one (R3-dismissto-untested); rename RatingScreen `donor` prop to a role-named prop.
 - Narrow `DraftProduct.coldChain` from `string` to `ColdChain`.
 - `.expo/types/router.d.ts` only regenerates on `expo start`; new route files fail `tsc` until then.
 - Retrying `/me` from the error phase briefly returns the phase to `loading` (TanStack resets a data-less query to pending); acceptable, but the Stack remounts.
