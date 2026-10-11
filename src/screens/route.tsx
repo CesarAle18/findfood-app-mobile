@@ -11,6 +11,9 @@ import {
 } from "@/components/findfood/ui";
 import { RouteMap } from "@/components/findfood/icon";
 
+// TODO(F3): read the active route from GET /rutas and GET /rutas/:id, and pass the next
+// stop's `donacion_id` (UUID) to registrar-recogida and detalle-donacion. Until then the
+// detail link carries no id and opens its empty state.
 export function ActiveRouteScreen() {
   return (
     <Screen
@@ -36,14 +39,7 @@ export function ActiveRouteScreen() {
       <NavButton href="/voluntario/registrar-recogida" showArrow={false}>
         Llegué al destino
       </NavButton>
-      <TextLink
-        href={{
-          pathname: "/voluntario/detalle-donacion",
-          params: { id: "DON-1058" },
-        }}
-      >
-        Ver detalle
-      </TextLink>
+      <TextLink href="/voluntario/detalle-donacion">Ver detalle</TextLink>
       <Button variant="outline">Contactar al donante</Button>
       <NavButton href="/voluntario/entrega-voluntario" showArrow={false}>
         Finalizar viaje

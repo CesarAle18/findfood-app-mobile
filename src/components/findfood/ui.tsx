@@ -75,13 +75,34 @@ export function Screen({
   badge,
   back = false,
   center = false,
+  scroll = true,
 }: PropsWithChildren<{
   title?: string;
   subtitle?: string;
   badge?: ReactNode;
   back?: boolean;
   center?: boolean;
+  /**
+   * False for a screen whose body is a virtualized list: the heading and children fill the
+   * frame without a ScrollView, and the list scrolls (and pads its bottom) on its own.
+   */
+  scroll?: boolean;
 }>) {
+  const heading = title ? (
+    <View style={styles.heading}>
+      <View style={styles.headingText}>
+        <Copy weight="bold" style={styles.title}>
+          {title}
+        </Copy>
+        {subtitle ? (
+          <Copy tone="secondary" style={styles.subtitle}>
+            {subtitle}
+          </Copy>
+        ) : null}
+      </View>
+      {badge}
+    </View>
+  ) : null;
   return (
     <SafeAreaView style={styles.safe} edges={SAFE_AREA_EDGES}>
       <View style={styles.frame}>
@@ -121,34 +142,27 @@ export function Screen({
             </Pressing>
           </Link>
         </View>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={[
-            styles.content,
-            center && styles.centerContent,
-          ]}
-          contentInsetAdjustmentBehavior="automatic"
-          showsVerticalScrollIndicator
-          keyboardShouldPersistTaps="handled"
-          automaticallyAdjustKeyboardInsets
-        >
-          {title ? (
-            <View style={styles.heading}>
-              <View style={styles.headingText}>
-                <Copy weight="bold" style={styles.title}>
-                  {title}
-                </Copy>
-                {subtitle ? (
-                  <Copy tone="secondary" style={styles.subtitle}>
-                    {subtitle}
-                  </Copy>
-                ) : null}
-              </View>
-              {badge}
-            </View>
-          ) : null}
-          {children}
-        </ScrollView>
+        {scroll ? (
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={[
+              styles.content,
+              center && styles.centerContent,
+            ]}
+            contentInsetAdjustmentBehavior="automatic"
+            showsVerticalScrollIndicator
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets
+          >
+            {heading}
+            {children}
+          </ScrollView>
+        ) : (
+          <View style={[styles.content, styles.fixedContent]}>
+            {heading}
+            {children}
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -620,6 +634,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   centerContent: { paddingTop: 32 },
+  fixedContent: { flex: 1, paddingBottom: 0 },
   heading: {
     flexDirection: "row",
     alignItems: "center",

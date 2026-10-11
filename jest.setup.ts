@@ -18,3 +18,13 @@ for (const [name, value] of Object.entries(TEST_ENV)) {
 // Worklets ships a JS double for this; Reanimated itself stays real and runs its own Jest
 // mode (animations jump to their final values, layout animations are skipped).
 jest.mock("react-native-worklets", () => require("react-native-worklets/src/mock"));
+
+// FlashList lays items out from native measurements, which do not exist under Jest. Its own
+// `@shopify/flash-list/jestSetup` (2.0.2) also remaps `FlashList` to an export that no longer
+// exists, so only the measurements are replaced here: a 400x900 viewport, 100 pt items.
+jest.mock("@shopify/flash-list/dist/recyclerview/utils/measureLayout", () => ({
+  ...jest.requireActual("@shopify/flash-list/dist/recyclerview/utils/measureLayout"),
+  measureParentSize: () => ({ x: 0, y: 0, width: 400, height: 900 }),
+  measureFirstChildLayout: () => ({ x: 0, y: 0, width: 400, height: 900 }),
+  measureItemLayout: () => ({ x: 0, y: 0, width: 100, height: 100 }),
+}));

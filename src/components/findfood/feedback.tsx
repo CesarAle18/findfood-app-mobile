@@ -106,7 +106,44 @@ export function ErrorState({
   );
 }
 
-const subscribeOnline = (onChange: () => void) => onlineManager.subscribe(onChange);
+/** The fields of a TanStack query result that `QueryContent` reads. */
+export interface QueryLike<T> {
+  data: T | undefined;
+  error: unknown;
+  isFetching: boolean;
+  refetch: () => unknown;
+}
+
+/**
+ * A query's data through `children`, or its loading or error state. Data already on
+ * screen stays there when a background refetch fails.
+ */
+export function QueryContent<T>({
+  query,
+  loadingLabel,
+  errorTitle,
+  children,
+}: {
+  query: QueryLike<T>;
+  loadingLabel?: string;
+  errorTitle?: string;
+  children: (data: T) => ReactNode;
+}) {
+  if (query.data !== undefined) return children(query.data);
+  if (query.error) {
+    return (
+      <ErrorState
+        error={query.error}
+        title={errorTitle}
+        onRetry={() => void query.refetch()}
+        retrying={query.isFetching}
+      />
+    );
+  }
+  return <LoadingState label={loadingLabel} />;
+}
+
+const subscribeOnline =(onChange: () => void) => onlineManager.subscribe(onChange);
 const isOnline = () => onlineManager.isOnline();
 // Server rendering (the web preview) has no connection state: assume online.
 const isOnlineOnServer = () => true;

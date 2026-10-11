@@ -1,7 +1,9 @@
-import { useState } from "react";
-import { TextInput, View } from "react-native";
-import { router, useLocalSearchParams, type Href } from "expo-router";
+import { useState, type PropsWithChildren } from "react";
+import { StyleSheet, TextInput, View } from "react-native";
+import { router, type Href } from "expo-router";
+import type { EstadoVerificacion, MeDto } from "@/api/types";
 import type { MobileRole } from "@/auth/access";
+import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import {
   Badge,
   Chip,
@@ -25,91 +27,195 @@ import {
   fadeOut,
   itemLayout,
 } from "@/components/findfood/motion";
-import { Metrics } from "./donor";
+import { assignedVolunteerFromDetalle } from "@/domain/mappers/donations";
+import {
+  formatFranjas,
+  formatKg,
+  formatRating,
+  profileFromMe,
+} from "@/domain/mappers/profile";
+import { useImpacto } from "@/services/perfil";
 import { useMobile } from "@/state/mobile-context";
-import { useAccess } from "@/state/session";
+import { useAccess, useMe } from "@/state/session";
 import { colors, fonts } from "@/design/tokens";
 
+import {
+  useDonationDetail,
+  useDonationId,
+  type DonationDetail,
+} from "./donation-queries";
+import { Metrics } from "./donor";
+
+const VERIFICATION: Record<EstadoVerificacion, string> = {
+  NO_INICIADA: "Verificación sin iniciar",
+  PENDIENTE: "Verificación en revisión",
+  APROBADA: "Voluntario verificado",
+  RECHAZADA: "Verificación rechazada",
+};
+
+function ProfileCard({
+  me,
+  caption,
+  average,
+  children,
+}: PropsWithChildren<{ me: MeDto; caption: string; average: number | null }>) {
+  const profile = profileFromMe(me);
+  return (
+    <Card>
+      <Row>
+        <View style={styles.avatar}>
+          <Copy weight="bold" style={{ fontSize: 20 }}>
+            {profile.initials}
+          </Copy>
+        </View>
+        <View style={{ flex: 1, gap: 5 }}>
+          <Copy weight="bold">{profile.name}</Copy>
+          <Copy tone="secondary">{profile.email}</Copy>
+        </View>
+      </Row>
+      <Copy tone="secondary">{caption}</Copy>
+      <Row>
+        <Icon name="star" />
+        <Copy weight="bold">{formatRating(average)}</Copy>
+      </Row>
+      {children}
+    </Card>
+  );
+}
+
+function Details({ rows }: { rows: [string, string][] }) {
+  return (
+    <Card>
+      {rows.map(([label, value]) => (
+        <Detail key={label} label={label} value={value} />
+      ))}
+    </Card>
+  );
+}
+
+/** `GET /me/impacto` as metrics; null for a role without impact data yet. */
+function ImpactMetrics({ volunteer }: { volunteer: boolean }) {
+  const impacto = useImpacto();
+  return (
+    <QueryContent
+      query={impacto}
+      loadingLabel="Cargando tu impacto"
+      errorTitle="No pudimos cargar tu impacto"
+    >
+      {({ donante, voluntario }) => {
+        const values: [string, string][] | null = volunteer
+          ? voluntario && [
+              [String(voluntario.total_entregas), "entregas"],
+              [formatKg(voluntario.total_kg_transportados), "transportados"],
+              [String(voluntario.recolecciones_completadas), "recogidas"],
+            ]
+          : donante && [
+              [String(donante.total_donaciones), "donaciones"],
+              [formatKg(donante.total_kg_donados), "aportados"],
+              [String(donante.donaciones_entregadas), "entregadas"],
+            ];
+        return values ? (
+          <Card soft>
+            <Metrics values={values} />
+          </Card>
+        ) : (
+          <EmptyState
+            title="Aún no hay datos de impacto"
+            description="Aparecerán cuando completes tu primera entrega."
+          />
+        );
+      }}
+    </QueryContent>
+  );
+}
+
+function DonorProfile({ me }: { me: MeDto }) {
+  const profile = profileFromMe(me);
+  return (
+    <>
+      <ProfileCard
+        me={me}
+        caption="Donante"
+        average={me.donante?.calificacion_promedio ?? null}
+      />
+      <Section title="Resumen">
+        <ImpactMetrics volunteer={false} />
+      </Section>
+      <Section title="Información personal">
+        <Details
+          rows={[
+            ["Correo electrónico", profile.email],
+            ["Teléfono", profile.phone],
+            ["Rol activo", "Donante"],
+          ]}
+        />
+      </Section>
+    </>
+  );
+}
+
+function VolunteerProfile({ me }: { me: MeDto }) {
+  const { available, setAvailable } = useMobile();
+  const voluntario = me.voluntario;
+  if (!voluntario) {
+    return (
+      <EmptyState
+        icon="truck"
+        title="Aún no tienes perfil de voluntario"
+        description="Completa tu registro como voluntario para recibir ofertas de recogida."
+      />
+    );
+  }
+  return (
+    <>
+      <ProfileCard
+        me={me}
+        caption={VERIFICATION[voluntario.estado_verificacion] ?? "Voluntario"}
+        average={voluntario.calificacion_promedio}
+      >
+        {/* TODO(F3): persist with PATCH /voluntario/estado (useCambiarDisponibleMutation). */}
+        <Choices
+          values={["Disponible", "No disponible"]}
+          selected={available ? 0 : 1}
+          onChange={(i) => setAvailable(i === 0)}
+        />
+      </ProfileCard>
+      <Section title="Resumen operativo">
+        <ImpactMetrics volunteer />
+      </Section>
+      <Section title="Información de voluntario">
+        <Details
+          rows={[
+            ["Vehículo", voluntario.tipo_vehiculo.nombre],
+            ["Placa", voluntario.placa_vehiculo],
+            ["Capacidad", formatKg(voluntario.capacidad_carga_kg)],
+            ["Cadena de frío", voluntario.tiene_refrigeracion ? "Sí dispone" : "No dispone"],
+            ["Disponibilidad", formatFranjas(voluntario.disponibilidad)],
+            ["Zona de operación", `Hasta ${voluntario.radio_cobertura_km} km de tu base`],
+          ]}
+        />
+      </Section>
+    </>
+  );
+}
+
 export function ProfileScreen({ volunteer = false }: { volunteer?: boolean }) {
-  const { data, available, setAvailable, ratings } = useMobile();
-  const scores = ratings[volunteer ? "volunteer" : "donor"];
-  const average = (scores.reduce((sum, n) => sum + n, 0) / scores.length).toFixed(1);
-  const p = volunteer ? data.volunteer : data.donor;
+  const me = useMe();
   return (
     <Screen
       title="Perfil"
       subtitle={volunteer ? "Vista voluntario" : "Vista donante"}
       badge={<Badge>{volunteer ? "Voluntario" : "Donante"}</Badge>}
     >
-      <Card>
-        <Row>
-          <View
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 28,
-              backgroundColor: colors.soft,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Copy weight="bold" style={{ fontSize: 20 }}>
-              {p.initials}
-            </Copy>
-          </View>
-          <View style={{ flex: 1, gap: 5 }}>
-            <Copy weight="bold">{p.name}</Copy>
-            <Copy tone="secondary">{p.email}</Copy>
-          </View>
-        </Row>
-        <Copy tone="secondary">
-          {volunteer ? "Voluntario activo" : "Donante desde Sep 2026"}
-        </Copy>
-        <Row><Icon name="star" /><Copy weight="bold">{average} / 5</Copy><Copy tone="secondary">{scores.length} calificaciones</Copy></Row>
-        <Copy tone="secondary">Promedio de demostración</Copy>
-        {volunteer && <Choices values={["Disponible", "No disponible"]} selected={available ? 0 : 1} onChange={i => setAvailable(i === 0)} />}
-      </Card>
-      <Section title={volunteer ? "Resumen operativo" : "Resumen"}>
-        <Card soft>
-          <Metrics
-            values={
-              volunteer
-                ? [
-                    ["18", "rutas"],
-                    ["1.2 t", "transportadas"],
-                    ["98%", "cumplimiento"],
-                  ]
-                : [
-                    ["12", "donaciones"],
-                    ["280 kg", "aportados"],
-                    ["4", "completadas"],
-                  ]
-            }
-          />
-        </Card>
-      </Section>
-      <Section
-        title={volunteer ? "Información de voluntario" : "Información personal"}
+      <QueryContent
+        query={me}
+        loadingLabel="Cargando tu perfil"
+        errorTitle="No pudimos cargar tu perfil"
       >
-        <Card>
-          {(volunteer
-            ? [
-                ["Vehículo", "Camioneta"],
-                ["Capacidad", "500 kg"],
-                ["Cadena de frío", "Sí dispone"],
-                ["Disponibilidad", "Lun–Vie · 08:00–18:00"],
-                ["Zona de operación", "Bogotá y área metropolitana"],
-              ]
-            : [
-                ["Correo electrónico", p.email],
-                ["Teléfono", p.phone],
-                ["Rol activo", "Donante"],
-              ]
-          ).map(([label, value]) => (
-            <Detail key={label} label={label} value={value} />
-          ))}
-        </Card>
-      </Section>
+        {(account) =>
+          volunteer ? <VolunteerProfile me={account} /> : <DonorProfile me={account} />
+        }
+      </QueryContent>
     </Screen>
   );
 }
@@ -119,8 +225,18 @@ const VIEWS = [
   { role: "VOLUNTARIO", label: "Ver como voluntario", home: "/voluntario" },
 ] as const satisfies readonly { role: MobileRole; label: string; home: Href }[];
 
+function AccountIdentity({ me }: { me: MeDto }) {
+  const { name, email } = profileFromMe(me);
+  return (
+    <>
+      <Copy weight="semibold">{name}</Copy>
+      <Copy tone="secondary">{email}</Copy>
+    </>
+  );
+}
+
 export function AccountScreen() {
-  const { data } = useMobile();
+  const me = useMe();
   const { activeRole, canDonor, canVolunteer, setActiveRole } = useAccess();
   const views = VIEWS.filter(({ role }) =>
     role === "DONANTE" ? canDonor : canVolunteer,
@@ -131,8 +247,9 @@ export function AccountScreen() {
         <Copy weight="bold" style={{ fontSize: 20 }}>
           Cuenta
         </Copy>
-        <Copy weight="semibold">{data.donor.name}</Copy>
-        <Copy tone="secondary">{data.donor.email}</Copy>
+        <QueryContent query={me} loadingLabel="Cargando tu cuenta">
+          {(account) => <AccountIdentity me={account} />}
+        </QueryContent>
         <Section title="Cambiar vista">
           {views.map(({ role, label, home }) => (
             <Pressing
@@ -243,33 +360,71 @@ export function VerifyEmailScreen() {
     </Screen>
   );
 }
-export function RatingScreen({ donor = false }: { donor?: boolean }) {
-  const { data, addRating } = useMobile();
+/** Who rates: the donor rates the volunteer, the volunteer rates the donor. */
+export type Rater = Extract<MobileRole, "DONANTE" | "VOLUNTARIO">;
+
+const RATING_COPY = {
+  DONANTE: {
+    title: "Calificar voluntario",
+    subtitle: "Tu donación fue entregada",
+    rated: "Voluntario",
+    badge: "Entrega completada",
+    missing: "Esta donación aún no tiene un voluntario asignado.",
+  },
+  VOLUNTARIO: {
+    title: "Calificar donante",
+    subtitle: "Experiencia durante la recogida",
+    rated: "Donante",
+    badge: "Recogida de donación",
+    missing: "Los datos del donante estarán disponibles cuando aceptes la oferta.",
+  },
+} as const satisfies Record<Rater, Record<string, string>>;
+
+/** The rated party's name: the assigned volunteer, or the donation's contact. */
+function ratedName(dto: DonationDetail["dto"], rater: Rater): string | null {
+  if (rater === "DONANTE") return assignedVolunteerFromDetalle(dto)?.name ?? null;
+  return dto.contacto?.nombre ?? null;
+}
+
+export function RatingScreen({ rater = "DONANTE" }: { rater?: Rater }) {
   const [aspects, setAspects] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
-  const { id } = useLocalSearchParams<{ id?: string }>();
-  const donation = id
-    ? data.donations.find((d) => d.id === id)
-    : data.donations[0];
   const [rating, setRating] = useState(4);
   const [comment, setComment] = useState("");
-  if (!donation) {
+  const id = useDonationId();
+  const detail = useDonationDetail(id);
+  const copy = RATING_COPY[rater];
+  if (!id || !detail.data) {
     return (
-      <Screen title={donor ? "Calificar donante" : "Calificar voluntario"} back>
-        <Copy>Donación no encontrada.</Copy>
+      <Screen title={copy.title} back>
+        {id ? (
+          <QueryContent query={detail} loadingLabel="Cargando la donación">
+            {() => null}
+          </QueryContent>
+        ) : (
+          <EmptyState
+            title="No encontramos la donación"
+            description="Abre la calificación desde el detalle de la donación."
+          />
+        )}
       </Screen>
     );
   }
+  const name = ratedName(detail.data.dto, rater);
+  if (!name) {
+    return (
+      <Screen title={copy.title} back>
+        <EmptyState icon="user" title="Aún no puedes calificar" description={copy.missing} />
+      </Screen>
+    );
+  }
+  const donation = detail.data.view;
   return (
-    <Screen
-      title={donor ? "Calificar donante" : "Calificar voluntario"}
-      subtitle={donor ? "Experiencia durante la recogida" : "Tu donación fue entregada"}
-      back
-    >
+    <Screen title={copy.title} subtitle={copy.subtitle} back>
       <Card>
-        <Copy weight="bold">{donor ? data.donor.name : data.volunteer.name}</Copy>
-        <Copy tone="secondary">{donor ? "Donante" : "Voluntario"} · {donation.id}</Copy>
-        <Badge>{donor ? "Recogida de donación" : "Entrega completada"}</Badge>
+        <Copy weight="bold">{name}</Copy>
+        <Copy tone="secondary">{copy.rated} · {donation.code}</Copy>
+        <Badge>{copy.badge}</Badge>
       </Card>
       <Section title="¿Cómo fue tu experiencia?">
         <Row style={{ justifyContent: "center", gap: 4 }}>
@@ -317,12 +472,26 @@ export function RatingScreen({ donor = false }: { donor?: boolean }) {
         multiline
       />
       {submitted ? <Animated.View entering={enterItem} layout={itemLayout} style={{ gap: 24 }}>
-        <Copy tone="primary">Calificación guardada en esta sesión de demostración.</Copy>
-        <NavButton href={donor ? "/voluntario/registrar-recogida" : { pathname: "/donante/detalle-donacion", params: { id: donation.id } }} dismissTo showArrow={false}>{donor ? "Volver a recogida" : "Volver al detalle de donación"}</NavButton>
-      </Animated.View> : <Pressing accessibilityRole="button" onPress={() => { addRating(donor ? "donor" : "volunteer", rating); setSubmitted(true); }} surface={{ minHeight: 52, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}><Copy style={{ color: colors.surface }} weight="bold">Enviar calificación</Copy></Pressing>}
+        <Copy tone="primary">Calificación registrada solo en esta sesión de demostración.</Copy>
+        <NavButton href={rater === "VOLUNTARIO" ? { pathname: "/voluntario/registrar-recogida", params: { id: donation.id } } : { pathname: "/donante/detalle-donacion", params: { id: donation.id } }} dismissTo showArrow={false}>{rater === "VOLUNTARIO" ? "Volver a recogida" : "Volver al detalle de donación"}</NavButton>
+      </Animated.View> : (
+        // TODO(F3): send it with useCalificarAsignacionMutation (POST /asignaciones/:id/calificacion).
+        <Pressing accessibilityRole="button" onPress={() => setSubmitted(true)} surface={{ minHeight: 52, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}><Copy style={{ color: colors.surface }} weight="bold">Enviar calificación</Copy></Pressing>
+      )}
       <Copy tone="secondary">
         Tu opinión ayuda a mejorar futuras asignaciones.
       </Copy>
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.soft,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});

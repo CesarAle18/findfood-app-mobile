@@ -9,7 +9,10 @@
 import type { EstadoAsignacion, EstadoDonacion, EstadoParada, EstadoRuta } from "@/api/types";
 import { colors } from "@/design/tokens";
 
-/** Named after the color token each tone is drawn with. */
+/**
+ * Badge tones by meaning; `toneColor` maps each one to its text and background tokens
+ * (`neutral` has no token of its own: it uses the secondary text on the muted surface).
+ */
 export const STATUS_TONES = ["primary", "warning", "danger", "neutral"] as const;
 
 export type StatusTone = (typeof STATUS_TONES)[number];

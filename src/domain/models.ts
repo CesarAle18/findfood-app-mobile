@@ -1,5 +1,4 @@
-/** Modelos de presentación; el contrato HTTP definitivo se acordará con el backend. */
-export type UserRole = "donor" | "volunteer";
+/** Presentation models of the screens; API DTOs are mapped to them in `@/domain/mappers`. */
 export type DocumentType = "CC" | "CE" | "PA" | "PPT";
 export interface Donation {
   id: string;
@@ -11,13 +10,6 @@ export interface Donation {
   address: string;
   refrigerated: boolean;
 }
-export interface Profile {
-  name: string;
-  initials: string;
-  email: string;
-  phone: string;
-  role: UserRole;
-}
 export interface VolunteerApplication {
   fullName: string;
   email: string;
@@ -28,9 +20,4 @@ export interface VolunteerApplication {
   capacityKg: string;
   refrigerated: boolean;
   availability: string;
-}
-export interface MobileData {
-  donations: Donation[];
-  donor: Profile;
-  volunteer: Profile;
 }

@@ -10,18 +10,9 @@ import {
   toFechaVencimiento,
   toPickupWindow,
 } from "./dates";
-import { MappingError, type MappingErrorCode } from "./errors";
+import { errorCode } from "@/test-utils/mapping";
 
-/** Runs `fn` and returns the MappingError code it threw. */
-function errorCode(fn: () => unknown): MappingErrorCode {
-  try {
-    fn();
-  } catch (error) {
-    if (error instanceof MappingError) return error.code;
-    throw error;
-  }
-  throw new Error("expected a MappingError");
-}
+import { MappingError } from "./errors";
 
 /** Epoch of a Bogotá wall-clock instant (UTC−05:00), for `now`. */
 const bogota = (year: number, month: number, day: number, hour: number, minute = 0) =>
@@ -300,6 +291,7 @@ describe("toFechaVencimiento / fromFechaVencimiento", () => {
     ["2026-03-01T00:00:00.000Z", "01/03/2026"],
     ["2026-12-31T00:00:00.000Z", "31/12/2026"],
     ["2026-09-07", "07/09/2026"],
+    ["2026-09-07T00:00:00Z", "07/09/2026"],
   ])("keeps the calendar date of %s", (apiValue, expected) => {
     expect(fromFechaVencimiento(apiValue)).toBe(expected);
   });
@@ -310,7 +302,19 @@ describe("toFechaVencimiento / fromFechaVencimiento", () => {
     );
   });
 
-  it.each(["07/09/2026", "2026-02-30T00:00:00.000Z", "2026-9-7", ""])("rejects %p", (apiValue) => {
+  it.each([
+    "07/09/2026",
+    "2026-02-30T00:00:00.000Z",
+    "2026-9-7",
+    "",
+    // Only a bare date or midnight UTC: anything else after the date is not a calendar date.
+    "2026-09-07garbage",
+    "2026-09-07T",
+    "2026-09-07T12:00:00.000Z",
+    "2026-09-07T00:00:00.000-05:00",
+    "2026-09-07T00:00:00.0Z",
+    "2026-09-07 00:00:00",
+  ])("rejects %p", (apiValue) => {
     expect(errorCode(() => fromFechaVencimiento(apiValue))).toBe("invalid-date");
   });
 });

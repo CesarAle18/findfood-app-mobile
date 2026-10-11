@@ -12,6 +12,56 @@ const original = Module._load;
 let routeParams = {};
 let fixtures;
 let draft;
+/** Raw answer of a query key (`["donaciones", "detail", id]`…), or undefined. */
+function answerFor(queryKey) {
+  const [root, kind, arg] = queryKey;
+  if (root === "perfil") return fixtures.impactoFixture();
+  if (root !== "donaciones") return undefined;
+  if (kind === "detail")
+    return fixtures.detalleFixture({ id: arg, estado: "RECIBIDA" });
+  if (kind === "list")
+    return fixtures.pageFixture([
+      fixtures.resumenFixture(),
+      fixtures.resumenFixture({
+        id: "uuid-2",
+        codigo: "DON-1051",
+        estado: "RECIBIDA",
+      }),
+    ]);
+  return undefined;
+}
+// TanStack Query without a client or network: each query answers its fixture at once,
+// through the screen's own `select`, as a settled result.
+function settled(data) {
+  return {
+    data,
+    error: null,
+    status: data === undefined ? "pending" : "success",
+    isPending: data === undefined,
+    isFetching: false,
+    refetch() {},
+  };
+}
+const queryStubs = {
+  useQuery: (options) => {
+    const raw =
+      options.enabled === false ? undefined : answerFor(options.queryKey);
+    return settled(
+      raw !== undefined && options.select ? options.select(raw) : raw,
+    );
+  },
+  useInfiniteQuery: (options) => {
+    const page = answerFor(options.queryKey);
+    const raw = { pages: [page], pageParams: [options.initialPageParam] };
+    return {
+      ...settled(options.select ? options.select(raw) : raw),
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      isFetchNextPageError: false,
+      fetchNextPage() {},
+    };
+  },
+};
 Module._extensions[".tsx"] = Module._extensions[".ts"] = (module, filename) => {
   module._compile(
     ts.transpileModule(fs.readFileSync(filename, "utf8"), {
@@ -132,26 +182,55 @@ Module._load = function (name, parent, isMain) {
         canVolunteer: true,
         setActiveRole() {},
       }),
+      useMe: () => settled(fixtures.meFixture()),
+      deviceIdStorage: {},
     };
   if (name === "@/state/mobile-context")
     return {
       useMobile: () => ({
-        data: fixtures,
         available: true,
         setAvailable() {},
-        ratings: { donor: [5, 4], volunteer: [5, 5] },
-        addRating() {},
-        role: "donor",
-        setRole() {},
         draft,
         setDraft() {},
       }),
+    };
+  // No requests leave this check: the query hooks are stubbed above.
+  if (name === "@/api") return { api: {} };
+  if (name === "@tanstack/react-query")
+    return {
+      ...original.call(this, name, parent, isMain),
+      ...queryStubs,
+    };
+  // FlashList needs native measurements; a plain map keeps the rows, header and footer.
+  if (name === "@shopify/flash-list")
+    return {
+      FlashList: ({
+        data,
+        renderItem,
+        keyExtractor,
+        ListEmptyComponent,
+        ListFooterComponent,
+      }) =>
+        React.createElement(
+          native.View,
+          null,
+          data.length === 0
+            ? ListEmptyComponent
+            : data.map((item, index) =>
+                React.createElement(
+                  React.Fragment,
+                  { key: keyExtractor(item, index) },
+                  renderItem({ item, index }),
+                ),
+              ),
+          ListFooterComponent,
+        ),
     };
   if (name.startsWith("@/")) name = path.join(root, "src", name.slice(2));
   return original.call(this, name, parent, isMain);
 };
 Slot = require("expo-router/build/ui/Slot").Slot;
-fixtures = require("../src/data/mobile.ts").mobileData;
+fixtures = require("../src/test-utils/fixtures.ts");
 const {
   initialDonationDraft,
   appendProduct,
@@ -188,23 +267,40 @@ try {
     }
   }
   const { ProfileScreen } = require("../src/screens/account.tsx");
-  assert(
-    renderToStaticMarkup(
-      React.createElement(ProfileScreen, { volunteer: true }),
-    ).includes("Carlos Ruiz"),
+  const volunteerProfileHtml = renderToStaticMarkup(
+    React.createElement(ProfileScreen, { volunteer: true }),
   );
+  assert(volunteerProfileHtml.includes("María García López"));
+  assert(volunteerProfileHtml.includes("Camioneta"));
   count++;
-  const { RatingScreen } = require("../src/screens/account.tsx");
-  routeParams = { id: "DON-1051" };
+  // Remote lists and details render their rows: human codes, never the UUIDs.
+  const {
+    DonationsScreen,
+    DonorHomeScreen,
+  } = require("../src/screens/donor.tsx");
+  const donationsHtml = renderToStaticMarkup(
+    React.createElement(DonationsScreen),
+  );
+  assert(donationsHtml.includes("DON-1058") && donationsHtml.includes("DON-1051"));
+  assert(!donationsHtml.includes(fixtures.DONATION_ID));
   assert(
-    renderToStaticMarkup(React.createElement(RatingScreen)).includes(
-      "DON-1051",
+    renderToStaticMarkup(React.createElement(DonorHomeScreen)).includes(
+      "DON-1058",
     ),
   );
-  routeParams = { id: "DON-1056" };
+  const { RatingScreen } = require("../src/screens/account.tsx");
+  routeParams = { id: fixtures.DONATION_ID };
+  const donorRatingHtml = renderToStaticMarkup(React.createElement(RatingScreen));
+  assert(donorRatingHtml.includes("DON-1058") && donorRatingHtml.includes("Carlos Ruiz"));
+  assert(
+    renderToStaticMarkup(
+      React.createElement(RatingScreen, { rater: "VOLUNTARIO" }),
+    ).includes("María García"),
+  );
+  routeParams = {};
   assert(
     renderToStaticMarkup(React.createElement(RatingScreen)).includes(
-      "DON-1056",
+      "No encontramos la donación",
     ),
   );
   const expanded = appendProduct(appendProduct(initialDonationDraft));
@@ -248,7 +344,7 @@ try {
     React.createElement(ReviewDonationScreen),
   );
   assert(reviewHtml.includes("Producto prueba 3") && reviewHtml.includes("ML"));
-  routeParams = { id: "DON-1058" };
+  routeParams = { id: fixtures.DONATION_ID };
   const donorDetailHtml = renderToStaticMarkup(
     React.createElement(DonationDetailScreen),
   );
@@ -359,7 +455,8 @@ try {
     nodes(choice()).filter((n) => n.props?.role === "radio")[1].props.selected,
     true,
   );
-  const rating = harness(RatingScreen, { donor: true });
+  routeParams = { id: fixtures.DONATION_ID };
+  const rating = harness(RatingScreen, { rater: "VOLUNTARIO" });
   nodes(rating())
     .find((n) => n.props?.accessibilityLabel === "5 estrellas")
     .props.onPress();

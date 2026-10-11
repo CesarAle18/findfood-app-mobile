@@ -30,7 +30,8 @@ const MIN_YEAR = 1900;
 
 const DATE_PATTERN = /^(\d{2})\/(\d{2})\/(\d{4})$/;
 const TIME_PATTERN = /^(\d{2}):(\d{2})$/;
-const API_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+/** A bare date, or that date at midnight UTC (how the API serializes a DATE column). */
+const API_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.000)?Z)?$/;
 /** ISO 8601 with a mandatory offset: without one it would be read in the device zone. */
 const TIMESTAMP_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}:\d{2})$/;
@@ -261,13 +262,14 @@ export function toFechaVencimiento(value: string): string {
 }
 
 /**
- * A `fecha_vencimiento` from the API (`YYYY-MM-DDT00:00:00.000Z`) → `DD/MM/AAAA`.
+ * A `fecha_vencimiento` from the API (`YYYY-MM-DD` or `YYYY-MM-DDT00:00:00.000Z`) →
+ * `DD/MM/AAAA`.
  *
- * It is a calendar date: only its first 10 characters are read. Converting it to Bogotá
- * would move it to the previous day.
+ * It is a calendar date: the date part is read as is. Converting it to Bogotá would move
+ * it to the previous day. Any other time or offset is rejected: it would not be a date.
  */
 export function fromFechaVencimiento(apiValue: string): string {
-  const match = API_DATE_PATTERN.exec(apiValue.slice(0, 10));
+  const match = API_DATE_PATTERN.exec(apiValue);
   if (!match) throw invalidDate(apiValue);
   const date = { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
   if (!isValidDate(date)) throw invalidDate(apiValue);

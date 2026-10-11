@@ -4,7 +4,13 @@ import type {
   DonacionResumenDto,
 } from "@/services/donaciones";
 
-import { donationFromDetalle, donationFromResumen } from "./donations";
+import {
+  UNKNOWN_PICKUP_WINDOW,
+  assignedVolunteerFromDetalle,
+  donationFromDetalle,
+  donationFromResumen,
+  donationRowFromResumen,
+} from "./donations";
 import { MappingError } from "./errors";
 
 function resumen(overrides: Partial<DonacionResumenDto> = {}): DonacionResumenDto {
@@ -121,6 +127,77 @@ describe("donationFromResumen", () => {
     expect(() =>
       donationFromResumen(resumen({ ventana_recogida_fin: "2026-09-23T23:00:00" })),
     ).toThrow(MappingError);
+  });
+});
+
+describe("donationRowFromResumen", () => {
+  it("maps a valid row exactly like donationFromResumen", () => {
+    expect(donationRowFromResumen(resumen(), NOW)).toEqual(donationFromResumen(resumen(), NOW));
+  });
+
+  it.each([
+    ["an inverted window", { ventana_recogida_fin: "2026-09-23T20:00:00.000Z" }],
+    ["a window without offset", { ventana_recogida_inicio: "2026-09-23T21:00:00" }],
+  ])("keeps a row with %s, showing a neutral window", (_case, overrides) => {
+    expect(donationRowFromResumen(resumen(overrides), NOW)).toMatchObject({
+      id: "7d4f6a1e-0c2b-4f7e-9a51-3b8f2d1c9e10",
+      code: "DON-1058",
+      estado: "PUBLICADA",
+      status: "Buscando voluntario",
+      pickupWindow: UNKNOWN_PICKUP_WINDOW,
+    });
+  });
+
+  it("does not hide errors other than mapping errors", () => {
+    expect(() => donationRowFromResumen(null as unknown as DonacionResumenDto)).toThrow(
+      TypeError,
+    );
+  });
+});
+
+describe("assignedVolunteerFromDetalle", () => {
+  const asignacion: NonNullable<DonacionDetalleDto["asignacion"]> = {
+    id: "asig-1",
+    estado: "ACEPTADA",
+    intento: 1,
+    expira_at: "2026-09-23T20:00:00.000Z",
+    aceptada_at: "2026-09-23T19:12:00.000Z",
+    ruta_id: null,
+    flota_banco: false,
+    voluntario: {
+      nombres: "Carlos",
+      apellidos: "Ruiz",
+      telefono: "+573001112233",
+      placa_vehiculo: "ABC123",
+      tipo_vehiculo: "Camioneta",
+    },
+  };
+
+  it("names the volunteer and their vehicle", () => {
+    expect(assignedVolunteerFromDetalle(detalle({ asignacion }))).toEqual({
+      name: "Carlos Ruiz",
+      vehicle: "Camioneta · ABC123",
+      phone: "+573001112233",
+    });
+  });
+
+  it("leaves out what the API does not share yet", () => {
+    const voluntario = {
+      ...asignacion.voluntario!,
+      apellidos: null,
+      telefono: null,
+      placa_vehiculo: null,
+    };
+    expect(
+      assignedVolunteerFromDetalle(detalle({ asignacion: { ...asignacion, voluntario } })),
+    ).toEqual({ name: "Carlos", vehicle: "Camioneta", phone: null });
+  });
+
+  it.each([
+    ["no assignment", null],
+    ["a bank fleet assignment", { ...asignacion, flota_banco: true, voluntario: null }],
+  ])("is null with %s", (_case, value) => {
+    expect(assignedVolunteerFromDetalle(detalle({ asignacion: value }))).toBeNull();
   });
 });
 

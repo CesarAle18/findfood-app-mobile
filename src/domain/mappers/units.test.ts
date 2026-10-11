@@ -1,18 +1,9 @@
 import type { QuantityUnit } from "@/domain/donation-draft";
 import type { UnidadMedidaDto } from "@/services/catalogos";
 
-import { MappingError, type MappingErrorCode } from "./errors";
-import { idToUnidad, isQuantityUnit, toQuantityUnit, unidadToId } from "./units";
+import { errorCode } from "@/test-utils/mapping";
 
-function errorCode(fn: () => unknown): MappingErrorCode {
-  try {
-    fn();
-  } catch (error) {
-    if (error instanceof MappingError) return error.code;
-    throw error;
-  }
-  throw new Error("expected a MappingError");
-}
+import { idToUnidad, isQuantityUnit, toQuantityUnit, unidadToId } from "./units";
 
 /** `unidades_medida` of `GET /catalogos`; ids are deliberately not in code order. */
 const catalogo: UnidadMedidaDto[] = [

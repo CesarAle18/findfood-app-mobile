@@ -59,9 +59,13 @@ El formulario `/donante/registro-voluntario` tiene scroll, tipo de identificaci�
 - `src/components/findfood`: componentes nativos, controles e iconos SVG.
 - `src/design/tokens.ts`: colores, tipografía y espaciado.
 - `src/domain/models.ts`: modelos de presentación tipados.
-- `src/services/mobile-repository.ts`: puerto asíncrono de lectura y repositorio de demostración.
-- `src/data/mobile.ts`: fixtures de perfiles y donaciones; quedan otros fixtures visuales locales en pantallas.
-- `src/state/mobile-context.tsx`: proveedor de datos, rol local e inyección del repositorio.
+- `src/config/env.ts`: variables `EXPO_PUBLIC_*` validadas por perfil.
+- `src/api`: cliente HTTP (`/v1`, Bearer, problem+json, renovación en 401), `QueryClient` y mensajes de error en español.
+- `src/auth`: cliente de Supabase, almacenamiento seguro de la sesión y reglas de acceso.
+- `src/services`: servicios por módulo (perfil, catálogos, donaciones, asignaciones, rutas, evidencias, notificaciones) con hooks de TanStack Query e invalidación por mutación.
+- `src/domain/mappers`: conversión de fechas, unidades, refrigeración y estados entre la API y la interfaz.
+- `src/state/session.tsx`: sesión, usuario de `GET /me`, rol activo y `cerrarSesion()`.
+- `src/state/mobile-context.tsx`: estado local de interfaz (borrador de donación y disponibilidad).
 - `src/data/preview.ts`: fixtures visuales de actividad y avisos, pendientes de sus endpoints.
 - `assets/brand`: logotipo conservado del diseño proporcionado.
 - `docs/integracion-backend.md`: límites y próximos pasos de integración.

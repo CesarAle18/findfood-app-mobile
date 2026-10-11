@@ -1,2 +1,2 @@
 import { RatingScreen } from "@/screens/account";
-export default function RateDonor() { return <RatingScreen donor />; }
+export default function RateDonor() { return <RatingScreen rater="VOLUNTARIO" />; }
