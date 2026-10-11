@@ -1,6 +1,9 @@
 import {
   OTP_LENGTH,
+  completeProfileSchema,
+  forgotPasswordSchema,
   loginSchema,
+  newPasswordSchema,
   normalizeColombianMobile,
   otpSchema,
   registerSchema,
@@ -136,6 +139,74 @@ describe("registerSchema", () => {
     expect(errorsOf(result)).toEqual({
       telefono: "Ingresa un celular colombiano de 10 dígitos que empiece por 3.",
     });
+  });
+});
+
+describe("newPasswordSchema", () => {
+  it("accepts a password and its matching confirmation", () => {
+    expect(newPasswordSchema.parse({ password: "nueva1234", confirmacion: "nueva1234" })).toEqual({
+      password: "nueva1234",
+      confirmacion: "nueva1234",
+    });
+  });
+
+  it.each([
+    ["secret1", "Usa al menos 8 caracteres."],
+    ["12345678", "Incluye al menos una letra."],
+    ["solamente", "Incluye al menos un número."],
+  ])("applies the registration rules to %s", (password, message) => {
+    const result = newPasswordSchema.safeParse({ password, confirmacion: password });
+    expect(errorsOf(result).password).toBe(message);
+    expect(errorsOf(registerSchema.safeParse({ ...validRegistration, password, confirmacion: password })).password).toBe(
+      message,
+    );
+  });
+
+  it("requires the confirmation and reports a mismatch on it", () => {
+    expect(errorsOf(newPasswordSchema.safeParse({ password: "nueva1234", confirmacion: "" }))).toEqual({
+      confirmacion: "Confirma tu contraseña.",
+    });
+    expect(
+      errorsOf(newPasswordSchema.safeParse({ password: "nueva1234", confirmacion: "nueva1235" })),
+    ).toEqual({ confirmacion: "Las contraseñas no coinciden." });
+  });
+});
+
+describe("forgotPasswordSchema", () => {
+  it("trims the email and validates it in Spanish", () => {
+    expect(forgotPasswordSchema.parse({ email: " ana@correo.com " })).toEqual({ email: "ana@correo.com" });
+    expect(errorsOf(forgotPasswordSchema.safeParse({ email: "" }))).toEqual({
+      email: "Ingresa tu correo electrónico.",
+    });
+  });
+});
+
+describe("completeProfileSchema", () => {
+  const profile = { nombres: " Ana ", apellidos: " Ruiz ", telefono: "300 123 4567", acepto_terminos: false };
+
+  it("trims the names and normalizes the phone; terms are optional without the pending step", () => {
+    expect(completeProfileSchema(false).parse(profile)).toEqual({
+      nombres: "Ana",
+      apellidos: "Ruiz",
+      telefono: "+573001234567",
+      acepto_terminos: false,
+    });
+  });
+
+  it("requires the surnames and the phone (Google accounts arrive without them)", () => {
+    expect(
+      errorsOf(completeProfileSchema(false).safeParse({ ...profile, apellidos: "", telefono: "" })),
+    ).toEqual({
+      apellidos: "Ingresa tus apellidos.",
+      telefono: "Ingresa tu número de celular.",
+    });
+  });
+
+  it("requires accepting the terms while that step is pending", () => {
+    expect(errorsOf(completeProfileSchema(true).safeParse(profile))).toEqual({
+      acepto_terminos: "Debes aceptar los términos y condiciones.",
+    });
+    expect(completeProfileSchema(true).parse({ ...profile, acepto_terminos: true }).acepto_terminos).toBe(true);
   });
 });
 

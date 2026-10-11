@@ -43,6 +43,38 @@ const telefono = z
 const name = (missing: string) =>
   z.string().trim().min(1, missing).max(100, "Usa como máximo 100 caracteres.");
 
+const nombres = name("Ingresa tus nombres.");
+const apellidos = name("Ingresa tus apellidos.");
+
+/** The rules for a new password, the same at sign-up, reset and forced change. */
+const newPassword = z
+  .string()
+  .min(8, "Usa al menos 8 caracteres.")
+  .regex(/\p{L}/u, "Incluye al menos una letra.")
+  .regex(/\d/, "Incluye al menos un número.");
+
+const confirmacion = z.string().min(1, "Confirma tu contraseña.");
+
+const acceptedTerms = z.literal(true, "Debes aceptar los términos y condiciones.");
+
+const passwordsMatch = (data: { password: string; confirmacion: string }) =>
+  data.password === data.confirmacion;
+
+const PASSWORDS_MISMATCH = {
+  message: "Las contraseñas no coinciden.",
+  path: ["confirmacion"],
+  // Compared as soon as both are text, even while other fields are still invalid, so the
+  // confirmation field reports a mismatch on blur.
+  when: ({ value }: { value: unknown }) => {
+    const data = value as { password?: unknown; confirmacion?: unknown };
+    return (
+      typeof data.password === "string" &&
+      typeof data.confirmacion === "string" &&
+      data.confirmacion !== ""
+    );
+  },
+};
+
 export const loginSchema = z.object({
   email,
   password: z.string().min(1, "Ingresa tu contraseña."),
@@ -52,34 +84,42 @@ export type LoginData = z.output<typeof loginSchema>;
 
 export const registerSchema = z
   .object({
-    nombres: name("Ingresa tus nombres."),
-    apellidos: name("Ingresa tus apellidos."),
+    nombres,
+    apellidos,
     email,
     telefono,
-    password: z
-      .string()
-      .min(8, "Usa al menos 8 caracteres.")
-      .regex(/\p{L}/u, "Incluye al menos una letra.")
-      .regex(/\d/, "Incluye al menos un número."),
-    confirmacion: z.string().min(1, "Confirma tu contraseña."),
-    acepto_terminos: z.literal(true, "Debes aceptar los términos y condiciones."),
+    password: newPassword,
+    confirmacion,
+    acepto_terminos: acceptedTerms,
   })
-  .refine((data) => data.password === data.confirmacion, {
-    message: "Las contraseñas no coinciden.",
-    path: ["confirmacion"],
-    // Compared as soon as both are text, even while other fields are still invalid, so the
-    // confirmation field reports a mismatch on blur.
-    when: ({ value }) => {
-      const data = value as { password?: unknown; confirmacion?: unknown };
-      return (
-        typeof data.password === "string" &&
-        typeof data.confirmacion === "string" &&
-        data.confirmacion !== ""
-      );
-    },
-  });
+  .refine(passwordsMatch, PASSWORDS_MISMATCH);
 
 export type RegisterData = z.output<typeof registerSchema>;
+
+/** Password reset (deep link) and the forced change (`CAMBIAR_PASSWORD`). */
+export const newPasswordSchema = z
+  .object({ password: newPassword, confirmacion })
+  .refine(passwordsMatch, PASSWORDS_MISMATCH);
+
+export type NewPasswordData = z.output<typeof newPasswordSchema>;
+
+export const forgotPasswordSchema = z.object({ email });
+
+/**
+ * `PATCH /me` from the profile completion. Surnames and phone are required even though only
+ * the phone is a pending step: Google accounts arrive without either. The terms checkbox is
+ * only required while `ACEPTAR_TERMINOS` is pending.
+ */
+export function completeProfileSchema(termsPending: boolean) {
+  return z.object({
+    nombres,
+    apellidos,
+    telefono,
+    acepto_terminos: termsPending ? acceptedTerms : z.boolean(),
+  });
+}
+
+export type CompleteProfileData = z.output<ReturnType<typeof completeProfileSchema>>;
 
 export const OTP_LENGTH = 6;
 

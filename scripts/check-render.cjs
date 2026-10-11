@@ -10,6 +10,9 @@ const native = require("react-native-web");
 const root = path.resolve(__dirname, "..");
 const original = Module._load;
 let routeParams = {};
+/** What the fake session reports: `useAccess().phase` and `useMe().data`. */
+let accessPhase = "app";
+let me;
 let fixtures;
 let draft;
 /** Raw answer of a query key (`["donaciones", "detail", id]`…), or undefined. */
@@ -45,6 +48,8 @@ function settled(data) {
 const queryStubs = {
   // Only read by handlers (cache invalidation), never while rendering.
   useQueryClient: () => ({ invalidateQueries: async () => {} }),
+  // Mutations only run from handlers.
+  useMutation: () => ({ mutateAsync: async () => undefined, isPending: false }),
   useQuery: (options) => {
     const raw =
       options.enabled === false ? undefined : answerFor(options.queryKey);
@@ -178,14 +183,19 @@ Module._load = function (name, parent, isMain) {
   if (name === "@/state/session")
     return {
       useAccess: () => ({
-        phase: "app",
+        phase: accessPhase,
         activeRole: "DONANTE",
         canDonor: true,
         canVolunteer: true,
         setActiveRole() {},
       }),
-      useMe: () => settled(fixtures.meFixture()),
+      useMe: () => settled(me),
       useSession: () => ({ status: "none" }),
+      // Only called from handlers and effects, which server rendering never runs.
+      useSessionActions: () => ({
+        cerrarSesion: async () => {},
+        setRecovering() {},
+      }),
       deviceIdStorage: {},
     };
   if (name === "@/state/mobile-context")
@@ -206,11 +216,15 @@ Module._load = function (name, parent, isMain) {
       throw new Error("not available in the render check");
     };
     return {
+      AUTH_UNAVAILABLE_CODE: "auth_unavailable",
       isEmailAuthAvailable: () => true,
       signIn: unused,
       signUp: unused,
       verifyEmailOtp: unused,
       resendSignupOtp: unused,
+      requestPasswordReset: unused,
+      exchangeRecoveryCode: unused,
+      updatePassword: unused,
     };
   }
   if (name === "@tanstack/react-query")
@@ -248,6 +262,7 @@ Module._load = function (name, parent, isMain) {
 };
 Slot = require("expo-router/build/ui/Slot").Slot;
 fixtures = require("../src/test-utils/fixtures.ts");
+me = fixtures.meFixture();
 const {
   initialDonationDraft,
   appendProduct,
@@ -268,6 +283,8 @@ try {
     "notifications",
     "donor",
     "account",
+    "password",
+    "profile-setup",
   ];
   let count = 0;
   for (const module of modules) {
@@ -413,6 +430,46 @@ try {
   assert(registerHtml.includes("Apellidos") && registerHtml.includes("Celular"));
   assert(!/documento/i.test(registerHtml));
   assert(!registerHtml.includes('href="/verificar-correo"'));
+  // Password recovery and the account steps.
+  const { ForgotPasswordScreen } = require("../src/screens/auth.tsx");
+  const forgotHtml = renderToStaticMarkup(React.createElement(ForgotPasswordScreen));
+  assert(forgotHtml.includes("Enviar enlace") && forgotHtml.includes('href="/login"'));
+  const {
+    ResetPasswordScreen,
+    ChangePasswordScreen,
+  } = require("../src/screens/password.tsx");
+  // Without a link: a way to request one, never the form.
+  const noLinkHtml = renderToStaticMarkup(React.createElement(ResetPasswordScreen));
+  assert(noLinkHtml.includes('href="/recuperar-contrasena"'));
+  assert(!noLinkHtml.includes("Nueva contraseña"));
+  routeParams = { error: "access_denied", error_code: "otp_expired", error_description: "Email link is invalid or has expired" };
+  const expiredHtml = renderToStaticMarkup(React.createElement(ResetPasswordScreen));
+  assert(expiredHtml.includes("expiró o ya se usó") && !expiredHtml.includes("Email link"));
+  routeParams = { code: "auth-code", sb_flow_id: "flow-id-1234" };
+  assert(
+    renderToStaticMarkup(React.createElement(ResetPasswordScreen)).includes("Validando el enlace…"),
+  );
+  routeParams = {};
+  accessPhase = "recovering";
+  const resetFormHtml = renderToStaticMarkup(React.createElement(ResetPasswordScreen));
+  assert(resetFormHtml.includes("Nueva contraseña") && resetFormHtml.includes("Cancelar"));
+  accessPhase = "app";
+  const changeHtml = renderToStaticMarkup(React.createElement(ChangePasswordScreen));
+  assert(changeHtml.includes("Confirmar contraseña") && changeHtml.includes("Cerrar sesión"));
+  const { CompleteProfileScreen } = require("../src/screens/profile-setup.tsx");
+  me = fixtures.meFixture({
+    nombres: "Ana",
+    apellidos: null,
+    telefono: null,
+    pendientes: ["TELEFONO", "ACEPTAR_TERMINOS"],
+  });
+  const profileHtml = renderToStaticMarkup(React.createElement(CompleteProfileScreen));
+  assert(profileHtml.includes('value="Ana"') && profileHtml.includes("Acepto los Términos"));
+  me = fixtures.meFixture({ telefono: null, pendientes: ["TELEFONO"] });
+  assert(
+    !renderToStaticMarkup(React.createElement(CompleteProfileScreen)).includes("Acepto los Términos"),
+  );
+  me = fixtures.meFixture();
   const {
     VolunteerRegistrationScreen,
   } = require("../src/screens/volunteer.tsx");

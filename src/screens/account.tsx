@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type PropsWithChildren } from "react";
 import { StyleSheet, TextInput, View } from "react-native";
 import { isAuthError } from "@supabase/supabase-js";
-import { useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams, type Href } from "expo-router";
 import { messageFor } from "@/api/problem-messages";
 import type { EstadoVerificacion, MeDto } from "@/api/types";
@@ -44,7 +43,6 @@ import {
 } from "@/domain/mappers/profile";
 import { useImpacto } from "@/services/perfil";
 import { useMobile } from "@/state/mobile-context";
-import { queryKeys } from "@/services/query-keys";
 import { useAccess, useMe, useSession } from "@/state/session";
 import { colors, fonts } from "@/design/tokens";
 
@@ -442,7 +440,6 @@ interface SendState {
 type Opening = "after-sign-up" | "send-code" | "nothing-sent";
 
 function VerifyEmailForm({ email, opening }: { email: string; opening: Opening }) {
-  const queryClient = useQueryClient();
   const form = useZodForm(otpSchema, { token: "" });
   const cooldown = useResendCooldown(opening === "after-sign-up");
   const { restart } = cooldown;
@@ -467,17 +464,19 @@ function VerifyEmailForm({ email, opening }: { email: string; opening: Opening }
     if (opening !== "send-code" || sentOnMount.current) return;
     sentOnMount.current = true;
     // `sending` already starts true for this opening; state only changes once it settles.
-    void send();
+    // Then `enviar` is consumed: a remount or the same deep link opened again must not send
+    // another code. Not right away: on a cold deep link this effect can run before the
+    // navigator is ready to take a params update.
+    void send().finally(() => router.setParams({ enviar: undefined }));
   }, [opening, send]);
 
   // On success Supabase stores the session: the guards close this screen and open the app.
+  // Signed in with an unconfirmed email (verify-email phase) the session keeps its status;
+  // the session provider fetches `/me` again on the SIGNED_IN event, which clears
+  // CONFIRMAR_CORREO.
   const submit = form.handleSubmit(async ({ token }) => {
     try {
       await verifyEmailOtp(email, token);
-      // Signed in with an unconfirmed email (verify-email phase), the session keeps its
-      // status and `/me` would keep listing CONFIRMAR_CORREO: fetch it again. Without a
-      // session there is no `/me` query yet and this does nothing.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.me });
     } catch (error) {
       // Supabase answers a wrong or expired code alike: a new code can be requested now.
       if (isAuthError(error) && error.code === "otp_expired") cooldown.allowNow();

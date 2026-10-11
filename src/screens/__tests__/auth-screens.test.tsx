@@ -5,13 +5,12 @@
  */
 import { AuthApiError } from "@supabase/supabase-js";
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
-import { Slot } from "expo-router";
+import { router, Slot } from "expo-router";
 import { act, fireEvent, renderRouter, screen } from "expo-router/testing-library";
 import { Text } from "react-native";
 
 import { VerifyEmailScreen } from "@/screens/account";
 import { LoginScreen, RegisterScreen } from "@/screens/auth";
-import { queryKeys } from "@/services/query-keys";
 import { createTestQueryClient } from "@/test-utils/query";
 
 /** The session the verification falls back to (`verify-email` phase): none by default. */
@@ -139,8 +138,9 @@ describe("LoginScreen", () => {
 
     expect(await screen.findByText("ana@correo.com")).toBeOnTheScreen();
     expect(pathname()).toBe("/verificar-correo");
-    expect(searchParams()).toEqual({ email: "ana@correo.com", enviar: "1" });
     expect(await screen.findByText("Te enviamos un código nuevo.")).toBeOnTheScreen();
+    // `enviar` is consumed once sent (see "asked to send a code" below).
+    expect(searchParams()).toEqual({ email: "ana@correo.com" });
     expect(mockAuth.resend).toHaveBeenCalledTimes(1);
     expect(mockAuth.resend).toHaveBeenCalledWith({ type: "signup", email: "ana@correo.com" });
     // The account exists: no sign-up note.
@@ -309,22 +309,20 @@ describe("VerifyEmailScreen", () => {
       mockSession = { status: "present", email: "sesion@correo.com" };
     });
 
-    it("verifies the session's email and refreshes the account", async () => {
+    it("verifies the session's email", async () => {
       await renderAt("/verificar-correo");
-      const invalidate = jest.spyOn(client, "invalidateQueries");
 
       expect(screen.getByText("sesion@correo.com")).toBeOnTheScreen();
       expect(screen.queryByText(NEUTRAL_NOTE)).toBeNull();
       await type(CODE_LABEL, "654321");
       await press("Verificar correo");
 
+      // `/me` is fetched again by the session provider on the SIGNED_IN event that follows.
       expect(mockAuth.verifyOtp).toHaveBeenCalledWith({
         email: "sesion@correo.com",
         token: "654321",
         type: "email",
       });
-      // `/me` still lists CONFIRMAR_CORREO until it is fetched again.
-      expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.me });
     });
 
     it("allows a resend right away: nothing was sent from this screen", async () => {
@@ -392,6 +390,20 @@ describe("VerifyEmailScreen", () => {
       expect(screen.getByText("Te enviamos un código nuevo.")).toBeOnTheScreen();
       expect(screen.queryByText("Enviando un código a tu correo…")).toBeNull();
       expect(screen.getByRole("button", { name: "Reenviar código en 01:00" })).toBeDisabled();
+      expect(mockAuth.resend).toHaveBeenCalledTimes(1);
+    });
+
+    it("clears enviar once the send started, so opening the screen again sends nothing", async () => {
+      await renderAt(sendUrl);
+      await screen.findByText("Te enviamos un código nuevo.");
+
+      expect(searchParams()).toEqual({ email: "maria@correo.com" });
+      // A new screen instance with the current params, as after a remount.
+      await act(async () =>
+        router.replace({ pathname: "/verificar-correo", params: { email: "maria@correo.com" } }),
+      );
+
+      expect(await screen.findByRole("button", { name: "Reenviar código" })).toBeEnabled();
       expect(mockAuth.resend).toHaveBeenCalledTimes(1);
     });
 

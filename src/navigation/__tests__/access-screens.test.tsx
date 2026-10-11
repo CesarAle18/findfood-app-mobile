@@ -60,18 +60,12 @@ describe("AccessGateScreen", () => {
     expect(mockSession.cerrarSesion).toHaveBeenCalledTimes(1);
   });
 
-  it.each<[AccessPhase, string]>([
-    ["complete-profile", "Completa tu perfil"],
-    ["change-password", "Cambia tu contraseña"],
-    ["recovering", "Restablece tu contraseña"],
-  ])("shows an interim notice for %s with a way out", async (phase, title) => {
-    withPhase(phase);
+  it("waits with a spinner while the phase is loading", async () => {
+    withPhase("loading");
 
     await render(<AccessGateScreen />);
 
-    expect(screen.getByText(title)).toBeOnTheScreen();
-    await pressSignOut();
-    expect(mockSession.cerrarSesion).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("progressbar")).toBeOnTheScreen();
   });
 });
 

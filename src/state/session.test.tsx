@@ -357,6 +357,23 @@ describe("real profile", () => {
     expect(mockedSignOutLocally).not.toHaveBeenCalled();
   });
 
+  it("fetches /me again when Supabase signs in or updates the user, not on a token refresh", async () => {
+    const calls = serve(() => ({ status: 200, body: me() }));
+    const { result } = await renderSession();
+    await waitFor(() => expect(result.current.access.phase).toBe("app"));
+    expect(calls).toHaveLength(1);
+
+    // A new password clears CAMBIAR_PASSWORD; a verified code clears CONFIRMAR_CORREO.
+    await act(async () => auth.emit("USER_UPDATED", realSession));
+    await waitFor(() => expect(calls).toHaveLength(2));
+
+    await act(async () => auth.emit("SIGNED_IN", realSession));
+    await waitFor(() => expect(calls).toHaveLength(3));
+
+    await act(async () => auth.emit("TOKEN_REFRESHED", { ...realSession, access_token: "t2" }));
+    expect(calls).toHaveLength(3);
+  });
+
   it("starts without session when Supabase has none", async () => {
     auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
     const calls = serve(() => ({ status: 200, body: me() }));

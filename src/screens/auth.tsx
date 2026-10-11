@@ -1,9 +1,16 @@
-import { isAuthError } from "@supabase/supabase-js";
+import { isAuthError, isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { router } from "expo-router";
+import { useState } from "react";
 import { View } from "react-native";
 
 import { authErrorMessages } from "@/api/problem-messages";
-import { isEmailAuthAvailable, signIn, signUp } from "@/auth/email-auth";
+import {
+  AUTH_UNAVAILABLE_CODE,
+  isEmailAuthAvailable,
+  requestPasswordReset,
+  signIn,
+  signUp,
+} from "@/auth/email-auth";
 import {
   Button,
   Card,
@@ -18,7 +25,7 @@ import {
 import { Icon } from "@/components/findfood/icon";
 import { Pressing } from "@/components/findfood/motion";
 import { colors } from "@/design/tokens";
-import { loginSchema, registerSchema } from "@/domain/validation/auth";
+import { forgotPasswordSchema, loginSchema, registerSchema } from "@/domain/validation/auth";
 import { useZodForm } from "@/hooks/use-zod-form";
 
 /**
@@ -160,7 +167,8 @@ const REGISTER_INITIAL = {
   acepto_terminos: false,
 };
 
-function TermsCheckbox({
+/** Also used by the profile completion while `ACEPTAR_TERMINOS` is pending. */
+export function TermsCheckbox({
   checked,
   error,
   disabled,
@@ -305,7 +313,36 @@ export function RegisterScreen() {
     </Screen>
   );
 }
+/** Errors that say nothing about the account, so they can be shown: limits and connectivity. */
+const RESET_RATE_LIMITS = new Set(["over_email_send_rate_limit", "over_request_rate_limit"]);
+
+function isShownResetError(error: unknown): boolean {
+  if (!isAuthError(error)) return true;
+  if (isAuthRetryableFetchError(error) || error.status === 429) return true;
+  return error.code === AUTH_UNAVAILABLE_CODE || (!!error.code && RESET_RATE_LIMITS.has(error.code));
+}
+
+const RESET_SENT =
+  "Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña. Ábrelo en este teléfono.";
+
+const FORGOT_INITIAL = { email: "" };
+
 export function ForgotPasswordScreen() {
+  const available = isEmailAuthAvailable();
+  const form = useZodForm(forgotPasswordSchema, FORGOT_INITIAL);
+  const [sent, setSent] = useState(false);
+  const submit = form.handleSubmit(async ({ email }) => {
+    setSent(false);
+    try {
+      await requestPasswordReset(email);
+    } catch (error) {
+      // Supabase sends nothing to an unknown address and answers as if it did, so any other
+      // failure (an SMTP error, say) can only come from a registered one: it gets the same
+      // confirmation, and the screen never reveals which addresses have an account.
+      if (isShownResetError(error)) throw error;
+    }
+    setSent(true);
+  });
   return (
     <Screen back center>
       <View
@@ -335,12 +372,27 @@ export function ForgotPasswordScreen() {
           ¿Olvidaste tu contraseña?
         </Copy>
         <Copy tone="secondary" style={{ fontSize: 12, textAlign: "center" }}>
-          Ingresa el correo asociado a tu cuenta y te enviaremos las
-          instrucciones.
+          Ingresa el correo asociado a tu cuenta y te enviaremos un enlace para crear una nueva
+          contraseña.
         </Copy>
       </View>
-      <Field label="Correo electrónico *" value="tu@correo.com" />
-      <Button>Enviar instrucciones</Button>
+      {available ? null : <LocalProfileNotice />}
+      <Field
+        label="Correo electrónico"
+        {...editableIf(available, form.field("email"))}
+        placeholder="tu@correo.com"
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoComplete="email"
+        textContentType="emailAddress"
+        returnKeyType="send"
+        onSubmitEditing={submit}
+      />
+      <FormMessage message={form.formError} />
+      <FormMessage message={sent ? RESET_SENT : undefined} tone="success" />
+      <Button onPress={submit} loading={form.submitting} disabled={!available}>
+        Enviar enlace
+      </Button>
       <TextLink href="/login">Volver al inicio de sesión</TextLink>
       <Card soft>
         <Copy weight="semibold">Consejo</Copy>

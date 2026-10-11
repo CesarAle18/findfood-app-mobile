@@ -132,6 +132,12 @@ const AUTH_CODES = [
   "validation_failed",
   "session_not_found",
   "refresh_token_not_found",
+  // Password reset link (PKCE exchange) and password change.
+  "flow_state_not_found",
+  "flow_state_expired",
+  "bad_code_verifier",
+  "pkce_code_verifier_not_found",
+  "reauthentication_needed",
   // App-defined: email auth in a profile without Supabase (see src/auth/email-auth.ts).
   "auth_unavailable",
 ];

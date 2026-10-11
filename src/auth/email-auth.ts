@@ -7,6 +7,7 @@
  * `onAuthStateChange`, and the root guards open the right screen.
  */
 import { AuthError, type SupabaseClient } from "@supabase/supabase-js";
+import * as Linking from "expo-linking";
 
 import type { LoginData, RegisterData } from "@/domain/validation/auth";
 
@@ -67,5 +68,37 @@ export async function verifyEmailOtp(email: string, token: string): Promise<void
 
 export async function resendSignupOtp(email: string): Promise<void> {
   const { error } = await auth().resend({ type: "signup", email });
+  if (error) throw error;
+}
+
+/** The screen the reset email links back to (`findfoodappmobile://restablecer-contrasena`). */
+export const RESET_PASSWORD_PATH = "/restablecer-contrasena";
+
+/**
+ * Emails a reset link that opens the reset screen. With PKCE the link only works on this
+ * device: the code verifier stays in this install's storage. Supabase answers the same for an
+ * unknown address (and sends nothing), so the caller must not reveal which addresses exist.
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  const { error } = await auth().resetPasswordForEmail(email, {
+    redirectTo: Linking.createURL(RESET_PASSWORD_PATH),
+  });
+  if (error) throw error;
+}
+
+/**
+ * Exchanges the reset link's `code` for a recovery session; auth-js then emits
+ * PASSWORD_RECOVERY. On React Native it cannot read the flow id from window.location, so the
+ * link's `sb_flow_id` is passed explicitly; without one, the verifier of the latest flow
+ * started on this device is used.
+ */
+export async function exchangeRecoveryCode(code: string, flowId?: string): Promise<void> {
+  const { error } = await auth().exchangeCodeForSession(code, flowId ? { flowId } : undefined);
+  if (error) throw error;
+}
+
+/** Sets the signed-in user's password (after a reset link, or a forced change). */
+export async function updatePassword(password: string): Promise<void> {
+  const { error } = await auth().updateUser({ password });
   if (error) throw error;
 }

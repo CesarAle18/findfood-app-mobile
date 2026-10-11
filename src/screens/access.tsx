@@ -9,7 +9,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { messageFor } from "@/api/problem-messages";
 import { EmptyState, ErrorState, LoadingState } from "@/components/findfood/feedback";
-import type { IconName } from "@/components/findfood/icon";
 import { Button, Copy } from "@/components/findfood/ui";
 import type { ConfigError } from "@/config/env";
 import { colors } from "@/design/tokens";
@@ -50,7 +49,8 @@ function useSignOut() {
   return { signOut, signingOut };
 }
 
-function SignOutButton({ variant = "primary" }: { variant?: "primary" | "outline" }) {
+/** Also on the account steps (complete profile, change password): the way out of them. */
+export function SignOutButton({ variant = "primary" }: { variant?: "primary" | "outline" }) {
   const { signOut, signingOut } = useSignOut();
   return (
     <Button variant={variant} onPress={signOut} loading={signingOut}>
@@ -75,41 +75,6 @@ function StartupError() {
   );
 }
 
-type PendingStep = "complete-profile" | "change-password" | "recovering";
-
-// Interim notices: the real screens arrive with F2-05 (complete profile, change password)
-// and F2-04 (password reset deep link). Until then the user can only sign out.
-const PENDING_STEPS: Record<PendingStep, { icon: IconName; title: string; description: string }> =
-  {
-    "complete-profile": {
-      icon: "user",
-      title: "Completa tu perfil",
-      description:
-        "Antes de continuar necesitamos tu número de celular y que aceptes los términos de uso. Esta opción estará disponible muy pronto en la app.",
-    },
-    "change-password": {
-      icon: "eye",
-      title: "Cambia tu contraseña",
-      description:
-        "Por seguridad debes definir una nueva contraseña antes de continuar. Esta opción estará disponible muy pronto en la app.",
-    },
-    recovering: {
-      icon: "mail",
-      title: "Restablece tu contraseña",
-      description:
-        "Abriste un enlace para restablecer tu contraseña. Esta opción estará disponible muy pronto en la app.",
-    },
-  };
-
-function PendingStepNotice({ step }: { step: PendingStep }) {
-  const { icon, title, description } = PENDING_STEPS[step];
-  return (
-    <StatusFrame>
-      <EmptyState icon={icon} title={title} description={description} action={<SignOutButton />} />
-    </StatusFrame>
-  );
-}
-
 /**
  * The first screen (`index`): redirects to the screen of the access phase, or renders the
  * phases that have no screen of their own.
@@ -118,18 +83,9 @@ export function AccessGateScreen() {
   const { phase, activeRole } = useAccess();
   const route = routeForAccess(phase, activeRole);
   if (route) return <Redirect href={route} />;
-  switch (phase) {
-    case "error":
-      return <StartupError />;
-    case "complete-profile":
-    case "change-password":
-    case "recovering":
-      return <PendingStepNotice step={phase} />;
-    default:
-      // `loading` (the root layout keeps the splash meanwhile), or the unreachable app
-      // phase without a mobile role.
-      return <LoadingState />;
-  }
+  // `loading` (the root layout keeps the splash meanwhile), or the unreachable app phase
+  // without a mobile role.
+  return phase === "error" ? <StartupError /> : <LoadingState />;
 }
 
 /** `sin-acceso`: an account without a mobile role, or one the API blocks. */

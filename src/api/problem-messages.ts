@@ -144,6 +144,7 @@ export const problemMessages: Readonly<Record<string, string>> = {
 
 const EXPIRED_SESSION = "Tu sesión expiró. Inicia sesión de nuevo.";
 const EXISTING_ACCOUNT = "Ya existe una cuenta con este correo electrónico.";
+const INVALID_LINK = "El enlace o el código no es válido o ya expiró. Solicita uno nuevo.";
 
 /** Message per Supabase Auth error `code`. */
 export const authErrorMessages: Readonly<Record<string, string>> = {
@@ -152,7 +153,16 @@ export const authErrorMessages: Readonly<Record<string, string>> = {
   user_already_exists: EXISTING_ACCOUNT,
   email_exists: EXISTING_ACCOUNT,
   // Supabase also answers a wrong code with `otp_expired`.
-  otp_expired: "El enlace o el código no es válido o ya expiró. Solicita uno nuevo.",
+  otp_expired: INVALID_LINK,
+  // Password reset link (PKCE): the link's flow is unknown, expired or already used.
+  flow_state_not_found: INVALID_LINK,
+  flow_state_expired: INVALID_LINK,
+  bad_code_verifier: INVALID_LINK,
+  // auth-js: the link was opened on another device (the verifier lives where it was asked).
+  pkce_code_verifier_not_found:
+    "Abre el enlace en el mismo teléfono donde lo solicitaste, o solicita uno nuevo desde aquí.",
+  reauthentication_needed:
+    "Por seguridad, cierra sesión y vuelve a iniciarla antes de cambiar tu contraseña.",
   over_email_send_rate_limit:
     "Ya enviamos varios correos. Espera unos minutos antes de solicitar otro.",
   over_request_rate_limit: "Hiciste demasiados intentos. Espera unos minutos e inténtalo de nuevo.",

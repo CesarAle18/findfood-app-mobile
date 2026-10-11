@@ -52,11 +52,22 @@ describe("routeForAccess", () => {
     ["account-blocked", null, "/sin-acceso"],
     ["app", "DONANTE", "/donante"],
     ["app", "VOLUNTARIO", "/voluntario"],
+    ["recovering", null, "/restablecer-contrasena"],
+    ["complete-profile", null, "/completar-perfil"],
+    ["change-password", null, "/cambiar-contrasena"],
   ])("sends %s with role %s to %s", (phase, role, route) => {
     expect(routeForAccess(phase, role)).toBe(route);
   });
 
-  it.each<AccessPhase>(["auth", "verify-email", "no-mobile-role", "account-blocked"])(
+  it.each<AccessPhase>([
+    "auth",
+    "verify-email",
+    "no-mobile-role",
+    "account-blocked",
+    "recovering",
+    "complete-profile",
+    "change-password",
+  ])(
     "ignores the active role in %s",
     (phase) => {
       const routes = ROLES.map((role) => routeForAccess(phase, role));
@@ -64,7 +75,7 @@ describe("routeForAccess", () => {
     },
   );
 
-  it.each<AccessPhase>(["loading", "error", "recovering", "change-password", "complete-profile"])(
+  it.each<AccessPhase>(["loading", "error"])(
     "keeps %s on the gate",
     (phase) => {
       for (const role of ROLES) expect(routeForAccess(phase, role)).toBeNull();
@@ -78,9 +89,14 @@ describe("routeForAccess", () => {
 });
 
 describe("guardsFor", () => {
+  // The password reset screen is never guarded: its deep link opens it in any phase (it
+  // creates the session itself), and the `recovering` flag keeps the gate away from the app.
   const NONE: RouteGuards = {
     auth: false,
     verifyEmail: false,
+    recovery: true,
+    completeProfile: false,
+    changePassword: false,
     noAccess: false,
     donor: false,
     volunteer: false,
@@ -91,8 +107,8 @@ describe("guardsFor", () => {
     ["loading", {}],
     ["recovering", {}],
     ["error", {}],
-    ["change-password", {}],
-    ["complete-profile", {}],
+    ["change-password", { changePassword: true }],
+    ["complete-profile", { completeProfile: true }],
     ["auth", { auth: true, verifyEmail: true }],
     ["verify-email", { verifyEmail: true }],
     ["no-mobile-role", { noAccess: true }],

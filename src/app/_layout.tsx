@@ -71,6 +71,11 @@ function RootNavigator({ fontsLoaded, fontError }: { fontsLoaded: boolean; fontE
       <Stack.Screen name="index" />
       <Stack.Protected guard={guards.auth}>{screensOf("auth")}</Stack.Protected>
       <Stack.Protected guard={guards.verifyEmail}>{screensOf("verifyEmail")}</Stack.Protected>
+      <Stack.Protected guard={guards.recovery}>{screensOf("recovery")}</Stack.Protected>
+      <Stack.Protected guard={guards.completeProfile}>
+        {screensOf("completeProfile")}
+      </Stack.Protected>
+      <Stack.Protected guard={guards.changePassword}>{screensOf("changePassword")}</Stack.Protected>
       <Stack.Protected guard={guards.noAccess}>{screensOf("noAccess")}</Stack.Protected>
       <Stack.Protected guard={guards.donor}>{screensOf("donor")}</Stack.Protected>
       <Stack.Protected guard={guards.volunteer}>{screensOf("volunteer")}</Stack.Protected>

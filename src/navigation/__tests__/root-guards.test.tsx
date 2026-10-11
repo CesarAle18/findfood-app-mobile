@@ -261,6 +261,42 @@ describe("root guards", () => {
     expect(pathname()).toBe("/verificar-correo");
   });
 
+  it.each<[AccessPhase, string]>([
+    ["complete-profile", "completar-perfil"],
+    ["change-password", "cambiar-contrasena"],
+    ["recovering", "restablecer-contrasena"],
+  ])("sends an account in %s to its screen", async (phase, file) => {
+    await renderApp({ ...DONOR, phase }, "/donante");
+
+    expect(await screen.findByText(`route:${file}`)).toBeOnTheScreen();
+    expect(pathname()).toBe(`/${file}`);
+    expect(screen.queryByText(/^route:donante/)).toBeNull();
+  });
+
+  it("drops a cold deep link to the profile completion for a donor in the app", async () => {
+    await renderApp(DONOR, "/completar-perfil");
+
+    expect(await screen.findByText("route:donante/(tabs)/index")).toBeOnTheScreen();
+    expect(pathname()).toBe("/donante");
+  });
+
+  it("drops a cold deep link to the password change for a donor in the app", async () => {
+    await renderApp(DONOR, "/cambiar-contrasena");
+
+    expect(await screen.findByText("route:donante/(tabs)/index")).toBeOnTheScreen();
+    expect(pathname()).toBe("/donante");
+  });
+
+  it("opens the profile completion's next step once the account is complete", async () => {
+    await renderApp({ ...DONOR, phase: "complete-profile" });
+    await screen.findByText("route:completar-perfil");
+
+    await act(async () => mockAccessStore.set(DONOR));
+
+    expect(await screen.findByText("route:donante/(tabs)/index")).toBeOnTheScreen();
+    expect(pathname()).toBe("/donante");
+  });
+
   it("leaves an app screen when the session ends", async () => {
     await renderApp(DONOR, "/donante/seguimiento");
     await screen.findByText("route:donante/seguimiento");

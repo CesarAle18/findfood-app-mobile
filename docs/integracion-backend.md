@@ -58,7 +58,8 @@ Las fechas siguen usando DD/MM/AAAA y las horas HH:mm en el modelo de presentaci
 | Authentication → URL Configuration | Agregar `findfoodappmobile://**` a *Redirect URLs* | El enlace de restablecer contraseña vuelve a la app (PKCE). |
 | Authentication → Providers → Email | *Confirm email* activo; revisar longitud y vigencia del OTP | El registro exige verificar el correo con código. |
 | Authentication → Email Templates → Confirm signup | Incluir `{{ .Token }}` en el cuerpo | La app pide el código de 6 dígitos (`verifyOtp` tipo `email`). |
-| Authentication → Email Templates → Reset password | Mantener `{{ .ConfirmationURL }}` | El enlace abre `restablecer-contrasena` con `code`. |
+| Authentication → Email Templates → Reset password | Mantener `{{ .ConfirmationURL }}` | El enlace abre `restablecer-contrasena` con `code` (y `sb_flow_id` si el cliente lo agrega); un enlace vencido vuelve con `error_code=otp_expired`. |
+| Authentication → Providers → Email | Dejar *Secure password change* desactivado | La app no pide el código de reautenticación: con la opción activa, `/cambiar-contrasena` falla (`reauthentication_needed`) si la sesión tiene más de 24 h, y la app solo puede pedir iniciar sesión de nuevo. |
 | Authentication → Rate Limits | Intervalo mínimo de reenvío (60 s por defecto) | Define el contador de «Reenviar código». |
 | Authentication → SMTP Settings | SMTP propio | El SMTP integrado solo envía unos pocos correos por hora. |
 | Authentication → Providers → Google | Habilitar; *Client IDs*: primero el ID web y luego el de iOS; secreto del cliente web; activar *Skip nonce checks* | Inicio de sesión nativo con `signInWithIdToken`. |

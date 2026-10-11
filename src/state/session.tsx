@@ -201,6 +201,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
         queryClient.clear();
       }
       sessionStore.setSession(toSnapshot(session));
+      // A verified email code or a new password changes `pendientes` (the database clears
+      // CONFIRMAR_CORREO / CAMBIAR_PASSWORD) without changing the session's status: fetch
+      // the account again, so no screen has to remember it.
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.me });
+      }
     });
     // An auth event is newer than the stored session read at startup.
     client.auth.getSession().then(

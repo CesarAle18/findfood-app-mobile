@@ -4,10 +4,13 @@ import { messageFor } from "@/api/problem-messages";
 
 import {
   AUTH_UNAVAILABLE_CODE,
+  exchangeRecoveryCode,
   isEmailAuthAvailable,
+  requestPasswordReset,
   resendSignupOtp,
   signIn,
   signUp,
+  updatePassword,
   verifyEmailOtp,
 } from "./email-auth";
 
@@ -16,6 +19,9 @@ const mockAuth = {
   signUp: jest.fn(),
   verifyOtp: jest.fn(),
   resend: jest.fn(),
+  resetPasswordForEmail: jest.fn(),
+  exchangeCodeForSession: jest.fn(),
+  updateUser: jest.fn(),
 };
 let mockClient: { auth: typeof mockAuth } | null = { auth: mockAuth };
 
@@ -23,6 +29,13 @@ jest.mock("./supabase", () => ({
   get supabase() {
     return mockClient;
   },
+}));
+
+// A development build's URL for the app scheme (see app.json `scheme`).
+const mockCreateURL = jest.fn((path: string) => `findfoodappmobile://${path.replace(/^\//, "")}`);
+
+jest.mock("expo-linking", () => ({
+  createURL: (path: string) => mockCreateURL(path),
 }));
 
 const session = { access_token: "token" };
@@ -147,6 +160,68 @@ describe("resendSignupOtp", () => {
   });
 });
 
+describe("requestPasswordReset", () => {
+  it("sends the reset link back to the app's reset screen", async () => {
+    mockAuth.resetPasswordForEmail.mockResolvedValue({ data: {}, error: null });
+
+    await requestPasswordReset("maria@correo.com");
+
+    expect(mockCreateURL).toHaveBeenCalledWith("/restablecer-contrasena");
+    expect(mockAuth.resetPasswordForEmail).toHaveBeenCalledWith("maria@correo.com", {
+      redirectTo: "findfoodappmobile://restablecer-contrasena",
+    });
+  });
+
+  it("throws the AuthError Supabase returns", async () => {
+    const error = new AuthApiError("Rate limit", 429, "over_email_send_rate_limit");
+    mockAuth.resetPasswordForEmail.mockResolvedValue({ data: null, error });
+
+    await expect(requestPasswordReset("maria@correo.com")).rejects.toBe(error);
+  });
+});
+
+describe("exchangeRecoveryCode", () => {
+  it("exchanges the code for the flow that requested it", async () => {
+    mockAuth.exchangeCodeForSession.mockResolvedValue({ data: { session }, error: null });
+
+    await exchangeRecoveryCode("auth-code", "flow-id-1234");
+
+    expect(mockAuth.exchangeCodeForSession).toHaveBeenCalledWith("auth-code", { flowId: "flow-id-1234" });
+  });
+
+  it("falls back to the latest flow without a flow id", async () => {
+    mockAuth.exchangeCodeForSession.mockResolvedValue({ data: { session }, error: null });
+
+    await exchangeRecoveryCode("auth-code");
+
+    expect(mockAuth.exchangeCodeForSession).toHaveBeenCalledWith("auth-code", undefined);
+  });
+
+  it("throws the AuthError Supabase returns", async () => {
+    const error = new AuthApiError("Flow expired", 400, "flow_state_expired");
+    mockAuth.exchangeCodeForSession.mockResolvedValue({ data: { session: null }, error });
+
+    await expect(exchangeRecoveryCode("auth-code")).rejects.toBe(error);
+  });
+});
+
+describe("updatePassword", () => {
+  it("sets the signed-in user's new password", async () => {
+    mockAuth.updateUser.mockResolvedValue({ data: { user: user() }, error: null });
+
+    await updatePassword("nueva1234");
+
+    expect(mockAuth.updateUser).toHaveBeenCalledWith({ password: "nueva1234" });
+  });
+
+  it("throws the AuthError Supabase returns", async () => {
+    const error = new AuthApiError("Same password", 422, "same_password");
+    mockAuth.updateUser.mockResolvedValue({ data: { user: null }, error });
+
+    await expect(updatePassword("nueva1234")).rejects.toBe(error);
+  });
+});
+
 describe("without Supabase (local profile)", () => {
   beforeEach(() => {
     mockClient = null;
@@ -161,6 +236,9 @@ describe("without Supabase (local profile)", () => {
     ["signUp", () => signUp(registration)],
     ["verifyEmailOtp", () => verifyEmailOtp("a@b.co", "123456")],
     ["resendSignupOtp", () => resendSignupOtp("a@b.co")],
+    ["requestPasswordReset", () => requestPasswordReset("a@b.co")],
+    ["exchangeRecoveryCode", () => exchangeRecoveryCode("auth-code")],
+    ["updatePassword", () => updatePassword("nueva1234")],
   ])("%s throws an error with a Spanish explanation", async (_name, action) => {
     const error: unknown = await action().catch((e: unknown) => e);
 
