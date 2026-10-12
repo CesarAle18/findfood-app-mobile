@@ -33,7 +33,16 @@ const mockSupabaseFetch = () => Promise.reject(new Error("Not used by these test
 jest.mock("./supabase-fetch", () => ({ createSupabaseFetch: () => mockSupabaseFetch }));
 
 function fakeAuth() {
+  const listeners: ((event: string, session: unknown) => void)[] = [];
   return {
+    onAuthStateChange: jest.fn((listener: (event: string, session: unknown) => void) => {
+      listeners.push(listener);
+      return { data: { subscription: { unsubscribe: jest.fn() } } };
+    }),
+    /** Like auth-js notifying its subscribers. */
+    emit: (event: string, session: unknown) => {
+      for (const listener of listeners) listener(event, session);
+    },
     startAutoRefresh: jest.fn(async () => {}),
     stopAutoRefresh: jest.fn(async () => {}),
     refreshSession: jest.fn(async () => ({
@@ -296,8 +305,8 @@ describe("signOutLocally", () => {
 
       expect(done).toBe(true);
       expect([...mockStoredValues.keys()]).toEqual(["another-key"]);
-      // The ticker stays paused while auth-js is still signing out.
-      expect(auth.startAutoRefresh).not.toHaveBeenCalled();
+      // A next sign-in needs the ticker; without a stored session it has nothing to refresh.
+      expect(auth.startAutoRefresh).toHaveBeenCalledTimes(1);
     });
 
     it("removes a session a late sign-out stored again after the deadline", async () => {
@@ -317,7 +326,55 @@ describe("signOutLocally", () => {
       await jest.advanceTimersByTimeAsync(0);
 
       expect([...mockStoredValues.keys()]).toEqual(["another-key"]);
+      // Started again at the deadline, not touched by the late settle.
       expect(auth.startAutoRefresh).toHaveBeenCalledTimes(1);
+      expect(auth.stopAutoRefresh).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps a session signed in after the deadline when the old sign-out settles", async () => {
+      seedStoredSession();
+      const { auth, signOutLocally, deadlineMs } = loadClient();
+      const settle = hangingSignOut(auth);
+      const signingOut = signOutLocally();
+      await jest.advanceTimersByTimeAsync(deadlineMs);
+      await signingOut;
+
+      // The user signs in again before the old sign-out gives up.
+      const newSession = '{"access_token":"new-sign-in"}';
+      mockStoredValues.set("findfood.auth", newSession);
+      mockStoredValues.set("findfood.auth-user", '{"id":"u-2"}');
+      auth.emit("SIGNED_IN", { access_token: "new-sign-in" });
+      settle();
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(mockStoredValues.get("findfood.auth")).toBe(newSession);
+      expect(mockStoredValues.get("findfood.auth-user")).toBe('{"id":"u-2"}');
+      // The ticker keeps running for the new session.
+      expect(auth.stopAutoRefresh).toHaveBeenCalledTimes(1);
+      expect(auth.startAutoRefresh).toHaveBeenCalledTimes(1);
+      expect(auth.stopAutoRefresh.mock.invocationCallOrder[0]).toBeLessThan(
+        auth.startAutoRefresh.mock.invocationCallOrder[0],
+      );
+    });
+
+    it("leaves the late settle of a superseded sign-out to the newer one", async () => {
+      seedStoredSession();
+      const { auth, signOutLocally, deadlineMs } = loadClient();
+      const settleFirst = hangingSignOut(auth);
+      const first = signOutLocally();
+      await jest.advanceTimersByTimeAsync(deadlineMs);
+      await first;
+
+      // Signed in, then out again: this second sign-out finishes normally.
+      mockStoredValues.set("findfood.auth", '{"access_token":"second"}');
+      auth.emit("SIGNED_IN", { access_token: "second" });
+      auth.signOut.mockResolvedValue({ error: null });
+      await signOutLocally();
+      expect(mockStoredValues.has("findfood.auth")).toBe(false);
+
+      settleFirst();
+      await jest.advanceTimersByTimeAsync(0);
+      expect([...mockStoredValues.keys()]).toEqual(["another-key"]);
     });
   });
 

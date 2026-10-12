@@ -257,9 +257,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
     let active = true;
     const signedIn = sessionStatus === "present";
     void readItem(RECOVERING_KEY).then((value) => {
-      // A newer session status reads again. A change made meanwhile (a recovery link, a
-      // sign-out) wins over the stored flag, which may even be its own write: never
-      // delete it then.
+      // Ignored when the session status changed meanwhile (the effect reads again for the
+      // new one) or the value is already decided in memory: by an earlier read, or by a
+      // recovery link or sign-out that wins over the stored flag (which may even be its own
+      // write, so it is never deleted then). Once decided, later reads change nothing.
       if (!active || recoveringNow.current !== undefined) return;
       const stored = value === "1";
       if (stored && !signedIn) {
