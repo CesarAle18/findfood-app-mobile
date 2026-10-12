@@ -55,7 +55,7 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 | F2-01..03 | Login + register + OTP verification (one coherent email sign-in/sign-up flow) | delegated writer (2+ non-trivial files) | [x] | `ac9bbbd` + `8177d04` | high → granted → approved (ebab8f6..ac9bbbd); 3 warnings fixed in `8177d04` → approved (ac9bbbd..8177d04) |
 | F2-04+05 | Forgot/reset password (PKCE deep link) + complete profile + change password (shared new-password form; replace gate interim notices) | delegated writer (2+ non-trivial files) | [x] | `f2407a2` + `6471223` | high → granted → approved (8177d04..f2407a2); 3 warnings fixed in `6471223` → approved (f2407a2..6471223); 2 race warnings → F2-06 (single-correction rule) |
 | F2-06 | Account menu (switch view, logout) + assigned follow-ups | delegated writer (2+ non-trivial files) | [x] | `9f4deec` + `17c2bd5` | high → granted → approved (6471223..9f4deec); late-settle bug fixed in `17c2bd5` → approved (9f4deec..17c2bd5); window race + comment → F2-07 |
-| F2-07 | Google native sign-in + sign-in/late-sign-out window fix | delegated writer (2+ non-trivial files) | [x] | `bbbe7d3` + fix (see log) | high → granted → approved (17c2bd5..bbbe7d3); unbounded Google sign-out fixed inline |
+| F2-07 | Google native sign-in + sign-in/late-sign-out window fix | delegated writer (2+ non-trivial files) | [x] | `bbbe7d3` + `43cb088` | high → granted → approved (17c2bd5..bbbe7d3); unbounded Google sign-out fixed in `43cb088` → approved (bbbe7d3..43cb088) |
 
 ## Progress / evidence
 - 2026-10-09: plan approved; branches created; feature document created.
@@ -105,10 +105,11 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - Tests to add: rejected `onValid` clears `submitting`; AuthError code naming a prototype member; `touched` comment should say "changed via setValue".
 - Unverified: Supabase response to `resend({type:"signup"})` for an already confirmed address.
 - Device checks: reset link end to end (another phone → "mismo teléfono" message); cold start after killing the app mid-recovery should reopen `/restablecer-contrasena`; keep Supabase *Secure password change* off.
+- Test: empty-string iOS client id disables Google on iOS (defensive branch; `env.ts` already normalizes empty values to undefined).
 - Intermittent "SessionProvider … not wrapped in act" warning seen once in a full run (session.test.tsx); investigate if it recurs.
 - F3 screens: signed URLs (`url_lectura`, `foto_url`) expire after 5 min; add refetch/expiry handling where shown.
 - Readability nits (F1-04b review): reword the fake `signOut` mock comment in supabase.test.ts; unify the two `ignore()` helpers.
 - Web build stores the session in localStorage (preview only); revisit if web ever ships to users.
 
 ## Next step
-Feature complete pending F2-07 review; then final PR `feat/integracion-api-auth` → `develop` (user decision).
+**Feature complete** (all tasks checked, every candidate reviewed and approved). Next: user-owned delivery — push and open the PR chain (`feat/integracion-api-auth` → `develop`; API `feat/unidades-ml-g` → its base), plus the pending user setup (Expo/EAS, Google Cloud, Supabase dashboard, API e2e with Docker) and device checks listed above.
