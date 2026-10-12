@@ -3,7 +3,7 @@
  * (`index`), the no-access screen and the configuration error.
  */
 import { Redirect } from "expo-router";
-import { useState, type PropsWithChildren } from "react";
+import type { PropsWithChildren } from "react";
 import { Image, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -13,7 +13,8 @@ import { Button, Copy } from "@/components/findfood/ui";
 import type { ConfigError } from "@/config/env";
 import { colors } from "@/design/tokens";
 import { routeForAccess } from "@/navigation/access-route";
-import { useAccess, useMe, useSessionActions } from "@/state/session";
+import { useAccess, useMe } from "@/state/session";
+import { useSignOut } from "@/state/use-sign-out";
 
 /** Branded full-screen frame without the app header (its account menu needs access). */
 function StatusFrame({ children }: PropsWithChildren) {
@@ -37,18 +38,6 @@ function StatusFrame({ children }: PropsWithChildren) {
   );
 }
 
-/** Signs out, showing the button as busy meanwhile. */
-function useSignOut() {
-  const { cerrarSesion } = useSessionActions();
-  const [signingOut, setSigningOut] = useState(false);
-  const signOut = () => {
-    setSigningOut(true);
-    // cerrarSesion never rejects.
-    void cerrarSesion().finally(() => setSigningOut(false));
-  };
-  return { signOut, signingOut };
-}
-
 /** Also on the account steps (complete profile, change password): the way out of them. */
 export function SignOutButton({ variant = "primary" }: { variant?: "primary" | "outline" }) {
   const { signOut, signingOut } = useSignOut();
@@ -61,7 +50,7 @@ export function SignOutButton({ variant = "primary" }: { variant?: "primary" | "
 
 function StartupError() {
   const { error, refetch, isFetching } = useMe();
-  const { signOut } = useSignOut();
+  const { signOut, signingOut } = useSignOut();
   return (
     <StatusFrame>
       <ErrorState
@@ -69,7 +58,7 @@ function StartupError() {
         title="No pudimos cargar tu cuenta"
         onRetry={() => void refetch()}
         retrying={isFetching}
-        secondaryAction={{ label: "Cerrar sesión", onPress: signOut }}
+        secondaryAction={{ label: "Cerrar sesión", onPress: signOut, busy: signingOut }}
       />
     </StatusFrame>
   );

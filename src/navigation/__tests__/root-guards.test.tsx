@@ -14,7 +14,7 @@ import {
 } from "expo-router/testing-library";
 import { router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { Text } from "react-native";
+import { Alert, Text, type AlertButton } from "react-native";
 
 import * as RootLayoutModule from "@/app/_layout";
 import * as AccountModule from "@/app/cuenta";
@@ -57,6 +57,7 @@ const mockAccessStore = {
 let mockFonts: [boolean, Error | null] = [true, null];
 
 const mockSetActiveRole = jest.fn();
+const mockCerrarSesion = jest.fn(async () => {});
 
 jest.mock("@/state/session", () => {
   const { useSyncExternalStore } = jest.requireActual<typeof import("react")>("react");
@@ -67,7 +68,7 @@ jest.mock("@/state/session", () => {
     };
   };
   const getState = () => mockAccessStore.state;
-  const actions = { cerrarSesion: async () => {}, setRecovering: () => {} };
+  const actions = { cerrarSesion: () => mockCerrarSesion(), setRecovering: () => {} };
   return {
     SessionProvider: ({ children }: { children: unknown }) => children,
     useAccess: () => ({
@@ -160,6 +161,7 @@ beforeEach(() => {
   mockFonts = [true, null];
   hide.mockClear();
   mockSetActiveRole.mockClear();
+  mockCerrarSesion.mockReset().mockResolvedValue(undefined);
 });
 
 describe("splash screen", () => {
@@ -186,6 +188,18 @@ describe("splash screen", () => {
 
     expect(screen.queryByText(/^route:/)).toBeNull();
     expect(hide).not.toHaveBeenCalled();
+  });
+
+  it("gives way to an explanation when the fonts cannot be loaded", async () => {
+    mockFonts = [false, new Error("Font file missing")];
+
+    await renderApp(DONOR);
+
+    expect(
+      screen.getByText("No se pudo cargar la tipografía local. Vuelve a abrir la aplicación."),
+    ).toBeOnTheScreen();
+    expect(screen.queryByText(/^route:/)).toBeNull();
+    expect(hide).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -387,6 +401,26 @@ describe("role guards", () => {
 
     expect(await screen.findByText("Ver como donante")).toBeOnTheScreen();
     expect(screen.queryByText("Ver como voluntario")).toBeNull();
+  });
+
+  it("signs out from the account menu and lets the guards open the login", async () => {
+    const alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+    mockCerrarSesion.mockImplementation(async () => mockAccessStore.set(SIGNED_OUT));
+    try {
+      await renderApp(DONOR);
+      await screen.findByText("route:donante/(tabs)/index");
+      await act(async () => router.push("/cuenta"));
+
+      await fireEvent.press(await screen.findByRole("button", { name: "Cerrar sesión" }));
+      const buttons = alert.mock.calls[0][2] as AlertButton[];
+      await act(async () => buttons.find(({ style }) => style === "destructive")?.onPress?.());
+
+      expect(mockCerrarSesion).toHaveBeenCalledTimes(1);
+      expect(await screen.findByText("route:login")).toBeOnTheScreen();
+      expect(pathname()).toBe("/login");
+    } finally {
+      alert.mockRestore();
+    }
   });
 
   it("closes the volunteer segment when the account loses the role", async () => {

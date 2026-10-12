@@ -155,11 +155,18 @@ describe("signOutLocally", () => {
     mockStoredValues.set("another-key", "kept");
   }
 
+  /** A native client with the app in the foreground (its ticker running). */
   function loadClient() {
     const auth = fakeAuth();
     mockCreateClient.mockReturnValue({ auth });
-    const { module } = loadSupabase(REAL_ENV);
-    return { auth, signOutLocally: module.signOutLocally };
+    const { module, emitAppState } = loadSupabase(REAL_ENV);
+    emitAppState("active");
+    auth.startAutoRefresh.mockClear();
+    return {
+      auth,
+      signOutLocally: module.signOutLocally,
+      deadlineMs: module.SIGN_OUT_DEADLINE_MS,
+    };
   }
 
   it("signs out on this device and removes every key auth-js stores", async () => {
@@ -214,6 +221,104 @@ describe("signOutLocally", () => {
     finishSignOut();
     await done;
     expect(mockStoredValues.has("findfood.auth")).toBe(false);
+  });
+
+  it("pauses the refresh ticker until sign-out has finished", async () => {
+    seedStoredSession();
+    const { auth, signOutLocally } = loadClient();
+
+    await signOutLocally();
+
+    expect(auth.stopAutoRefresh).toHaveBeenCalledTimes(1);
+    expect(auth.stopAutoRefresh.mock.invocationCallOrder[0]).toBeLessThan(
+      auth.signOut.mock.invocationCallOrder[0],
+    );
+    expect(auth.startAutoRefresh).toHaveBeenCalledTimes(1);
+    expect(auth.startAutoRefresh.mock.invocationCallOrder[0]).toBeGreaterThan(
+      auth.signOut.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("leaves the ticker paused when the app went to the background meanwhile", async () => {
+    const auth = fakeAuth();
+    mockCreateClient.mockReturnValue({ auth });
+    const { module, emitAppState } = loadSupabase(REAL_ENV);
+    emitAppState("background");
+
+    await module.signOutLocally();
+
+    expect(auth.signOut).toHaveBeenCalledTimes(1);
+    expect(auth.startAutoRefresh).not.toHaveBeenCalled();
+  });
+
+  it("leaves the ticker to auth-js on web", async () => {
+    const auth = fakeAuth();
+    mockCreateClient.mockReturnValue({ auth });
+    const { module } = loadSupabase(REAL_ENV, "web");
+
+    await module.signOutLocally();
+
+    expect(auth.signOut).toHaveBeenCalledTimes(1);
+    expect(auth.stopAutoRefresh).not.toHaveBeenCalled();
+    expect(auth.startAutoRefresh).not.toHaveBeenCalled();
+  });
+
+  describe("when Supabase's sign-out hangs", () => {
+    // e.g. offline with an expired session: auth-js retries the refresh inside signOut.
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    function hangingSignOut(auth: ReturnType<typeof fakeAuth>) {
+      let settle: () => void = () => {};
+      auth.signOut.mockReturnValue(
+        new Promise((resolve) => {
+          settle = () => resolve({ error: null });
+        }),
+      );
+      return () => settle();
+    }
+
+    it("stops waiting at the deadline and removes the stored session anyway", async () => {
+      seedStoredSession();
+      const { auth, signOutLocally, deadlineMs } = loadClient();
+      hangingSignOut(auth);
+      let done = false;
+
+      const signingOut = signOutLocally().then(() => {
+        done = true;
+      });
+      await jest.advanceTimersByTimeAsync(deadlineMs - 1);
+      expect(done).toBe(false);
+      expect(mockStoredValues.has("findfood.auth")).toBe(true);
+
+      await jest.advanceTimersByTimeAsync(1);
+      await signingOut;
+
+      expect(done).toBe(true);
+      expect([...mockStoredValues.keys()]).toEqual(["another-key"]);
+      // The ticker stays paused while auth-js is still signing out.
+      expect(auth.startAutoRefresh).not.toHaveBeenCalled();
+    });
+
+    it("removes a session a late sign-out stored again after the deadline", async () => {
+      seedStoredSession();
+      const { auth, signOutLocally, deadlineMs } = loadClient();
+      const settle = hangingSignOut(auth);
+
+      const signingOut = signOutLocally();
+      await jest.advanceTimersByTimeAsync(deadlineMs);
+      await signingOut;
+      expect(mockStoredValues.has("findfood.auth")).toBe(false);
+
+      // Its refresh succeeded once the network was back, and stored the session again.
+      mockStoredValues.set("findfood.auth", '{"access_token":"refreshed"}');
+      mockStoredValues.set("findfood.auth-user", '{"id":"u-1"}');
+      settle();
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect([...mockStoredValues.keys()]).toEqual(["another-key"]);
+      expect(auth.startAutoRefresh).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("never rejects and removes every other key when one removal fails", async () => {

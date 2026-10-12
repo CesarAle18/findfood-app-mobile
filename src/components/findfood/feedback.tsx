@@ -77,8 +77,11 @@ export function ErrorState({
   onRetry?: () => void;
   /** True while the retry is in flight: the button shows a busy indicator. */
   retrying?: boolean;
-  /** For example "Cerrar sesión" when the app cannot start without this data. */
-  secondaryAction?: { label: string; onPress: () => void };
+  /**
+   * For example "Cerrar sesión" when the app cannot start without this data; `busy` shows
+   * it running and blocks repeated presses.
+   */
+  secondaryAction?: { label: string; onPress: () => void; busy?: boolean };
 }) {
   return (
     <View style={styles.center}>
@@ -97,7 +100,11 @@ export function ErrorState({
           </Button>
         ) : null}
         {secondaryAction ? (
-          <Button variant="outline" onPress={secondaryAction.onPress}>
+          <Button
+            variant="outline"
+            onPress={secondaryAction.onPress}
+            loading={secondaryAction.busy ?? false}
+          >
             {secondaryAction.label}
           </Button>
         ) : null}

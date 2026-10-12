@@ -396,6 +396,8 @@ try {
     accountHtml.includes("Ver como donante") &&
       accountHtml.includes("Ver como voluntario"),
   );
+  // Sign-out is an action (confirmed first), not a link to the login.
+  assert(accountHtml.includes("Cerrar sesión") && !accountHtml.includes('href="/login"'));
   // Without an `email` param the verification links back to login.
   const { VerifyEmailScreen } = require("../src/screens/account.tsx");
   assert(

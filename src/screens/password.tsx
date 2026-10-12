@@ -50,8 +50,11 @@ type Outcome = { code: string; failed: false } | { code: string; failed: true; e
 function useRecoveryExchange(
   code: string | undefined,
   flowId: string | undefined,
-  /** A recovery from an earlier link is in progress: a failure here must not end it. */
-  recoveringAlready: boolean,
+  /**
+   * A recovery from an earlier link is in progress: a failure here must not end it.
+   * Undefined until the stored flag is read (cold start): the exchange waits for it.
+   */
+  recoveringAlready: boolean | undefined,
 ) {
   const { setRecovering } = useSessionActions();
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -66,7 +69,7 @@ function useRecoveryExchange(
   }, []);
 
   useEffect(() => {
-    if (!code || started.current === code) return;
+    if (!code || recoveringAlready === undefined || started.current === code) return;
     started.current = code;
     const setByThisLink = !recoveringAlready;
     // Stored before the exchange: its session must never reach the gate as an ordinary
@@ -150,9 +153,15 @@ function ResetContent() {
   const linkError = single(params.error_code) ?? single(params.error);
   const { phase } = useAccess();
   const recovering = phase === "recovering";
-  const exchange = useRecoveryExchange(code, single(params.sb_flow_id), recovering);
+  // `loading`: the stored recovery flag (or the session) is not known yet.
+  const exchange = useRecoveryExchange(
+    code,
+    single(params.sb_flow_id),
+    phase === "loading" ? undefined : recovering,
+  );
 
   if (exchange.running) return <LoadingState label="Validando el enlace…" />;
+  if (phase === "loading") return <LoadingState />;
   const failure = exchange.outcome?.failed ? messageFor(exchange.outcome.error) : undefined;
   const problem =
     failure ??

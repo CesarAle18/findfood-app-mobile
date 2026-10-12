@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PropsWithChildren } from "react";
-import { StyleSheet, TextInput, View } from "react-native";
+import { Alert, Platform, StyleSheet, TextInput, View } from "react-native";
 import { isAuthError } from "@supabase/supabase-js";
 import { router, useLocalSearchParams, type Href } from "expo-router";
 import { messageFor } from "@/api/problem-messages";
@@ -44,6 +44,7 @@ import {
 import { useImpacto } from "@/services/perfil";
 import { useMobile } from "@/state/mobile-context";
 import { useAccess, useMe, useSession } from "@/state/session";
+import { useSignOut } from "@/state/use-sign-out";
 import { colors, fonts } from "@/design/tokens";
 
 import { SEND_CODE, SIGN_UP_ORIGIN } from "./auth";
@@ -244,9 +245,26 @@ function AccountIdentity({ me }: { me: MeDto }) {
   );
 }
 
+const SIGN_OUT_QUESTION = "¿Quieres cerrar la sesión en este teléfono?";
+
+/** Asks before signing out: a native alert, or the browser's dialog on web. */
+function confirmSignOut(onConfirm: () => void) {
+  if (Platform.OS === "web") {
+    // react-native-web's Alert.alert does nothing.
+    if (globalThis.confirm?.(SIGN_OUT_QUESTION)) onConfirm();
+    return;
+  }
+  Alert.alert("Cerrar sesión", SIGN_OUT_QUESTION, [
+    { text: "Cancelar", style: "cancel" },
+    { text: "Cerrar sesión", style: "destructive", onPress: onConfirm },
+  ]);
+}
+
 export function AccountScreen() {
   const me = useMe();
   const { activeRole, canDonor, canVolunteer, setActiveRole } = useAccess();
+  // Once the session ends, the guards close this screen and open the login.
+  const { signOut, signingOut } = useSignOut();
   const views = VIEWS.filter(({ role }) =>
     role === "DONANTE" ? canDonor : canVolunteer,
   );
@@ -264,7 +282,8 @@ export function AccountScreen() {
             <Pressing
               key={role}
               accessibilityRole="radio"
-              accessibilityState={{ checked: activeRole === role }}
+              accessibilityState={{ checked: activeRole === role, disabled: signingOut }}
+              disabled={signingOut}
               onPress={() => {
                 setActiveRole(role);
                 // Only the chosen view stays in the history: back never returns to the
@@ -295,7 +314,10 @@ export function AccountScreen() {
             </Pressing>
           ))}
         </Section>
-        <TextLink href="/login">Cerrar sesión</TextLink>
+        <Button variant="danger" onPress={() => confirmSignOut(signOut)} loading={signingOut}>
+          Cerrar sesión
+        </Button>
+        <FormMessage message={signingOut ? "Cerrando sesión…" : undefined} tone="info" />
       </Card>
     </Screen>
   );

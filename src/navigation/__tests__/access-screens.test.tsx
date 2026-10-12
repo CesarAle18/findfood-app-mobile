@@ -60,6 +60,27 @@ describe("AccessGateScreen", () => {
     expect(mockSession.cerrarSesion).toHaveBeenCalledTimes(1);
   });
 
+  it("shows the startup error's sign-out as busy until it finishes", async () => {
+    withPhase("error", ApiError.network(new TypeError("Network request failed")));
+    let finish: () => void = () => {};
+    mockSession.cerrarSesion.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await render(<AccessGateScreen />);
+
+    await pressSignOut();
+
+    const button = screen.getByRole("button", { name: "Cerrar sesión" });
+    expect(button).toBeBusy();
+    expect(button).toBeDisabled();
+    await act(async () => finish());
+    expect(screen.getByRole("button", { name: "Cerrar sesión" })).not.toBeBusy();
+    expect(mockSession.cerrarSesion).toHaveBeenCalledTimes(1);
+  });
+
   it("waits with a spinner while the phase is loading", async () => {
     withPhase("loading");
 

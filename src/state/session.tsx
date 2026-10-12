@@ -178,9 +178,22 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const sessionStatus = useSessionStatus();
   // Undefined until the stored flag is read (the access phase stays `loading` meanwhile).
   const [recovering, setRecoveringState] = useState<boolean | undefined>(undefined);
+  // The latest value, readable from async callbacks (the startup read checks it).
+  const recoveringNow = useRef<boolean | undefined>(undefined);
+  // Writes of the flag, one after another: storage ends with the latest value.
+  const recoveringWrites = useRef<Promise<void>>(Promise.resolve());
   // User intent only (undefined: not read yet, null: no choice); see resolveActiveRole.
   const [storedRole, setStoredRole] = useState<string | null | undefined>(undefined);
   const signingOut = useRef<Promise<void> | null>(null);
+
+  /** The only way the flag changes once known: state, the ref and storage stay in sync. */
+  const setRecovering = useCallback((value: boolean): Promise<void> => {
+    recoveringNow.current = value;
+    setRecoveringState(value);
+    const write = recoveringWrites.current.then(() => storeRecovering(value));
+    recoveringWrites.current = write;
+    return write;
+  }, []);
 
   const {
     data: me,
@@ -209,13 +222,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
       data: { subscription },
     } = client.auth.onAuthStateChange((event, session) => {
       heardEvent = true;
-      if (event === "PASSWORD_RECOVERY") {
-        setRecoveringState(true);
-        void storeRecovering(true);
-      }
+      if (event === "PASSWORD_RECOVERY") void setRecovering(true);
       if (event === "SIGNED_OUT") {
-        setRecoveringState(false);
-        void storeRecovering(false);
+        void setRecovering(false);
         queryClient.clear();
       }
       sessionStore.setSession(toSnapshot(session));
@@ -239,7 +248,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       active = false;
       subscription.unsubscribe();
     };
-  }, [queryClient]);
+  }, [queryClient, setRecovering]);
 
   // Read once the session is known: a stored flag only counts with the session it belongs
   // to. Without one (signed out, or the exchange never finished) it is forgotten.
@@ -248,15 +257,22 @@ export function SessionProvider({ children }: PropsWithChildren) {
     let active = true;
     const signedIn = sessionStatus === "present";
     void readItem(RECOVERING_KEY).then((value) => {
+      // A newer session status reads again. A change made meanwhile (a recovery link, a
+      // sign-out) wins over the stored flag, which may even be its own write: never
+      // delete it then.
+      if (!active || recoveringNow.current !== undefined) return;
       const stored = value === "1";
-      if (stored && !signedIn) void storeRecovering(false);
-      // A change made meanwhile (a recovery link, a sign-out) wins over the stored flag.
-      if (active) setRecoveringState((current) => current ?? (stored && signedIn));
+      if (stored && !signedIn) {
+        void setRecovering(false);
+        return;
+      }
+      recoveringNow.current = stored;
+      setRecoveringState(stored);
     });
     return () => {
       active = false;
     };
-  }, [sessionStatus]);
+  }, [sessionStatus, setRecovering]);
 
   useEffect(() => {
     let active = true;
@@ -284,22 +300,17 @@ export function SessionProvider({ children }: PropsWithChildren) {
           await Promise.all([
             deviceIdStorage.clear(),
             deleteItem(ACTIVE_ROLE_KEY),
-            storeRecovering(false),
+            setRecovering(false),
           ]);
           setStoredRole(null);
-          setRecoveringState(false);
         } finally {
           signingOut.current = null;
         }
       })();
       return signingOut.current;
     }
-    function setRecovering(value: boolean): Promise<void> {
-      setRecoveringState(value);
-      return storeRecovering(value);
-    }
     return { cerrarSesion, setRecovering };
-  }, [queryClient]);
+  }, [queryClient, setRecovering]);
 
   const { cerrarSesion } = actions;
   useEffect(

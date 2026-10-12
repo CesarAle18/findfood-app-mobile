@@ -372,6 +372,26 @@ describe("ResetPasswordScreen", () => {
     expect(searchParams()).toEqual({});
   });
 
+  it("waits for the stored recovery flag before deciding what a failing link ends", async () => {
+    // Cold start: the restored session's recovery flag is still being read.
+    mockSession.state = { phase: "loading", status: "present" };
+    mockAuth.exchangeCodeForSession.mockResolvedValue(authError("pkce_code_verifier_not_found"));
+    await renderAt(linkUrl);
+
+    expect(screen.getByText("Validando el enlace…")).toBeOnTheScreen();
+    expect(mockSetRecovering).not.toHaveBeenCalled();
+    expect(mockAuth.exchangeCodeForSession).not.toHaveBeenCalled();
+
+    // The flag was stored: a recovery from an earlier link is in progress.
+    await act(async () => mockSession.set({ phase: "recovering" }));
+
+    expect(await screen.findByText(/mismo teléfono/)).toBeOnTheScreen();
+    expect(mockAuth.exchangeCodeForSession).toHaveBeenCalledTimes(1);
+    expect(mockSetRecovering).not.toHaveBeenCalledWith(false);
+    expect(mockSession.state.phase).toBe("recovering");
+    expect(screen.getByLabelText("Nueva contraseña")).toBeOnTheScreen();
+  });
+
   it("keeps a recovery already in progress when an expired link is opened", async () => {
     mockSession.state = { phase: "recovering", status: "present" };
     await renderAt("/restablecer-contrasena?error=access_denied&error_code=otp_expired");

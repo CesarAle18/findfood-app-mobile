@@ -412,6 +412,64 @@ describe("real profile", () => {
       await waitFor(() => expect(mockSecureValues.has(RECOVERING_KEY)).toBe(false));
     });
 
+    describe("when a recovery starts while the stored flag is still being read", () => {
+      const getItem = jest.mocked(SecureStore.getItemAsync);
+      const readStored = getItem.getMockImplementation();
+      let heldReads: (() => void)[] = [];
+
+      /** Holds every read of the flag until `finishReads`, then reads storage. */
+      function holdFlagRead() {
+        heldReads = [];
+        getItem.mockImplementation((key: string) =>
+          key === RECOVERING_KEY
+            ? new Promise((resolve) => {
+                heldReads.push(() => resolve(mockSecureValues.get(key) ?? null));
+              })
+            : Promise.resolve(mockSecureValues.get(key) ?? null),
+        );
+      }
+
+      function finishReads() {
+        for (const finish of heldReads.splice(0)) finish();
+      }
+
+      beforeEach(() => {
+        // An old flag whose recovery session is gone.
+        mockSecureValues.set(RECOVERING_KEY, "1");
+        auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
+        holdFlagRead();
+      });
+
+      afterEach(() => {
+        getItem.mockImplementation(readStored);
+      });
+
+      it("keeps the flag a new reset link stored", async () => {
+        const { result } = await renderSession();
+        await waitFor(() => expect(result.current.session.status).toBe("none"));
+
+        await act(() => result.current.actions.setRecovering(true));
+        await act(async () => finishReads());
+
+        await waitFor(() => expect(result.current.access.phase).toBe("recovering"));
+        expect(mockSecureValues.get(RECOVERING_KEY)).toBe("1");
+      });
+
+      it("keeps the flag of a PASSWORD_RECOVERY event", async () => {
+        serve(() => ({ status: 200, body: me() }));
+        const { result } = await renderSession();
+        await waitFor(() => expect(result.current.session.status).toBe("none"));
+
+        // The event also brings the session: the flag is read again for it.
+        await act(async () => auth.emit("PASSWORD_RECOVERY", realSession));
+        await waitFor(() => expect(mockSecureValues.get(RECOVERING_KEY)).toBe("1"));
+        await act(async () => finishReads());
+
+        expect(result.current.access.phase).toBe("recovering");
+        expect(mockSecureValues.get(RECOVERING_KEY)).toBe("1");
+      });
+    });
+
     it("persists the flag, and clears it when the recovery ends or the session does", async () => {
       serve(() => ({ status: 200, body: me() }));
       const { result } = await renderSession();

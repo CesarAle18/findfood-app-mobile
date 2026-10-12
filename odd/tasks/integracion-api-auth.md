@@ -53,8 +53,8 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 | F1-10b | F1-10 review fixes: tolerant detail mapping, dedupe paged rows, filter auto-paging, rating copy | delegated writer (2+ non-trivial files) | [x] | `a67df98` + `0a2c6c8` | high → granted → approved, burned (1b7c697..a67df98); 2 readability warnings fixed in `0a2c6c8` → granted → approved, burned (a67df98..0a2c6c8) |
 | F1-11 | EAS dev build config | inline (config files + 1 test) | [x] | `60d581e` + `6fbe77d` + fix | high → granted → approved (0a2c6c8..60d581e); README overclaim fixed + automated release check in `6fbe77d` → approved (60d581e..6fbe77d); temp-dir leak on failure fixed in `ebab8f6` → approved (6fbe77d..ebab8f6) |
 | F2-01..03 | Login + register + OTP verification (one coherent email sign-in/sign-up flow) | delegated writer (2+ non-trivial files) | [x] | `ac9bbbd` + `8177d04` | high → granted → approved (ebab8f6..ac9bbbd); 3 warnings fixed in `8177d04` → approved (ac9bbbd..8177d04) |
-| F2-04+05 | Forgot/reset password (PKCE deep link) + complete profile + change password (shared new-password form; replace gate interim notices) | delegated writer (2+ non-trivial files) | [x] | `f2407a2` + fix (see log) | high → granted → approved, burned (8177d04..f2407a2); 3 warnings fixed in follow-up |
-| F2-06 | Account menu (switch view, logout) | delegated writer | [ ] | | |
+| F2-04+05 | Forgot/reset password (PKCE deep link) + complete profile + change password (shared new-password form; replace gate interim notices) | delegated writer (2+ non-trivial files) | [x] | `f2407a2` + `6471223` | high → granted → approved (8177d04..f2407a2); 3 warnings fixed in `6471223` → approved (f2407a2..6471223); 2 race warnings → F2-06 (single-correction rule) |
+| F2-06 | Account menu (switch view, logout) + assigned follow-ups | delegated writer (2+ non-trivial files) | [x] | see log | |
 | F2-07 | Google native sign-in | delegated writer | [ ] | | |
 
 ## Progress / evidence
@@ -83,15 +83,14 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - F2-01..03 fix: login navigates immediately with `enviar=1`; the verify screen sends once on mount and starts the cooldown only after a successful send; session-fallback/bare email = resend enabled now; `otpSchema` derives from `OTP_LENGTH`; shared `editableIf`; FormMessage uses tokens. RED 7 → GREEN 945/945; typecheck, lint, test:render ok.
 - F2-04+05: RED 8 suites/43 tests → GREEN 1009/1009; typecheck, lint, test:render (26 screens) ok (parent re-ran tests + typecheck). Mutation: removing `setRecovering(true)` → 9 tests fail. Reset uses `exchangeCodeForSession(code, { flowId })` with `sb_flow_id` when present; **decision: keep `experimental.appendPkceFlowIdToRedirects` off** (experimental) — the most recent reset link on the device works. `enviar`/`code` params cleared after the async step (setParams in a mount effect throws before the root layout mounts). `me` refetched on `SIGNED_IN`/`USER_UPDATED`.
 - F2-04+05 fix: recovery flag persisted (`findfood.recovering`, 3-state: unread/true/false; deleted when no session at startup); a failed link only clears a recovery it started; hidden forgot-password errors logged in `__DEV__` (name/code/status only). RED 8 → GREEN 1017/1017; mutation (flag starts `false`) → 2 tests fail; typecheck, lint, test:render ok.
+- F2-06: RED (after fixing a test-setup error) → GREEN 1033/1033; typecheck, lint, test:render ok (parent re-ran tests). `/cuenta` sign-out with native confirmation + blocking busy state; shared `useSignOut` with re-entry guard; `signOutLocally` 8 s deadline + key removal again on late settle; recovery flag single setter with serialized writes; reset screen waits for the flag. Device checks: Alert look, offline sign-out ~8 s, ticker restart after re-login, rare TOKEN_REFRESHED after deadline.
 
 ## Follow-ups
 - API: assert `factor_a_kg` of ML/G in e2e; note in migration header that ON CONFLICT never corrects pre-existing rows.
 - scripts/dev-env.mjs: `\uFEFF` escape (written as text) instead of a literal BOM character; reject TTL that yields exp <= iat + 60; reject positional args for `real`; add `node --test` coverage for marker/role/postman parsing (R3-dev-env-untested, WARNING).
 
 - Done: env.test.ts typed `require` cast (F1-02); client refresh hardening (F1-03); shared-refresh deadline, late abort check, supabase wiring tests (F1-04).
-- F2-06: StartupError "Cerrar sesión" must show busy/disabled (`signingOut`) and `useSignOut` needs a re-entry guard (R3-001, F1-08 review).
-- Tests: font-load error branch of RootNavigator (R3-002); release builds should report invalid config to a crash reporter once one exists (R4).
-- F2-06: offline sign-out with an expired session can take ~25-30 s (auth-js retries the refresh inside `signOut`); give `signOutLocally` an overall deadline (then remove keys anyway) and show a blocking "Cerrando sesión…" state; add an end-to-end offline sign-out test. Old `sb-*` SecureStore entries from earlier dev builds stay orphaned (users sign in once more) — optional one-time cleanup.
+- Release builds should report invalid config to a crash reporter once one exists (R4).
 - Push registration (F3): log a failed rollback DELETE, reword the `registrarDispositivo` comment (it cannot guarantee no orphan when the DELETE also fails), test DELETE-also-fails, and route `deviceIdStorage.save` through a shared throwing write helper.
 - Done in F1-10: tolerant list rows, `fallbackCategory`, tone comment, shared `errorCode` helper, strict `fromFechaVencimiento`, `dismissTo` test, RatingScreen `rater` prop.
 - Device check pending: iOS scroll behind native tab bar, Android bottom insets; consider expo-router `ThemeProvider` to avoid white flash between tabs (iOS 26 ignores tab bar backgroundColor).
@@ -109,4 +108,4 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - Web build stores the session in localStorage (preview only); revisit if web ever ships to users.
 
 ## Next step
-F2-06 account menu + logout. Review boundary: `8177d04`.
+F2-07 Google native. Review boundary: `6471223`.

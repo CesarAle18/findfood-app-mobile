@@ -7,6 +7,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Slot } from "expo-router";
 import { act, fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
+import { Alert, type AlertButton } from "react-native";
 
 import { api } from "@/api";
 import { ApiError } from "@/api/errors";
@@ -39,7 +40,10 @@ const mockMe = {
   refetch: jest.fn(async () => {}),
 };
 
+const mockCerrarSesion = jest.fn<Promise<void>, []>();
+
 jest.mock("@/state/session", () => ({
+  useSessionActions: () => ({ cerrarSesion: mockCerrarSesion, setRecovering: async () => {} }),
   useMe: () => mockMe,
   useAccess: () => ({
     phase: "app",
@@ -79,8 +83,11 @@ async function renderScreen(Component: React.ComponentType, initialUrl = "/panta
   function Pantalla() {
     return <Component />;
   }
-  await renderRouter({ _layout: Layout, pantalla: Pantalla }, { initialUrl });
+  rendered = renderRouter({ _layout: Layout, pantalla: Pantalla }, { initialUrl });
+  await rendered;
 }
+
+let rendered: ReturnType<typeof renderRouter> | undefined;
 
 const withId = `/pantalla?id=${DONATION_ID}`;
 const detailPath = `/donaciones/${DONATION_ID}`;
@@ -453,6 +460,86 @@ describe("AccountScreen", () => {
 
     expect(screen.getByText("María García López")).toBeOnTheScreen();
     expect(screen.getByText("maria@correo.com")).toBeOnTheScreen();
+  });
+
+  describe("sign-out", () => {
+    let alert: jest.SpyInstance;
+
+    beforeEach(() => {
+      mockCerrarSesion.mockReset().mockResolvedValue(undefined);
+      alert = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      alert.mockRestore();
+    });
+
+    /** The buttons of the confirmation the last press opened. */
+    function confirmation(): AlertButton[] {
+      expect(alert).toHaveBeenCalledTimes(1);
+      const [title, message, buttons] = alert.mock.calls[0] as [string, string, AlertButton[]];
+      expect(title).toBe("Cerrar sesión");
+      expect(message).toBe("¿Quieres cerrar la sesión en este teléfono?");
+      return buttons;
+    }
+
+    const signOutButton = () => screen.getByRole("button", { name: "Cerrar sesión" });
+
+    it("is an action that asks first, not a link to the login", async () => {
+      await renderScreen(AccountScreen);
+
+      expect(screen.queryByRole("link", { name: "Cerrar sesión" })).toBeNull();
+      await fireEvent.press(signOutButton());
+
+      const buttons = confirmation();
+      expect(buttons.map(({ text, style }) => [text, style])).toEqual([
+        ["Cancelar", "cancel"],
+        ["Cerrar sesión", "destructive"],
+      ]);
+      expect(mockCerrarSesion).not.toHaveBeenCalled();
+    });
+
+    it("does nothing when cancelled", async () => {
+      await renderScreen(AccountScreen);
+      await fireEvent.press(signOutButton());
+
+      const [cancel] = confirmation();
+      await act(async () => cancel.onPress?.());
+
+      expect(mockCerrarSesion).not.toHaveBeenCalled();
+      expect(signOutButton()).not.toBeBusy();
+    });
+
+    it("signs out once confirmed, blocking the menu until it finishes", async () => {
+      let finish: () => void = () => {};
+      mockCerrarSesion.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      );
+      await renderScreen(AccountScreen);
+      await fireEvent.press(signOutButton());
+
+      const [, confirm] = confirmation();
+      // A second tap on the confirmation must not start another sign-out.
+      await act(async () => {
+        confirm.onPress?.();
+        confirm.onPress?.();
+      });
+
+      expect(mockCerrarSesion).toHaveBeenCalledTimes(1);
+      expect(signOutButton()).toBeBusy();
+      expect(signOutButton()).toBeDisabled();
+      expect(screen.getByText("Cerrando sesión…")).toBeOnTheScreen();
+      for (const view of screen.getAllByRole("radio")) expect(view).toBeDisabled();
+      // The guards leave the screen once the session ends: it never navigates itself.
+      expect(rendered?.getPathname()).toBe("/pantalla");
+
+      await act(async () => finish());
+      expect(signOutButton()).not.toBeBusy();
+      expect(screen.queryByText("Cerrando sesión…")).toBeNull();
+    });
   });
 });
 

@@ -78,7 +78,7 @@ La raíz (`src/app/_layout.tsx`) mantiene el splash hasta resolver la sesión y 
 - `/donante`: pestañas nativas Inicio, Donaciones, Alertas y Perfil; requiere el rol `DONANTE`.
 - `/voluntario`: pestañas nativas Inicio, Rutas, Alertas y Perfil; requiere el rol `VOLUNTARIO`.
 
-Un donante sin rol voluntario no puede abrir `/voluntario/*`, ni siquiera por enlace profundo: la ruta bloqueada se descarta y vuelve al índice. El menú de tres puntos abre `/cuenta`, donde «Cambiar vista» solo ofrece los roles que tiene la cuenta.
+Un donante sin rol voluntario no puede abrir `/voluntario/*`, ni siquiera por enlace profundo: la ruta bloqueada se descarta y vuelve al índice. El menú de tres puntos abre `/cuenta`, donde «Cambiar vista» solo ofrece los roles que tiene la cuenta y «Cerrar sesión» pide confirmación antes de cerrar la sesión en el teléfono. Mientras se cierra, el menú queda bloqueado con el aviso «Cerrando sesión…»; al terminar, las guardas llevan a `/login` sin navegación manual. El cierre de sesión es local y acotado: se intenta dar de baja el dispositivo de notificaciones (como máximo 3 s) y, si Supabase no responde en 8 s (por ejemplo, sin conexión y con la sesión vencida), se borra igualmente la sesión guardada.
 
 El formulario `/donante/registro-voluntario` tiene scroll, tipo de identificación, datos personales y de vehículo, y espacios para fotos de documento, vehículo y licencia. Los campos y selectores habilitados actualizan estado local; «Enviar» vuelve al inicio donante como navegación de demostración.
 
