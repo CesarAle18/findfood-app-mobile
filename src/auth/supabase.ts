@@ -76,6 +76,29 @@ if (supabase) {
   });
 }
 
+/** Sign-in requests still running (see trackSignIn). */
+const signInsInFlight = new Set<Promise<unknown>>();
+
+/**
+ * Wraps a Supabase request that may store a new session (a sign-in, a verified code, a reset
+ * link's exchange) and returns it unchanged. auth-js stores the session before it emits
+ * SIGNED_IN, so a late sign-out cleanup that ran in between would remove the new session:
+ * the cleanup waits for every tracked request to settle first, and then only runs when no
+ * new session arrived (a failed sign-in leaves the old session to remove).
+ */
+export function trackSignIn<T>(request: Promise<T>): Promise<T> {
+  signInsInFlight.add(request);
+  const untrack = () => {
+    signInsInFlight.delete(request);
+  };
+  request.then(untrack, untrack);
+  return request;
+}
+
+async function signInsSettled(): Promise<void> {
+  while (signInsInFlight.size > 0) await Promise.allSettled([...signInsInFlight]);
+}
+
 const refresher = supabase ? createAccessTokenRefresher(supabase.auth) : null;
 
 /**
@@ -133,7 +156,11 @@ async function removeStoredSession(storage: AuthStorage): Promise<void> {
  */
 export const SIGN_OUT_DEADLINE_MS = 8_000;
 
-/** Sign-outs still waiting for auth-js; the ticker stays paused while there is one. */
+/**
+ * Sign-outs whose wait (auth-js or the deadline, whichever ends first) is still running; the
+ * ticker stays paused while there is one. It restarts as soon as the wait ends, even when
+ * auth-js is still signing out after the deadline.
+ */
 let pendingSignOuts = 0;
 
 /**
@@ -148,15 +175,17 @@ let pendingSignOuts = 0;
  *
  * After the deadline, a refresh `signOut` started can still store the session: the keys
  * are removed again when it settles, unless a new session (or another sign-out) came
- * first, whose keys those now are. The refresh ticker (native only; auth-js manages it on
- * web) is paused while waiting and runs again afterwards if the app is in the foreground:
- * a next sign-in needs it, and without a stored session it has nothing to refresh.
+ * first, whose keys those now are. A sign-in still running (see trackSignIn) is waited
+ * for before deciding. The refresh ticker (native only; auth-js manages it on web) is
+ * paused while waiting and runs again afterwards if the app is in the foreground: a next
+ * sign-in needs it, and without a stored session it has nothing to refresh.
  */
 export async function signOutLocally(): Promise<void> {
   if (!supabase) return;
   const { auth } = supabase;
   const generation = ++sessionGeneration;
   const removeIfStillCurrent = async () => {
+    await signInsSettled();
     if (generation === sessionGeneration) await removeStoredSession(secureStorage);
   };
   pendingSignOuts += 1;

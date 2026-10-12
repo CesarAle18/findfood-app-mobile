@@ -54,8 +54,8 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 | F1-11 | EAS dev build config | inline (config files + 1 test) | [x] | `60d581e` + `6fbe77d` + fix | high → granted → approved (0a2c6c8..60d581e); README overclaim fixed + automated release check in `6fbe77d` → approved (60d581e..6fbe77d); temp-dir leak on failure fixed in `ebab8f6` → approved (6fbe77d..ebab8f6) |
 | F2-01..03 | Login + register + OTP verification (one coherent email sign-in/sign-up flow) | delegated writer (2+ non-trivial files) | [x] | `ac9bbbd` + `8177d04` | high → granted → approved (ebab8f6..ac9bbbd); 3 warnings fixed in `8177d04` → approved (ac9bbbd..8177d04) |
 | F2-04+05 | Forgot/reset password (PKCE deep link) + complete profile + change password (shared new-password form; replace gate interim notices) | delegated writer (2+ non-trivial files) | [x] | `f2407a2` + `6471223` | high → granted → approved (8177d04..f2407a2); 3 warnings fixed in `6471223` → approved (f2407a2..6471223); 2 race warnings → F2-06 (single-correction rule) |
-| F2-06 | Account menu (switch view, logout) + assigned follow-ups | delegated writer (2+ non-trivial files) | [x] | `9f4deec` + fix (see log) | high → granted → approved (6471223..9f4deec); late-settle bug fixed in follow-up |
-| F2-07 | Google native sign-in | delegated writer | [ ] | | |
+| F2-06 | Account menu (switch view, logout) + assigned follow-ups | delegated writer (2+ non-trivial files) | [x] | `9f4deec` + `17c2bd5` | high → granted → approved (6471223..9f4deec); late-settle bug fixed in `17c2bd5` → approved (9f4deec..17c2bd5); window race + comment → F2-07 |
+| F2-07 | Google native sign-in + sign-in/late-sign-out window fix | delegated writer (2+ non-trivial files) | [x] | see log | |
 
 ## Progress / evidence
 - 2026-10-09: plan approved; branches created; feature document created.
@@ -85,6 +85,7 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - F2-04+05 fix: recovery flag persisted (`findfood.recovering`, 3-state: unread/true/false; deleted when no session at startup); a failed link only clears a recovery it started; hidden forgot-password errors logged in `__DEV__` (name/code/status only). RED 8 → GREEN 1017/1017; mutation (flag starts `false`) → 2 tests fail; typecheck, lint, test:render ok.
 - F2-06: RED (after fixing a test-setup error) → GREEN 1033/1033; typecheck, lint, test:render ok (parent re-ran tests). `/cuenta` sign-out with native confirmation + blocking busy state; shared `useSignOut` with re-entry guard; `signOutLocally` 8 s deadline + key removal again on late settle; recovery flag single setter with serialized writes; reset screen waits for the flag. Device checks: Alert look, offline sign-out ~8 s, ticker restart after re-login, rare TOKEN_REFRESHED after deadline.
 - F2-06 fix: late `signOut` cleanup guarded by a session generation (bumped on SIGNED_IN/PASSWORD_RECOVERY and each sign-out) so a re-login after the deadline keeps its session; ticker restarts at the end of the wait. RED 2 → GREEN 1036/1036; provider-level test proves the deadline path ends the in-app session (phase auth → /login).
+- F2-07: `@react-native-google-signin/google-signin` ^16.1.5; `app.config.ts` adds the plugin with `iosUrlScheme` derived from `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` (none needed on Android). `signInWithGoogle` → `signInWithIdToken`; cancel/IN_PROGRESS show nothing; Google sign-out best-effort. Window race fixed with `trackSignIn` (late sign-out cleanup waits for in-flight sign-ins) instead of a pre-bump, so a failed sign-in still lets the stale session be removed. RED in 7 suites → GREEN 1079/1079 (parent added `trackSignIn` to 2 navigation test mocks outside the writer surface); typecheck, lint, test:render ok; `expo config` resolves the plugin only with the iOS id.
 
 ## Follow-ups
 - API: assert `factor_a_kg` of ML/G in e2e; note in migration header that ON CONFLICT never corrects pre-existing rows.
@@ -109,4 +110,4 @@ The app is a demo shell: fixtures in `src/data/mobile.ts`, local role toggle, st
 - Web build stores the session in localStorage (preview only); revisit if web ever ships to users.
 
 ## Next step
-F2-07 Google native. Review boundary: `6471223`.
+Feature complete pending F2-07 review; then final PR `feat/integracion-api-auth` → `develop` (user decision).

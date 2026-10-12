@@ -63,6 +63,7 @@ jest.mock("@/auth/supabase", () => ({
   // Called through a wrapper: the factory runs before `mockSignInWithPassword` is assigned.
   supabase: { auth: { signInWithPassword: (credentials: unknown) => mockSignInWithPassword(credentials) } },
   refreshAccessToken: async () => null,
+  trackSignIn: <T,>(request: Promise<T>) => request,
 }));
 
 jest.mock("@/services/notificaciones", () => ({

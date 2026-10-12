@@ -227,6 +227,16 @@ Module._load = function (name, parent, isMain) {
       updatePassword: unused,
     };
   }
+  // The real module loads Google Sign-In's native module and the Supabase client; the login
+  // only starts it from a handler.
+  if (name === "@/auth/google-auth")
+    return {
+      isGoogleSignInAvailable: () => true,
+      signInWithGoogle: async () => {
+        throw new Error("not available in the render check");
+      },
+      signOutFromGoogle: async () => {},
+    };
   if (name === "@tanstack/react-query")
     return {
       ...original.call(this, name, parent, isMain),
@@ -428,6 +438,7 @@ try {
   const loginHtml = renderToStaticMarkup(React.createElement(LoginScreen));
   assert(loginHtml.includes("Iniciar sesión") && loginHtml.includes('href="/registro"'));
   assert(!loginHtml.includes('href="/donante"'));
+  assert(loginHtml.includes("Continuar con Google") && !loginHtml.includes("próximamente"));
   const registerHtml = renderToStaticMarkup(React.createElement(RegisterScreen));
   assert(registerHtml.includes("Apellidos") && registerHtml.includes("Celular"));
   assert(!/documento/i.test(registerHtml));

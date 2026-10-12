@@ -24,11 +24,13 @@ const mockAuth = {
   updateUser: jest.fn(),
 };
 let mockClient: { auth: typeof mockAuth } | null = { auth: mockAuth };
+const mockTrackSignIn = jest.fn(<T,>(request: Promise<T>) => request);
 
 jest.mock("./supabase", () => ({
   get supabase() {
     return mockClient;
   },
+  trackSignIn: <T,>(request: Promise<T>) => mockTrackSignIn(request),
 }));
 
 // A development build's URL for the app scheme (see app.json `scheme`).
@@ -54,6 +56,36 @@ const registration = {
 beforeEach(() => {
   mockClient = { auth: mockAuth };
   for (const fn of Object.values(mockAuth)) fn.mockReset();
+  mockTrackSignIn.mockClear();
+});
+
+describe("requests that may store a new session", () => {
+  // A sign-out still settling must not remove a session stored before SIGNED_IN fires.
+  it.each([
+    ["signIn", mockAuth.signInWithPassword, () => signIn({ email: "a@b.co", password: "x" })],
+    ["signUp", mockAuth.signUp, () => signUp(registration)],
+    ["verifyEmailOtp", mockAuth.verifyOtp, () => verifyEmailOtp("a@b.co", "123456")],
+    ["exchangeRecoveryCode", mockAuth.exchangeCodeForSession, () => exchangeRecoveryCode("code")],
+  ])("%s is tracked as a sign-in", async (_name, request, action) => {
+    request.mockResolvedValue({ data: { user: user(), session }, error: null });
+
+    await action();
+
+    expect(mockTrackSignIn).toHaveBeenCalledTimes(1);
+    expect(mockTrackSignIn).toHaveBeenCalledWith(request.mock.results[0].value);
+  });
+
+  it.each([
+    ["resendSignupOtp", mockAuth.resend, () => resendSignupOtp("a@b.co")],
+    ["requestPasswordReset", mockAuth.resetPasswordForEmail, () => requestPasswordReset("a@b.co")],
+    ["updatePassword", mockAuth.updateUser, () => updatePassword("nueva1234")],
+  ])("%s is not", async (_name, request, action) => {
+    request.mockResolvedValue({ data: { user: user() }, error: null });
+
+    await action();
+
+    expect(mockTrackSignIn).not.toHaveBeenCalled();
+  });
 });
 
 describe("signIn", () => {

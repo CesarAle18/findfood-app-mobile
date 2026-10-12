@@ -91,6 +91,7 @@ jest.mock("@/auth/supabase", () => ({
     return mockClient;
   },
   refreshAccessToken: async () => null,
+  trackSignIn: <T,>(request: Promise<T>) => request,
 }));
 
 jest.mock("expo-linking", () => ({

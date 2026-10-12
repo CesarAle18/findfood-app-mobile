@@ -19,6 +19,11 @@ for (const [name, value] of Object.entries(TEST_ENV)) {
 // mode (animations jump to their final values, layout animations are skipped).
 jest.mock("react-native-worklets", () => require("react-native-worklets/src/mock"));
 
+// Google Sign-In's native module does not exist under Jest. Its own setup replaces only the
+// native module (the JS API, status codes and response helpers stay real); it is loaded by
+// path, as the library documents, because the package's `exports` do not expose it.
+require("./node_modules/@react-native-google-signin/google-signin/jest/build/jest/setup.js");
+
 // FlashList lays items out from native measurements, which do not exist under Jest. Its own
 // `@shopify/flash-list/jestSetup` (2.0.2) also remaps `FlashList` to an export that no longer
 // exists, so only the measurements are replaced here: a 400x900 viewport, 100 pt items.

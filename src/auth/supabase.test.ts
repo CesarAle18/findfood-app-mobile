@@ -174,6 +174,7 @@ describe("signOutLocally", () => {
     return {
       auth,
       signOutLocally: module.signOutLocally,
+      trackSignIn: module.trackSignIn,
       deadlineMs: module.SIGN_OUT_DEADLINE_MS,
     };
   }
@@ -355,6 +356,65 @@ describe("signOutLocally", () => {
       expect(auth.stopAutoRefresh.mock.invocationCallOrder[0]).toBeLessThan(
         auth.startAutoRefresh.mock.invocationCallOrder[0],
       );
+    });
+
+    describe("while a sign-in is running", () => {
+      /** A tracked sign-in request that the test settles. */
+      function pendingSignIn(trackSignIn: (request: Promise<unknown>) => Promise<unknown>) {
+        let finish: (result: { error: Error | null }) => void = () => {};
+        const request = trackSignIn(
+          new Promise<{ error: Error | null }>((resolve) => {
+            finish = resolve;
+          }),
+        );
+        return { request, finish };
+      }
+
+      it("keeps the session it stored before SIGNED_IN when the old sign-out settles in between", async () => {
+        seedStoredSession();
+        const { auth, signOutLocally, trackSignIn, deadlineMs } = loadClient();
+        const settle = hangingSignOut(auth);
+        const signingOut = signOutLocally();
+        await jest.advanceTimersByTimeAsync(deadlineMs);
+        await signingOut;
+
+        // auth-js stores the new session first and emits SIGNED_IN afterwards.
+        const signIn = pendingSignIn(trackSignIn);
+        const newSession = '{"access_token":"new-sign-in"}';
+        mockStoredValues.set("findfood.auth", newSession);
+        settle();
+        await jest.advanceTimersByTimeAsync(0);
+        expect(mockStoredValues.get("findfood.auth")).toBe(newSession);
+
+        auth.emit("SIGNED_IN", { access_token: "new-sign-in" });
+        signIn.finish({ error: null });
+        await signIn.request;
+        await jest.advanceTimersByTimeAsync(0);
+
+        expect(mockStoredValues.get("findfood.auth")).toBe(newSession);
+      });
+
+      it("still removes the old session once a failed sign-in has settled", async () => {
+        seedStoredSession();
+        const { auth, signOutLocally, trackSignIn, deadlineMs } = loadClient();
+        const settle = hangingSignOut(auth);
+        const signingOut = signOutLocally();
+        await jest.advanceTimersByTimeAsync(deadlineMs);
+        await signingOut;
+
+        const signIn = pendingSignIn(trackSignIn);
+        // The abandoned sign-out's refresh stored the old session again.
+        mockStoredValues.set("findfood.auth", '{"access_token":"refreshed"}');
+        settle();
+        await jest.advanceTimersByTimeAsync(0);
+        expect(mockStoredValues.has("findfood.auth")).toBe(true);
+
+        signIn.finish({ error: new Error("Invalid login credentials") });
+        await signIn.request;
+        await jest.advanceTimersByTimeAsync(0);
+
+        expect([...mockStoredValues.keys()]).toEqual(["another-key"]);
+      });
     });
 
     it("leaves the late settle of a superseded sign-out to the newer one", async () => {

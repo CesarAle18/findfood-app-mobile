@@ -64,4 +64,4 @@ Las fechas siguen usando DD/MM/AAAA y las horas HH:mm en el modelo de presentaci
 | Authentication → SMTP Settings | SMTP propio | El SMTP integrado solo envía unos pocos correos por hora. |
 | Authentication → Providers → Google | Habilitar; *Client IDs*: primero el ID web y luego el de iOS; secreto del cliente web; activar *Skip nonce checks* | Inicio de sesión nativo con `signInWithIdToken`. |
 
-En Google Cloud se registran el cliente web, el cliente iOS y el cliente Android con las huellas SHA-1 del keystore de EAS y del de Google Play.
+En Google Cloud se registran el cliente web, el cliente iOS y el cliente Android (paquete `co.findfood.app`) con las huellas SHA-1 del keystore de EAS y del certificado de firma de Google Play. La app usa la API original de `@react-native-google-signin/google-signin`, que no envía nonce; por eso *Skip nonce checks* debe seguir activo. Los pasos de la app (variables y build) están en la sección «Acceso con Google» del README.

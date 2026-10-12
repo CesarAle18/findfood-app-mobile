@@ -4,6 +4,9 @@
  * environment variables are out of reach here; the real protection is that the token is
  * read only under `__DEV__` (proved by `npm run check:release-token`).
  */
+import type { ConfigContext } from "expo/config";
+
+import appConfig from "../../app.config";
 import appJson from "../../app.json";
 import easJson from "../../eas.json";
 
@@ -25,6 +28,49 @@ describe("app.json", () => {
 
   it("loads the dev client plugin", () => {
     expect(appJson.expo.plugins).toContain("expo-dev-client");
+  });
+});
+
+describe("app.config.ts", () => {
+  const GOOGLE_PLUGIN = "@react-native-google-signin/google-signin";
+  const IOS_CLIENT_ID = "123456789-abcdef.apps.googleusercontent.com";
+  const originalIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+
+  /** The config Expo resolves: app.json's `expo` passed through app.config.ts. */
+  function resolveConfig(iosClientId: string | undefined) {
+    if (iosClientId === undefined) delete process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+    else process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID = iosClientId;
+    const context = { config: structuredClone(appJson.expo) } as unknown as ConfigContext;
+    return appConfig(context);
+  }
+
+  afterEach(() => {
+    if (originalIosClientId === undefined) delete process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+    else process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID = originalIosClientId;
+  });
+
+  it("keeps everything app.json declares", () => {
+    expect(resolveConfig(undefined)).toEqual(appJson.expo);
+  });
+
+  it("adds Google Sign-In's URL scheme for iOS, derived from the iOS client id", () => {
+    const { plugins } = resolveConfig(` ${IOS_CLIENT_ID} `);
+
+    expect(plugins).toEqual([
+      ...appJson.expo.plugins,
+      [GOOGLE_PLUGIN, { iosUrlScheme: "com.googleusercontent.apps.123456789-abcdef" }],
+    ]);
+  });
+
+  it("leaves the plugin out without an iOS client id (Android needs no native setup)", () => {
+    expect(JSON.stringify(resolveConfig("").plugins)).not.toContain(GOOGLE_PLUGIN);
+    expect(JSON.stringify(appJson.expo.plugins)).not.toContain(GOOGLE_PLUGIN);
+  });
+
+  it("fails the build on an iOS client id with the wrong shape", () => {
+    expect(() => resolveConfig("com.googleusercontent.apps.123")).toThrow(
+      /EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID/,
+    );
   });
 });
 

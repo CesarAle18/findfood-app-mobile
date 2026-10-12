@@ -1,9 +1,9 @@
 import { isAuthError, isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { View } from "react-native";
 
-import { authErrorMessages } from "@/api/problem-messages";
+import { authErrorMessages, messageFor } from "@/api/problem-messages";
 import {
   AUTH_UNAVAILABLE_CODE,
   isEmailAuthAvailable,
@@ -11,6 +11,7 @@ import {
   signIn,
   signUp,
 } from "@/auth/email-auth";
+import { isGoogleSignInAvailable, signInWithGoogle } from "@/auth/google-auth";
 import {
   Button,
   Card,
@@ -70,10 +71,40 @@ function LocalProfileNotice() {
   );
 }
 
+/**
+ * Google sign-in state for the login: one attempt at a time (the ref also blocks presses
+ * that arrive before the busy state renders). A closed account picker shows nothing; a
+ * successful sign-in never navigates (see openVerification).
+ */
+function useGoogleSignIn() {
+  const available = isGoogleSignInAvailable();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const running = useRef(false);
+
+  async function start() {
+    if (running.current) return;
+    running.current = true;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await signInWithGoogle();
+    } catch (failure) {
+      setError(messageFor(failure));
+    } finally {
+      running.current = false;
+      setBusy(false);
+    }
+  }
+
+  return { available, busy, error, start };
+}
+
 const LOGIN_INITIAL = { email: "", password: "" };
 
 export function LoginScreen() {
   const available = isEmailAuthAvailable();
+  const google = useGoogleSignIn();
   const form = useZodForm(loginSchema, LOGIN_INITIAL);
   const submit = form.handleSubmit(async (credentials) => {
     try {
@@ -125,7 +156,11 @@ export function LoginScreen() {
         </TextLink>
       </View>
       <FormMessage message={form.formError} />
-      <Button onPress={submit} loading={form.submitting} disabled={!available}>
+      <Button
+        onPress={submit}
+        loading={form.submitting}
+        disabled={!available || google.busy}
+      >
         Iniciar sesión
       </Button>
       <View
@@ -137,13 +172,17 @@ export function LoginScreen() {
         }}
       >
         <Copy tone="secondary" style={{ fontSize: 11, textAlign: "center" }}>
-          o continúa con
+          o
         </Copy>
-        {/* TODO(F2-07): native Google sign-in. Without onPress the button stays disabled. */}
-        <Button variant="outline">Google</Button>
-        <Copy tone="secondary" style={{ fontSize: 11, textAlign: "center" }}>
-          El acceso con Google estará disponible próximamente.
-        </Copy>
+        <Button
+          variant="outline"
+          onPress={() => void google.start()}
+          loading={google.busy}
+          disabled={!google.available || form.submitting}
+        >
+          Continuar con Google
+        </Button>
+        <FormMessage message={google.error} />
       </View>
       <TextLink href="/registro">¿No tienes cuenta? Regístrate</TextLink>
     </Screen>

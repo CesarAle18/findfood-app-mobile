@@ -176,6 +176,14 @@ export const authErrorMessages: Readonly<Record<string, string>> = {
   // App-defined (src/auth/email-auth.ts): email auth in a profile without Supabase.
   auth_unavailable:
     "Este perfil local no usa Supabase: la sesión se inicia con el token de desarrollo. Usa el perfil real para iniciar sesión o registrarte.",
+  // Supabase: the Google provider is off in the project.
+  provider_disabled: "El acceso con Google no está habilitado en este momento. Usa tu correo y contraseña.",
+  // App-defined (src/auth/google-auth.ts): native Google sign-in failures.
+  google_unavailable: "El acceso con Google no está disponible en esta versión de la app.",
+  google_play_services_unavailable:
+    "Para continuar con Google, instala o actualiza los servicios de Google Play en este teléfono.",
+  google_id_token_missing: "Google no envió los datos necesarios para iniciar sesión. Inténtalo de nuevo.",
+  google_sign_in_failed: "No pudimos iniciar sesión con Google. Inténtalo de nuevo.",
 };
 
 const UNEXPECTED_MESSAGE = "Ocurrió un error inesperado. Inténtalo de nuevo.";

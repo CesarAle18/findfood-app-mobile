@@ -3,7 +3,7 @@
  * is mounted under expo-router's testing library with the other auth routes, so the tests
  * can follow the navigation between them.
  */
-import { AuthApiError } from "@supabase/supabase-js";
+import { AuthApiError, AuthError } from "@supabase/supabase-js";
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { router, Slot } from "expo-router";
 import { act, fireEvent, renderRouter, screen } from "expo-router/testing-library";
@@ -33,6 +33,16 @@ jest.mock("@/auth/supabase", () => ({
     return mockClient;
   },
   refreshAccessToken: async () => null,
+  trackSignIn: <T,>(request: Promise<T>) => request,
+}));
+
+// The native flow is covered by google-auth.test.ts; here only the screen's states.
+let mockGoogleAvailable = false;
+const mockSignInWithGoogle = jest.fn();
+
+jest.mock("@/auth/google-auth", () => ({
+  isGoogleSignInAvailable: () => mockGoogleAvailable,
+  signInWithGoogle: () => mockSignInWithGoogle(),
 }));
 
 const ok = { data: { user: null, session: null }, error: null };
@@ -86,6 +96,8 @@ beforeEach(() => {
   mockSession = { status: "none" };
   mockClient = { auth: mockAuth };
   for (const fn of Object.values(mockAuth)) fn.mockReset().mockResolvedValue(ok);
+  mockGoogleAvailable = false;
+  mockSignInWithGoogle.mockReset();
 });
 
 afterEach(() => {
@@ -158,10 +170,81 @@ describe("LoginScreen", () => {
     expect(pathname()).toBe("/verificar-correo");
   });
 
-  it("keeps Google visible but unavailable", async () => {
-    await renderAt("/login");
+  describe("Continuar con Google", () => {
+    const GOOGLE = "Continuar con Google";
+    const pressGoogle = () => fireEvent.press(screen.getByRole("button", { name: GOOGLE }));
 
-    expect(screen.getByRole("button", { name: "Google" })).toBeDisabled();
+    beforeEach(() => {
+      mockGoogleAvailable = true;
+    });
+
+    it("stays visible but disabled when this build cannot sign in with Google", async () => {
+      mockGoogleAvailable = false;
+      await renderAt("/login");
+
+      expect(screen.getByRole("button", { name: GOOGLE })).toBeDisabled();
+      expect(screen.queryByText(/próximamente/)).toBeNull();
+    });
+
+    it("signs in with Google and stays put for the guards to move on", async () => {
+      mockSignInWithGoogle.mockResolvedValue({ cancelled: false });
+      await renderAt("/login");
+
+      await pressGoogle();
+
+      expect(mockSignInWithGoogle).toHaveBeenCalledTimes(1);
+      expect(pathname()).toBe("/login");
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+
+    it("shows its progress and ignores presses until it finishes", async () => {
+      let finish: (result: { cancelled: boolean }) => void = () => {};
+      mockSignInWithGoogle.mockReturnValue(
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+      );
+      await renderAt("/login");
+
+      await pressGoogle();
+      expect(screen.getByRole("button", { name: GOOGLE })).toBeDisabled();
+      // The email form waits too: one sign-in at a time.
+      expect(screen.getByRole("button", { name: "Iniciar sesión" })).toBeDisabled();
+      await pressGoogle();
+      expect(mockSignInWithGoogle).toHaveBeenCalledTimes(1);
+
+      await act(async () => finish({ cancelled: false }));
+      expect(screen.getByRole("button", { name: GOOGLE })).toBeEnabled();
+    });
+
+    it("shows nothing when the user closes the account picker", async () => {
+      mockSignInWithGoogle.mockResolvedValue({ cancelled: true });
+      await renderAt("/login");
+
+      await pressGoogle();
+
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByRole("button", { name: GOOGLE })).toBeEnabled();
+    });
+
+    it("explains a failure in Spanish and clears it on the next attempt", async () => {
+      mockSignInWithGoogle.mockRejectedValueOnce(
+        new AuthError("Google Play services are not available", undefined, "google_play_services_unavailable"),
+      );
+      await renderAt("/login");
+
+      await pressGoogle();
+
+      expect(
+        await screen.findByText(
+          "Para continuar con Google, instala o actualiza los servicios de Google Play en este teléfono.",
+        ),
+      ).toBeOnTheScreen();
+
+      mockSignInWithGoogle.mockResolvedValue({ cancelled: true });
+      await pressGoogle();
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
   });
 
   it("links to sign-up and password recovery", async () => {

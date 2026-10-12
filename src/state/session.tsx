@@ -35,6 +35,7 @@ import {
   type Access,
   type MobileRole,
 } from "@/auth/access";
+import { signOutFromGoogle } from "@/auth/google-auth";
 import { sessionStore, type SessionSnapshot, type SessionStatus } from "@/auth/session-store";
 import { signOutLocally, supabase } from "@/auth/supabase";
 import { env } from "@/config/env";
@@ -166,8 +167,9 @@ async function unregisterDevice(): Promise<void> {
 }
 
 async function endSession(): Promise<void> {
-  // Never rejects, and removes the stored session even when Supabase's sign-out fails.
-  if (env.appEnv === "real") await signOutLocally();
+  // Neither rejects. signOutLocally removes the stored session even when Supabase's sign-out
+  // fails; forgetting the Google account makes the next Google sign-in show the picker.
+  if (env.appEnv === "real") await Promise.all([signOutLocally(), signOutFromGoogle()]);
   // The local profile's dev session only lives in memory: it stays signed out until the
   // app restarts.
   sessionStore.setSession(SIGNED_OUT);

@@ -57,6 +57,21 @@ Primera vez (requiere una cuenta de Expo):
 
 Aunque la variable exista en el entorno, un bundle de release no contiene el token de desarrollo: se lee solo bajo `__DEV__` y el minificador elimina esa rama. `npm run check:release-token` lo comprueba exportando el bundle de Android con un token centinela y falla si el centinela aparece. Exporta sin bytecode de Hermes para poder buscar en el JS.
 
+## Acceso con Google
+
+El botón «Continuar con Google» del inicio de sesión usa el inicio de sesión nativo (`@react-native-google-signin/google-signin`, API original y gratuita): Google entrega un ID token y Supabase lo canjea por una sesión con `signInWithIdToken`. No funciona en Expo Go ni en la vista web; requiere un build de EAS (`development`, `preview` o `production`). Sin los client IDs, o con el perfil `local`, el botón aparece deshabilitado.
+
+Configuración, una sola vez:
+
+1. **Google Cloud → APIs y servicios → Credenciales**, en el mismo proyecto:
+   - Cliente OAuth **web**: su ID es `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` y, con su secreto, se registra en Supabase (ver `docs/integracion-backend.md`).
+   - Cliente **Android** con el paquete `co.findfood.app` y la huella SHA-1 de cada certificado que firma la app: el keystore de EAS (`npx eas-cli@latest credentials -p android`) y, al publicar, el certificado de firma de apps de Google Play (Play Console → Integridad de la app → Firma de apps). Con una SHA-1 sin registrar, Google responde `DEVELOPER_ERROR` y la app muestra «No pudimos iniciar sesión con Google».
+   - Cliente **iOS** con el bundle ID `co.findfood.app`: su ID es `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`.
+2. **Variables**: definir `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` y `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` en `.env.local` y en cada entorno de EAS (`--visibility plaintext`; no son secretos).
+3. **Build**: `app.config.ts` agrega el plugin de Google Sign-In con el esquema de URL de iOS (`com.googleusercontent.apps.<id>`) derivado de `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`; sin esa variable no lo agrega, porque Android no necesita configuración nativa. El esquema queda dentro del build de iOS: si cambia el client ID de iOS, hay que generar un build nuevo.
+
+Una cuenta nueva de Google llega sin apellidos ni celular: la raíz abre «Completar perfil» antes de entrar. Cerrar sesión también cierra la sesión de Google en el teléfono, para que el siguiente acceso muestre el selector de cuentas.
+
 ## Recorrer la demostración
 
 Sin sesión, la aplicación abre `/login`. Con el perfil `real` (`npm run start:real`), el inicio de sesión, el registro y la verificación de correo usan Supabase Auth:
@@ -69,7 +84,7 @@ Sin sesión, la aplicación abre `/login`. Con el perfil `real` (`npm run start:
 - **Completar perfil** (`/completar-perfil`): si `GET /me` tiene pendiente el celular o los términos, la raíz abre esta pantalla con los datos que ya tiene la cuenta. Pide apellidos y celular (las cuentas de Google llegan sin ellos) y la aceptación de los términos cuando están pendientes; envía a `PATCH /me` solo lo que cambió.
 - **Cambiar contraseña** (`/cambiar-contrasena`): si la cuenta debe cambiar su contraseña, la raíz abre esta pantalla; al guardar, Supabase actualiza la contraseña y la app vuelve a consultar `GET /me`.
 
-Al iniciar sesión o verificar el código, las pantallas no navegan por su cuenta: la sesión nueva cierra las rutas de autenticación y la raíz abre el inicio del rol. Completar perfil y cambiar contraseña también ofrecen «Cerrar sesión». El acceso con Google llega en la siguiente tarea de la fase 2 (ver `odd/tasks/integracion-api-auth.md`). Con el perfil `local` (`npm run start:local`) no hay Supabase: los formularios de autenticación quedan deshabilitados con un aviso, y el token de desarrollo abre directamente la vista del rol elegido.
+Al iniciar sesión o verificar el código, las pantallas no navegan por su cuenta: la sesión nueva cierra las rutas de autenticación y la raíz abre el inicio del rol. Completar perfil y cambiar contraseña también ofrecen «Cerrar sesión». El acceso con Google sigue el mismo camino (ver [Acceso con Google](#acceso-con-google)); si se cierra el selector de cuentas no se muestra ningún error. Con el perfil `local` (`npm run start:local`) no hay Supabase: los formularios de autenticación quedan deshabilitados con un aviso, y el token de desarrollo abre directamente la vista del rol elegido.
 
 ## Navegación
 

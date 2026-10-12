@@ -140,6 +140,13 @@ const AUTH_CODES = [
   "reauthentication_needed",
   // App-defined: email auth in a profile without Supabase (see src/auth/email-auth.ts).
   "auth_unavailable",
+  // Google sign-in: Supabase's provider setting and the app-defined native failures (see
+  // src/auth/google-auth.ts).
+  "provider_disabled",
+  "google_unavailable",
+  "google_play_services_unavailable",
+  "google_id_token_missing",
+  "google_sign_in_failed",
 ];
 
 describe("problemMessages", () => {

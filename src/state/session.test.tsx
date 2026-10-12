@@ -5,6 +5,7 @@ import * as SecureStore from "expo-secure-store";
 import type { PropsWithChildren } from "react";
 
 import type { MeDto } from "@/api/types";
+import { signOutFromGoogle } from "@/auth/google-auth";
 import { sessionStore } from "@/auth/session-store";
 import { signOutLocally, supabase } from "@/auth/supabase";
 import { env } from "@/config/env";
@@ -47,6 +48,11 @@ jest.mock("@/auth/supabase", () => {
   };
 });
 
+// Best effort and never rejects (see google-auth.test.ts).
+jest.mock("@/auth/google-auth", () => ({
+  signOutFromGoogle: jest.fn(async () => {}),
+}));
+
 const mockSecureValues = new Map<string, string>();
 
 jest.mock("expo-secure-store", () => ({
@@ -69,6 +75,7 @@ interface FakeAuth {
 
 const auth = (supabase as unknown as { auth: FakeAuth }).auth;
 const mockedSignOutLocally = jest.mocked(signOutLocally);
+const mockedSignOutFromGoogle = jest.mocked(signOutFromGoogle);
 const testEnv = env as { appEnv: "local" | "real"; devToken?: string };
 
 interface FetchCall {
@@ -511,6 +518,17 @@ describe("real profile", () => {
     await act(() => result.current.actions.cerrarSesion());
 
     expect(mockedSignOutLocally).toHaveBeenCalledTimes(1);
+    expect(result.current.session.status).toBe("none");
+  });
+
+  it("cerrarSesion also signs out of Google, so the next sign-in shows the account picker", async () => {
+    serve(() => ({ status: 200, body: me() }));
+    const { result } = await renderSession();
+    await waitFor(() => expect(result.current.access.phase).toBe("app"));
+
+    await act(() => result.current.actions.cerrarSesion());
+
+    expect(mockedSignOutFromGoogle).toHaveBeenCalledTimes(1);
     expect(result.current.session.status).toBe("none");
   });
 

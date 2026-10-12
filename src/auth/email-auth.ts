@@ -3,6 +3,9 @@
  * `AuthError` Supabase returns, so forms show it through `messageFor` (useZodForm's
  * `handleSubmit` does this for a rejected `onValid`).
  *
+ * Requests that may store a new session go through `trackSignIn`, so a sign-out still
+ * settling never removes it.
+ *
  * None of them navigates: a new session reaches the session provider through
  * `onAuthStateChange`, and the root guards open the right screen.
  */
@@ -11,7 +14,7 @@ import * as Linking from "expo-linking";
 
 import type { LoginData, RegisterData } from "@/domain/validation/auth";
 
-import { supabase } from "./supabase";
+import { supabase, trackSignIn } from "./supabase";
 
 /**
  * App-defined AuthError code for a profile without Supabase (`local`, which signs in with a
@@ -32,7 +35,7 @@ function auth(): SupabaseClient["auth"] {
 }
 
 export async function signIn({ email, password }: LoginData): Promise<void> {
-  const { error } = await auth().signInWithPassword({ email, password });
+  const { error } = await trackSignIn(auth().signInWithPassword({ email, password }));
   if (error) throw error;
 }
 
@@ -48,11 +51,14 @@ export async function signUp({
   telefono,
   password,
 }: RegisterData): Promise<{ confirmationPending: boolean }> {
-  const { data, error } = await auth().signUp({
-    email,
-    password,
-    options: { data: { nombres, apellidos, telefono, acepto_terminos: true } },
-  });
+  // Tracked: with email confirmation off, the sign-up signs the user in at once.
+  const { data, error } = await trackSignIn(
+    auth().signUp({
+      email,
+      password,
+      options: { data: { nombres, apellidos, telefono, acepto_terminos: true } },
+    }),
+  );
   if (error) throw error;
   // With email confirmation on, Supabase answers an existing address with an obfuscated
   // user (no identities) and sends no code. That is left alone on purpose: the app never
@@ -62,7 +68,7 @@ export async function signUp({
 
 /** Confirms the sign-up code; on success Supabase stores the session. */
 export async function verifyEmailOtp(email: string, token: string): Promise<void> {
-  const { error } = await auth().verifyOtp({ email, token, type: "email" });
+  const { error } = await trackSignIn(auth().verifyOtp({ email, token, type: "email" }));
   if (error) throw error;
 }
 
@@ -93,7 +99,9 @@ export async function requestPasswordReset(email: string): Promise<void> {
  * started on this device is used.
  */
 export async function exchangeRecoveryCode(code: string, flowId?: string): Promise<void> {
-  const { error } = await auth().exchangeCodeForSession(code, flowId ? { flowId } : undefined);
+  const { error } = await trackSignIn(
+    auth().exchangeCodeForSession(code, flowId ? { flowId } : undefined),
+  );
   if (error) throw error;
 }
 
