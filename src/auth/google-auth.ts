@@ -45,8 +45,12 @@ const playServicesError = () =>
  */
 export function isGoogleSignInAvailable(): boolean {
   if (!supabase || !env.googleWebClientId || Platform.OS === "web") return false;
-  return Platform.OS !== "ios" || env.googleIosClientId !== undefined;
+  // Same presence rule as the web id and as app.config.ts: an empty id counts as missing.
+  return Platform.OS !== "ios" || Boolean(env.googleIosClientId);
 }
+
+/** Longest wait for the native Google sign-out before the app sign-out moves on. */
+export const GOOGLE_SIGN_OUT_TIMEOUT_MS = 3_000;
 
 let configured = false;
 
@@ -123,10 +127,20 @@ export async function signInWithGoogle(): Promise<{ cancelled: boolean }> {
  */
 export async function signOutFromGoogle(): Promise<void> {
   if (!isGoogleSignInAvailable()) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     configureOnce();
-    await GoogleSignin.signOut();
+    // Bounded: sign-out waits for this call, and a stalled native module (e.g. Play
+    // services) must not hold the account screen in "Cerrando sesión…".
+    await Promise.race([
+      GoogleSignin.signOut(),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, GOOGLE_SIGN_OUT_TIMEOUT_MS);
+      }),
+    ]);
   } catch {
     // Only the account picker is at stake; the Supabase session is removed separately.
+  } finally {
+    clearTimeout(timer);
   }
 }

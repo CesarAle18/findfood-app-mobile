@@ -269,4 +269,23 @@ describe("signOutFromGoogle", () => {
 
     expect(mockGoogleSignin.signOut).not.toHaveBeenCalled();
   });
+
+  it("stops waiting for a native sign-out that never settles", async () => {
+    jest.useFakeTimers();
+    try {
+      mockGoogleSignin.signOut.mockReturnValue(new Promise<null>(() => undefined));
+      const { signOutFromGoogle, GOOGLE_SIGN_OUT_TIMEOUT_MS } = loadGoogleAuth();
+      let settled = false;
+      void signOutFromGoogle().then(() => {
+        settled = true;
+      });
+
+      await jest.advanceTimersByTimeAsync(GOOGLE_SIGN_OUT_TIMEOUT_MS - 1);
+      expect(settled).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      expect(settled).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
