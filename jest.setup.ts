@@ -71,7 +71,12 @@ jest.mock("expo-notifications", () => ({
   requestPermissionsAsync: jest.fn(async () => mockUndeterminedPermission),
   getExpoPushTokenAsync: jest.fn(async () => ({ type: "expo", data: "ExponentPushToken[test]" })),
   getLastNotificationResponse: jest.fn(() => null),
+  clearLastNotificationResponseAsync: jest.fn(async () => undefined),
   setNotificationChannelAsync: jest.fn(async () => null),
+  // The native emitters do not exist under Jest: each listener is a removable no-op.
+  addPushTokenListener: jest.fn(() => ({ remove: jest.fn() })),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
 }));
 
 jest.mock("expo-location", () => ({

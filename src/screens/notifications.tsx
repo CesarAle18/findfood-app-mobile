@@ -4,7 +4,6 @@
  */
 import { FlashList, type ListRenderItemInfo } from "@shopify/flash-list";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { router } from "expo-router";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
@@ -13,19 +12,14 @@ import { Icon, type IconName } from "@/components/findfood/icon";
 import { Pressing } from "@/components/findfood/motion";
 import { Badge, Button, Choices, Copy, Row, Screen } from "@/components/findfood/ui";
 import { colors } from "@/design/tokens";
-import {
-  ALERTS_HREF,
-  isImportant,
-  routeForNotification,
-} from "@/notifications/notification-routes";
+import { isImportant } from "@/notifications/notification-routes";
 import { relativeTime } from "@/notifications/relative-time";
+import { useOpenNotification } from "@/notifications/use-open-notification";
 import {
   notificacionesQuery,
-  useMarcarNotificacionLeidaMutation,
   useMarcarTodasLeidasMutation,
   type BandejaPages,
 } from "@/services/notificaciones";
-import { useAccess } from "@/state/session";
 
 /** One inbox row, ready to render. */
 export interface InboxRow {
@@ -109,9 +103,8 @@ export function NotificationsScreen() {
   });
   const { data, error, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage, refetch } =
     inbox;
-  const { mutate: markRead } = useMarcarNotificacionLeidaMutation();
   const { mutate: markAll, isPending: markingAll } = useMarcarTodasLeidasMutation();
-  const { canDonor, canVolunteer, activeRole, setActiveRole } = useAccess();
+  const openNotification = useOpenNotification();
   const [refreshing, setRefreshing] = useState(false);
 
   const visible = useMemo(() => {
@@ -129,17 +122,10 @@ export function NotificationsScreen() {
   const onPressItem = useCallback(
     (id: string) => {
       const row = rowsRef.current.find((candidate) => candidate.id === id);
-      if (!row) return;
-      if (row.unread) markRead(id);
-      const target = routeForNotification(row, { canDonor, canVolunteer, activeRole });
       // Without a screen of its own in this view, the notification stays here.
-      if (!target || (target.role === activeRole && target.href === ALERTS_HREF[target.role])) {
-        return;
-      }
-      if (target.role !== activeRole) setActiveRole(target.role);
-      router.push(target.href);
+      if (row) openNotification(row, { fromInbox: true });
     },
-    [markRead, canDonor, canVolunteer, activeRole, setActiveRole],
+    [openNotification],
   );
 
   const renderItem = useCallback(

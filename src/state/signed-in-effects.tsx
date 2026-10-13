@@ -4,10 +4,12 @@
  * Mounted once under `SessionProvider`. Each concern is its own hook called from
  * `ActiveEffects`, so later ones (push registration, location tracking) slot in beside the
  * catalog prefetch without touching the others. Leaving the app phase unmounts them all.
+ * Push registration only runs for accounts that receive pushes (DONANTE or VOLUNTARIO).
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
+import { usePushRegistration } from "@/notifications/push";
 import { catalogosQuery } from "@/services/catalogos";
 import { useAccess } from "@/state/session";
 
@@ -17,7 +19,9 @@ export function SignedInEffects() {
 }
 
 function ActiveEffects() {
+  const { canDonor, canVolunteer } = useAccess();
   useCatalogPrefetch();
+  usePushRegistration(canDonor || canVolunteer);
   return null;
 }
 

@@ -26,6 +26,8 @@ import { configResult, type ConfigError } from "@/config/env";
 import { colors } from "@/design/tokens";
 import { guardsFor, ROUTE_GROUPS, type RouteGroup } from "@/navigation/access-route";
 import { STACK_SCREEN_OPTIONS } from "@/navigation/stack-options";
+import { configureNotificationHandler } from "@/notifications/push";
+import { useNotificationResponses } from "@/notifications/use-notification-responses";
 import { ConfigErrorScreen } from "@/screens/access";
 import { MobileProvider } from "@/state/mobile-context";
 import { SessionProvider, useAccess } from "@/state/session";
@@ -36,6 +38,8 @@ SplashScreen.preventAutoHideAsync().catch(() => {
   // No native splash to keep (e.g. web): nothing to do.
 });
 setupQueryManagers();
+// Before any push can arrive: how notifications show while the app is in the foreground.
+configureNotificationHandler();
 
 const FONTS = { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold };
 
@@ -54,6 +58,8 @@ function RootNavigator({ fontsLoaded, fontError }: { fontsLoaded: boolean; fontE
   const { phase, canDonor, canVolunteer } = useAccess();
   const ready = (fontsLoaded || fontError !== null) && phase !== "loading";
   useHideSplash(ready);
+  // A tapped push opens its screen once the routes below exist.
+  useNotificationResponses(ready && fontError === null);
 
   // No Stack while loading, so no guard is ever open for a moment before the phase is
   // known. Under the splash at startup; a spinner when a sign-in loads the account.

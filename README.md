@@ -58,6 +58,14 @@ Primera vez (requiere una cuenta de Expo):
 
 Aunque la variable exista en el entorno, un bundle de release no contiene el token de desarrollo: se lee solo bajo `__DEV__` y el minificador elimina esa rama. `npm run check:release-token` lo comprueba exportando el bundle de Android con un token centinela y falla si el centinela aparece. Exporta sin bytecode de Hermes para poder buscar en el JS.
 
+### Probar las notificaciones push
+
+- Hace falta un build de desarrollo (o `preview`) instalado en un **teléfono físico**: Expo Go en Android no recibe push remotas y los emuladores/simuladores no obtienen token. En ellos la app simplemente omite el registro.
+- `extra.eas.projectId` debe existir (`eas init` o `EAS_PROJECT_ID`); sin él la app avisa en consola de desarrollo y no registra el dispositivo.
+- Credenciales en EAS: FCM V1 (Android, `npx eas-cli@latest credentials`) y una clave APNs (iOS). Sin ellas el API no puede entregar la push.
+- Al iniciar sesión con rol DONANTE o VOLUNTARIO la app pide permiso (una vez por sesión) y registra el token con `POST /me/dispositivos`; al cerrar sesión lo elimina.
+- Para probar la apertura: genera una oferta (`ASIGNACION_OFRECIDA`) desde el API, toca la notificación con la app cerrada y abierta; debe abrir `/voluntario/oferta` con esa asignación. Las notificaciones recibidas con la app abierta actualizan la bandeja.
+
 ## Acceso con Google
 
 El botón «Continuar con Google» del inicio de sesión usa el inicio de sesión nativo (`@react-native-google-signin/google-signin`, API original y gratuita): Google entrega un ID token y Supabase lo canjea por una sesión con `signInWithIdToken`. No funciona en Expo Go ni en la vista web; requiere un build de EAS (`development`, `preview` o `production`). Sin los client IDs, o con el perfil `local`, el botón aparece deshabilitado.

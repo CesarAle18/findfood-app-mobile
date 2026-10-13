@@ -2,6 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, waitFor } from "@testing-library/react-native";
 
 import { api } from "@/api";
+import { usePushRegistration } from "@/notifications/push";
 import { catalogosQuery } from "@/services/catalogos";
 import { resetApiMock, type ApiMock } from "@/test-utils/api";
 import { catalogosFixture } from "@/test-utils/fixtures";
@@ -13,7 +14,9 @@ jest.mock("@/api", () => ({
   api: jest.requireActual<typeof import("@/test-utils/api")>("@/test-utils/api").createApiMock(),
 }));
 
-const mockAccess = { phase: "loading" as string };
+const mockAccess = { phase: "loading" as string, canDonor: false, canVolunteer: false };
+
+jest.mock("@/notifications/push", () => ({ usePushRegistration: jest.fn() }));
 
 jest.mock("@/state/session", () => ({
   useAccess: () => mockAccess,
@@ -21,7 +24,12 @@ jest.mock("@/state/session", () => ({
 
 const mockedApi = api as unknown as ApiMock;
 
+const mockedPushRegistration = usePushRegistration as jest.Mock;
+
 beforeEach(() => {
+  mockAccess.canDonor = false;
+  mockAccess.canVolunteer = false;
+  mockedPushRegistration.mockClear();
   resetApiMock(mockedApi);
   mockedApi.get.mockResolvedValue(catalogosFixture);
 });
@@ -45,6 +53,7 @@ describe("SignedInEffects", () => {
 
       expect(mockedApi.get).not.toHaveBeenCalled();
       expect(client.getQueryData(catalogosQuery().queryKey)).toBeUndefined();
+      expect(mockedPushRegistration).not.toHaveBeenCalled();
     },
   );
 
@@ -56,6 +65,15 @@ describe("SignedInEffects", () => {
     );
     expect(mockedApi.get).toHaveBeenCalledTimes(1);
     expect(mockedApi.get.mock.calls[0][0]).toBe("/catalogos");
+  });
+
+  it("registers for push only when the account has a role that receives pushes", async () => {
+    await renderEffects("app");
+    expect(mockedPushRegistration).toHaveBeenLastCalledWith(false);
+
+    mockAccess.canVolunteer = true;
+    await renderEffects("app");
+    expect(mockedPushRegistration).toHaveBeenLastCalledWith(true);
   });
 
   it("renders nothing", async () => {
