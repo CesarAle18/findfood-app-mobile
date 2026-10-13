@@ -38,7 +38,7 @@ The data layer exists (`src/services/{catalogos,evidencias,notificaciones,perfil
 | T0 | Native deps, config plugins, env keys, jest mocks, permission gate + notice | delegated writer (2+ non-trivial files) | [x] | `4fed226` | medium (slice_budget_reached) → declined (candidate only); writer checks: typecheck 0, lint 0, jest 1098/1098; parent spot check typecheck 0 |
 | T1 | MOV-20 catalogs: single prefetched query, selectors, replace mocks, `MotivoField`, signed-in effects | delegated writer (2+ non-trivial files) | [x] | `8b44b36` | medium (slice_budget_reached) → declined (candidate only); writer: typecheck 0, lint 0, jest 1131/1131, test:render 3 PASS; parent spot check catalog+motivo tests 16/16 |
 | T2 | MOV-21 resumable evidence upload pipeline, `usePhotoCapture`, `PhotoField` | delegated writer (2+ non-trivial files) | [x] | `96d46e1` | medium (slice_budget_reached) → declined (candidate only); writer: typecheck 0, lint 0, jest 1154/1154, test:render 3 PASS; parent spot check src/media 20/20 |
-| T3 | MOV-23 inbox: `routeForNotification`, infinite query, FlashList screen, optimistic read | delegated writer | [ ] | | |
+| T3 | MOV-23 inbox: `routeForNotification`, infinite query, FlashList screen, optimistic read | delegated writer (2+ non-trivial files) | [x] | `e27046e` | medium (slice_budget_reached) → declined (candidate only); writer: typecheck 0, lint 0, jest 1195/1195, test:render 3 PASS; parent spot check notifications 43/43 |
 | T4 | MOV-22 push: handler, channel, registration, response routing, real offer screen | delegated writer | [ ] | | |
 | T5 | MOV-24 background location task, availability toggle from `/me`, stop on sign-out | delegated writer | [ ] | | |
 | T6 | MOV-25 maps: `FindFoodMap`, `LocationPicker`, `RouteMapView` | delegated writer | [ ] | | |
@@ -55,6 +55,7 @@ The data layer exists (`src/services/{catalogos,evidencias,notificaciones,perfil
 - T0 `4fed226`: RED→GREEN for permissions helper, PermissionNotice, problem slugs. Notification icon omitted (no 96x96 white asset) → follow-up. Maps plugin and `extra.eas.projectId` only applied when env vars set. Review boundary → `4fed226`.
 - T1 `8b44b36`: RED→GREEN for catalog selectors, draft helpers, signed-in effects. `useCatalogos` replaced by `catalogosQuery()` + `useTiposAlimento/useUnidades/useTiposVehiculo/useMotivos`. Reason body field is `observacion`. Reject offer / cancel donation call the API only when the route carries `asignacionId` / `id`. Review boundary → `8b44b36`.
 - T2 `96d46e1`: RED→GREEN pipeline (20 tests): id generated once at capture, retry after register failure reuses id without re-PUT, expired URL re-requested once, duplicate object = uploaded. Upload = PUT to Supabase signed URL with `x-upsert:false`, content-type, cache-control (matches supabase-js `uploadToSignedUrl`). `PhotoPlaceholder` removed. Review boundary → `96d46e1`.
+- T3 `e27046e`: RED→GREEN routes table, offset paging, optimistic read/rollback. `routeForNotification` returns role as `MobileRole` (DONANTE/VOLUNTARIO); donor screens take `?id=`. Relative time hand-built (no Intl.RelativeTimeFormat dependency on Hermes). Review boundary → `e27046e`.
 
 ## Follow-ups
 - Live volunteer position for donors (API-06 / Realtime). Push code for routes. Profile metrics (API-07).
@@ -62,6 +63,7 @@ The data layer exists (`src/services/{catalogos,evidencias,notificaciones,perfil
 - Volunteer registration submit (`solicitarVoluntario`, `Number(vehicleType)`) not wired. No abandon-assignment UI (ABANDONO_ASIGNACION).
 - Notification icon asset (96x96 white PNG). Unit tests for env-gated branches of `app.config.ts`.
 - Evidence fields (RECOGIDA/ENTREGA) upload but do not register until screens have a real parent id; product photo `ruta` not yet in `DraftProduct`; evidence list UI pending. Storage error shapes not verified live.
+- Inbox: role switch from a notification keeps history (account screen uses dismissAll); read rows linger in Sin leer until refetch.
 
 ## Next step
-T3 (MOV-23 inbox).
+T4 (MOV-22 push).
