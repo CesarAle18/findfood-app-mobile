@@ -9,6 +9,7 @@ import type {
   DonacionResumenDto,
 } from "@/services/donaciones";
 import type { CatalogosDto } from "@/services/catalogos";
+import type { BandejaDto, NotificacionDto } from "@/services/notificaciones";
 import type { ImpactoDto } from "@/services/perfil";
 
 export const DONATION_ID = "7d4f6a1e-0c2b-4f7e-9a51-3b8f2d1c9e10";
@@ -225,3 +226,33 @@ export const catalogosFixture: CatalogosDto = {
   tipos_incidencia: [],
   tipos_destino_distribucion: [],
 };
+
+/** One inbox row: unread, about a donation the donor can open. */
+export function notificacionFixture(overrides: Partial<NotificacionDto> = {}): NotificacionDto {
+  return {
+    id: "notif-1",
+    tipo: "DONACION_RECIBIDA",
+    titulo: "Donación recibida",
+    cuerpo: "El banco de alimentos recibió tu donación.",
+    data: null,
+    donacion_id: DONATION_ID,
+    asignacion_id: null,
+    leida_at: null,
+    created_at: "2026-10-13T14:00:00Z",
+    ...overrides,
+  };
+}
+
+/** A `GET /me/notificaciones` page; `no_leidas` counts its unread rows unless given. */
+export function bandejaFixture(
+  datos: NotificacionDto[],
+  { total = datos.length, desplazamiento = 0, limite = 20, no_leidas }: Partial<BandejaDto> = {},
+): BandejaDto {
+  return {
+    datos,
+    total,
+    limite,
+    desplazamiento,
+    no_leidas: no_leidas ?? datos.filter((row) => row.leida_at === null).length,
+  };
+}

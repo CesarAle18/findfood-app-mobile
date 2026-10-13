@@ -19,6 +19,8 @@ let draft;
 function answerFor(queryKey) {
   const [root, kind, arg] = queryKey;
   if (root === "perfil") return fixtures.impactoFixture();
+  if (root === "notificaciones" && kind === "list")
+    return fixtures.bandejaFixture([fixtures.notificacionFixture()]);
   if (root !== "donaciones") return undefined;
   if (kind === "detail")
     return fixtures.detalleFixture({ id: arg, estado: "RECIBIDA" });
@@ -356,6 +358,10 @@ try {
       "DON-1058",
     ),
   );
+  // The inbox renders its rows from the API, not the old preview data.
+  const { NotificationsScreen } = require("../src/screens/notifications.tsx");
+  const inboxHtml = renderToStaticMarkup(React.createElement(NotificationsScreen));
+  assert(inboxHtml.includes("Donación recibida") && inboxHtml.includes("Marcar todas como leídas"));
   const { RatingScreen } = require("../src/screens/account.tsx");
   routeParams = { id: fixtures.DONATION_ID };
   const donorRatingHtml = renderToStaticMarkup(React.createElement(RatingScreen));
