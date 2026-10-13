@@ -12,7 +12,6 @@ import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import {
   Badge,
   Chip,
-  Choices,
   Card,
   Copy,
   Button,
@@ -42,7 +41,7 @@ import {
   profileFromMe,
 } from "@/domain/mappers/profile";
 import { useImpacto } from "@/services/perfil";
-import { useMobile } from "@/state/mobile-context";
+import { AvailabilityToggle } from "@/location/availability-toggle";
 import { useAccess, useMe, useSession } from "@/state/session";
 import { useSignOut } from "@/state/use-sign-out";
 import { colors, fonts } from "@/design/tokens";
@@ -165,7 +164,6 @@ function DonorProfile({ me }: { me: MeDto }) {
 }
 
 function VolunteerProfile({ me }: { me: MeDto }) {
-  const { available, setAvailable } = useMobile();
   const voluntario = me.voluntario;
   if (!voluntario) {
     return (
@@ -183,12 +181,7 @@ function VolunteerProfile({ me }: { me: MeDto }) {
         caption={VERIFICATION[voluntario.estado_verificacion] ?? "Voluntario"}
         average={voluntario.calificacion_promedio}
       >
-        {/* TODO(F3): persist with PATCH /voluntario/estado (useCambiarDisponibleMutation). */}
-        <Choices
-          values={["Disponible", "No disponible"]}
-          selected={available ? 0 : 1}
-          onChange={(i) => setAvailable(i === 0)}
-        />
+        <AvailabilityToggle />
       </ProfileCard>
       <Section title="Resumen operativo">
         <ImpactMetrics volunteer />

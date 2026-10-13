@@ -204,11 +204,17 @@ Module._load = function (name, parent, isMain) {
   if (name === "@/state/mobile-context")
     return {
       useMobile: () => ({
-        available: true,
-        setAvailable() {},
         draft,
         setDraft() {},
       }),
+    };
+  // The real module defines a native background task (expo-location, expo-task-manager);
+  // the screens only read its status and start it from handlers.
+  if (name === "@/location/tracking")
+    return {
+      startLocationTracking: async () => "denied",
+      stopLocationTracking: async () => {},
+      trackingStatusStore: { get: () => "off", subscribe: () => () => {} },
     };
   // No requests leave this check: the query hooks are stubbed above.
   if (name === "@/api") return { api: {} };
