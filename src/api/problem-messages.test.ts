@@ -109,6 +109,9 @@ const PROBLEM_TYPES = [
   "padre-evidencia-invalido",
   "evidencia-id-en-uso",
   "evidencia-ajena",
+  // Catalog reasons (rejections, cancellations, incidents).
+  "motivo-invalido",
+  "comentario-requerido",
   // Incidents.
   "tipo-incidencia-invalido",
   "incidencia-sin-contexto",

@@ -50,7 +50,8 @@ Perfiles de `eas.json`:
 
 Primera vez (requiere una cuenta de Expo):
 
-1. `npx eas-cli@latest login` y `npx eas-cli@latest init` (vincula el proyecto y agrega `extra.eas.projectId` a `app.json`).
+1. `npx eas-cli@latest login` y `npx eas-cli@latest init` (vincula el proyecto y agrega `extra.eas.projectId` a `app.json`). Si prefieres no versionar el ID, defínelo como `EAS_PROJECT_ID` (en `.env.local` y en EAS): `app.config.ts` lo copia a `extra.eas.projectId`, que las notificaciones push necesitan para obtener el token.
+   - Mapas: definir `GOOGLE_MAPS_ANDROID_API_KEY` y `GOOGLE_MAPS_IOS_API_KEY` (variables de compilación, no `EXPO_PUBLIC_*`) en `.env.local` y en cada entorno de EAS con `--visibility sensitive`. `app.config.ts` agrega el plugin de `react-native-maps` solo si existe alguna de las dos; cambiarlas exige un build nuevo.
 2. Cargar las variables públicas en cada entorno de EAS (`development`, `preview`, `production`): `npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_API_URL --value <url> --visibility plaintext`, y lo mismo para `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` y los client IDs de Google. **Nunca** `EXPO_PUBLIC_DEV_TOKEN` ni `EXPO_PUBLIC_APP_ENV=local`. `src/config/build-config.test.ts` solo impide declararlos en `eas.json`; las variables remotas de EAS no las puede ver, así que revisa `npx eas-cli@latest env:list` antes de cada build.
 3. `npx eas-cli@latest build --profile development --platform android` e instalar el APK desde el enlace que entrega EAS.
 4. En el computador, `npm run start:local` o `npm run start:real` y abrir el proyecto desde el dev client.

@@ -121,6 +121,12 @@ const EVIDENCE_MESSAGES = {
   "evidencia-ajena": "Esta evidencia pertenece a otro usuario.",
 };
 
+/** Catalog reasons (`GET /catalogos` → `motivos`) used to reject, cancel or report. */
+const REASON_MESSAGES = {
+  "motivo-invalido": "El motivo seleccionado no es válido.",
+  "comentario-requerido": "Este motivo requiere un comentario. Escríbelo para continuar.",
+};
+
 const INCIDENT_MESSAGES = {
   "tipo-incidencia-invalido": "El tipo de incidencia no es válido.",
   "incidencia-sin-contexto": "La incidencia debe estar asociada a una donación o a una ruta.",
@@ -139,6 +145,7 @@ export const problemMessages: Readonly<Record<string, string>> = {
   ...ROUTING_MESSAGES,
   ...VOLUNTEER_MESSAGES,
   ...EVIDENCE_MESSAGES,
+  ...REASON_MESSAGES,
   ...INCIDENT_MESSAGES,
 };
 
