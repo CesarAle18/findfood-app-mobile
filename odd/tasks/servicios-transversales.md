@@ -40,7 +40,7 @@ The data layer exists (`src/services/{catalogos,evidencias,notificaciones,perfil
 | T2 | MOV-21 resumable evidence upload pipeline, `usePhotoCapture`, `PhotoField` | delegated writer (2+ non-trivial files) | [x] | `96d46e1` | medium (slice_budget_reached) → declined (candidate only); writer: typecheck 0, lint 0, jest 1154/1154, test:render 3 PASS; parent spot check src/media 20/20 |
 | T3 | MOV-23 inbox: `routeForNotification`, infinite query, FlashList screen, optimistic read | delegated writer (2+ non-trivial files) | [x] | `e27046e` | medium (slice_budget_reached) → declined (candidate only); writer: typecheck 0, lint 0, jest 1195/1195, test:render 3 PASS; parent spot check notifications 43/43 |
 | T4 | MOV-22 push: handler, channel, registration, response routing, real offer screen | delegated writer (2+ non-trivial files) | [x] | `40cd379` + `84af196` | medium (slice_budget_reached) → declined (candidate only); writer: typecheck 0, lint 0, jest 1224/1224, test:render 3 PASS; parent spot check src/notifications 46/46 |
-| T5 | MOV-24 background location task, availability toggle from `/me`, stop on sign-out | delegated writer | [ ] | | |
+| T5 | MOV-24 background location task, availability toggle from `/me`, stop on sign-out | delegated writer (2+ non-trivial files) | [x] | `244f68c` + `c08a937` | medium (slice_budget_reached) → declined (candidate only); writer: typecheck 0, lint 0, jest 1267/1267, test:render 3 PASS; parent spot check src/location 35/35 |
 | T6 | MOV-25 maps: `FindFoodMap`, `LocationPicker`, `RouteMapView` | delegated writer | [ ] | | |
 | T7 | MOV-26 profile edit, franjas mapper, controlled `AvailabilityField`, edit availability | delegated writer | [ ] | | |
 
@@ -57,6 +57,7 @@ The data layer exists (`src/services/{catalogos,evidencias,notificaciones,perfil
 - T2 `96d46e1`: RED→GREEN pipeline (20 tests): id generated once at capture, retry after register failure reuses id without re-PUT, expired URL re-requested once, duplicate object = uploaded. Upload = PUT to Supabase signed URL with `x-upsert:false`, content-type, cache-control (matches supabase-js `uploadToSignedUrl`). `PhotoPlaceholder` removed. Review boundary → `96d46e1`.
 - T3 `e27046e`: RED→GREEN routes table, offset paging, optimistic read/rollback. `routeForNotification` returns role as `MobileRole` (DONANTE/VOLUNTARIO); donor screens take `?id=`. Relative time hand-built (no Intl.RelativeTimeFormat dependency on Hermes). Review boundary → `e27046e`.
 - T4 `40cd379` + `84af196`: offer screen loads the real offer by `asignacionId` (RED→GREEN offers mapper); push registration skips with typed reasons (web, simulator, no projectId, denied); taps wait for navigator ready + phase app, then shared `openNotification`. Push/response tests written after code (no RED evidence). Push path uses plain mark-read mutation (existing suites mock notificaciones narrowly). Device-only behaviour unverified. Review boundary → `84af196`.
+- T5 `244f68c` + `c08a937`: RED→GREEN only for `shouldSend` throttle; other tests written after code. Background task posts only {lat,lng}, stops on no session/401/403 `sin-perfil-voluntario`; headless launch restores the Supabase session into `sessionStore`. Disclosure via native Alert, answer kept per session. `cerrarSesion` stops tracking first (2 s bound). Toggle is optimistic on `queryKeys.me`; `available` removed from mobile-context. Device-only behaviour unverified. Review boundary → `c08a937`.
 
 ## Follow-ups
 - Live volunteer position for donors (API-06 / Realtime). Push code for routes. Profile metrics (API-07).
@@ -65,6 +66,7 @@ The data layer exists (`src/services/{catalogos,evidencias,notificaciones,perfil
 - Notification icon asset (96x96 white PNG). Unit tests for env-gated branches of `app.config.ts`.
 - Evidence fields (RECOGIDA/ENTREGA) upload but do not register until screens have a real parent id; product photo `ruta` not yet in `DraftProduct`; evidence list UI pending. Storage error shapes not verified live.
 - Inbox: role switch from a notification keeps history (account screen uses dismissAll); read rows linger in Sin leer until refetch.
+- Location: import cycle session → tracking → perfil → session (safe, call-time only); point availability 422 link to `editar-disponibilidad` after T7.
 
 ## Next step
-T5 (MOV-24 location).
+T6 (MOV-25 maps).
