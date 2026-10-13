@@ -33,6 +33,10 @@ export const startupQueryOptions = {
   networkMode: "always",
   // TanStack turns the reconnect refetch off by default for `networkMode: 'always'`.
   refetchOnReconnect: true,
+  // The error screen reads the same query. Refetching when it mounts puts the query back in
+  // `pending`, which unmounts that screen; the failure mounts it again, in a loop. A failed
+  // query is fetched again only on retry (`refetch`) or reconnect.
+  retryOnMount: false,
   retry: (failureCount: number, error: unknown): boolean =>
     onlineManager.isOnline() && shouldRetryQuery(failureCount, error),
 } as const;
@@ -62,6 +66,9 @@ let managersReady = false;
 /** Connects the focus and online managers to the device. Safe to call more than once. */
 export function setupQueryManagers(): void {
   if (managersReady) return;
+  // The web build also renders each route in Node (`web.output: "static"`), where there is
+  // no `window` for expo-network's listener; the browser connects the managers.
+  if (Platform.OS === "web" && typeof window === "undefined") return;
   managersReady = true;
 
   // On web TanStack's default listener (visibilitychange) already does this.

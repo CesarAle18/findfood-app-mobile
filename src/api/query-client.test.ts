@@ -161,6 +161,28 @@ describe("startup queries", () => {
       client.unmount();
     }
   });
+
+  // The error screen reads the same query: a refetch on its mount would put the query back
+  // in `pending`, unmount that screen and fail again, in a loop.
+  it("are not fetched again by an observer mounting on the error", async () => {
+    const queryFn = jest.fn(async () => {
+      throw offline();
+    });
+    const options = { queryKey: ["startup"], queryFn, ...startupQueryOptions, retryDelay: 0 };
+    await expect(client.fetchQuery(options)).rejects.toMatchObject({ type: "sin-conexion" });
+    queryFn.mockClear();
+
+    const observer = new QueryObserver(client, options);
+    const unsubscribe = observer.subscribe(() => {});
+    try {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+      expect(queryFn).not.toHaveBeenCalled();
+      expect(observer.getCurrentResult().status).toBe("error");
+    } finally {
+      unsubscribe();
+    }
+  });
 });
 
 /** Polls `condition` on macrotasks (TanStack notifies observers on a timeout). */
@@ -329,6 +351,25 @@ describe("setupQueryManagers", () => {
     managers.setupQueryManagers();
 
     expect(managers.addAppStateListener).not.toHaveBeenCalled();
+    expect(managers.addNetworkListener).toHaveBeenCalledTimes(1);
+  });
+
+  // The web build renders each route in Node (`web.output: "static"`), where expo-network's
+  // web listener throws on the missing `window`.
+  it("waits for the browser when the web build renders on the server", () => {
+    const managers = loadManagers("web");
+    const noWindow = jest.replaceProperty(
+      globalThis,
+      "window",
+      undefined as unknown as typeof globalThis.window,
+    );
+
+    expect(() => managers.setupQueryManagers()).not.toThrow();
+    expect(managers.addNetworkListener).not.toHaveBeenCalled();
+
+    // In the browser the same module runs again and connects the managers.
+    noWindow.restore();
+    managers.setupQueryManagers();
     expect(managers.addNetworkListener).toHaveBeenCalledTimes(1);
   });
 });
