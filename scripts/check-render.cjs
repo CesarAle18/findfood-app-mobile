@@ -242,6 +242,18 @@ Module._load = function (name, parent, isMain) {
       }),
     };
   if (name === "expo-image") return { Image: native.Image };
+  // react-native-maps needs its native module; each map renders as a labelled box here
+  // (the map components are covered by Jest).
+  if (name === "@/components/findfood/map") {
+    const mapStub = (label) => () =>
+      React.createElement(native.View, { "aria-label": label });
+    return {
+      FindFoodMap: mapStub("Mapa"),
+      LocationPicker: mapStub("Mapa para elegir el punto de recogida"),
+      PointMap: mapStub("Mapa del punto de recogida"),
+      RouteMapView: mapStub("Mapa de la ruta"),
+    };
+  }
   // The real module creates the Supabase client (SecureStore, Expo config); the forms only
   // call these actions from their handlers.
   if (name === "@/auth/email-auth") {
@@ -430,17 +442,33 @@ try {
   } = require("../src/screens/donor.tsx");
   const newHtml = renderToStaticMarkup(React.createElement(NewDonationScreen));
   assert.equal((newHtml.match(/Ubicación de la entrega/g) || []).length, 1);
+  // The typed address and the map live side by side; nothing is picked yet.
+  assert(newHtml.includes("Dirección de recogida"));
+  assert(newHtml.includes("Mapa para elegir el punto de recogida"));
+  assert(newHtml.includes("Mueve el mapa hasta tu punto de recogida"));
   assert(newHtml.includes("Añadir otro producto"));
   const reviewHtml = renderToStaticMarkup(
     React.createElement(ReviewDonationScreen),
   );
   assert(reviewHtml.includes("Producto prueba 3") && reviewHtml.includes("ML"));
+  assert(reviewHtml.includes("Punto pendiente de seleccionar en el mapa"));
+  draft = {
+    ...draft,
+    direccion: "Cra 45 #12-30",
+    ubicacionRecogida: { lat: 4.65, lng: -74.06 },
+  };
+  const pickedHtml = renderToStaticMarkup(
+    React.createElement(ReviewDonationScreen),
+  );
+  assert(pickedHtml.includes("Cra 45 #12-30"));
+  assert(pickedHtml.includes("Mapa del punto de recogida"));
   routeParams = { id: fixtures.DONATION_ID };
   const donorDetailHtml = renderToStaticMarkup(
     React.createElement(DonationDetailScreen),
   );
   assert(donorDetailHtml.includes('href="/donante/calificar-voluntario"'));
   assert(donorDetailHtml.includes('href="/donante/donaciones"'));
+  assert(donorDetailHtml.includes("Mapa del punto de recogida"));
   // Volunteers open the same detail from their route, without the donor actions.
   const volunteerDetailHtml = renderToStaticMarkup(
     React.createElement(DonationDetailScreen, { asVolunteer: true }),

@@ -6,6 +6,7 @@ import { DateTimeField } from "@/components/findfood/date-time-field";
 import { QueryContent } from "@/components/findfood/feedback";
 import { PhotoField } from "@/components/findfood/photo-field";
 import { Icon } from "@/components/findfood/icon";
+import { LocationPicker } from "@/components/findfood/map";
 import {
   MotivoField,
   motivoBody,
@@ -40,9 +41,11 @@ import {
   applyTipoAlimento,
   foodTypeOptions,
   removeProduct,
+  suggestDireccion,
   unitOptions,
   type DraftProduct,
 } from "@/domain/donation-draft";
+import { formatCoordenada } from "@/domain/mappers/geo";
 import { COLD_CHAIN_OPTIONS } from "@/domain/mappers/refrigeration";
 import {
   useMotivos,
@@ -208,11 +211,45 @@ export function NewDonationScreen() {
         </Row>
       </Section>
       <Section title="Ubicación de la entrega">
+        <Field
+          label="Dirección de recogida"
+          value={draft.direccion}
+          placeholder="Ej. Calle 76 #15-20, Bogotá"
+          maxLength={255}
+          onChangeText={(direccion) =>
+            setDraft((current) => ({ ...current, direccion }))
+          }
+        />
+        <Field
+          label="Referencia (opcional)"
+          value={draft.referencia}
+          placeholder="Ej. Portería norte"
+          maxLength={500}
+          onChangeText={(referencia) =>
+            setDraft((current) => ({ ...current, referencia }))
+          }
+        />
+        <LocationPicker
+          value={draft.ubicacionRecogida}
+          onChange={(ubicacionRecogida) =>
+            setDraft((current) => ({ ...current, ubicacionRecogida }))
+          }
+          // Only while the address is empty: a typed address is never replaced.
+          onAddressSuggestion={
+            draft.direccion.trim() === ""
+              ? (text) => setDraft((current) => suggestDireccion(current, text))
+              : undefined
+          }
+        />
         <Card soft>
           <Row>
             <Icon name="pin" />
             <View style={{ flex: 1 }}>
-              <Copy>Ubicación pendiente de seleccionar en el mapa</Copy>
+              <Copy>
+                {draft.ubicacionRecogida
+                  ? `Punto elegido: ${formatCoordenada(draft.ubicacionRecogida)}`
+                  : "Mueve el mapa hasta tu punto de recogida o usa tu ubicación."}
+              </Copy>
               <Copy tone="secondary">
                 Este punto de recogida se compartirá entre todos los productos.
               </Copy>

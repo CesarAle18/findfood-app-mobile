@@ -1,3 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
+
+import { EmptyState, LoadingState } from "@/components/findfood/feedback";
+import { RouteMapView } from "@/components/findfood/map";
 import {
   Badge,
   Button,
@@ -9,11 +13,35 @@ import {
   Screen,
   Section,
 } from "@/components/findfood/ui";
-import { RouteMap } from "@/components/findfood/icon";
+import { rutaQuery, rutasQuery } from "@/services/rutas";
 
-// TODO(F3): read the active route from GET /rutas and GET /rutas/:id, and pass the next
-// stop's `donacion_id` (UUID) to registrar-recogida and detalle-donacion. Until then the
-// detail link carries no id and opens its empty state.
+/** The volunteer's route in progress (the same request the location tracking makes). */
+const ROUTE_IN_PROGRESS = { estado: "EN_CURSO", limite: 1 } as const;
+
+/** Map of the route in progress: `GET /rutas?estado=EN_CURSO`, then `GET /rutas/:id`. */
+function ActiveRouteMap() {
+  const rutas = useQuery(rutasQuery(ROUTE_IN_PROGRESS));
+  const id = rutas.data?.datos[0]?.id;
+  const ruta = useQuery({ ...rutaQuery(id ?? ""), enabled: Boolean(id) });
+  if (ruta.data) {
+    return <RouteMapView geometria={ruta.data.geometria} paradas={ruta.data.paradas} />;
+  }
+  if (rutas.isPending || (id && ruta.isPending)) {
+    return <LoadingState label="Cargando el mapa de la ruta" />;
+  }
+  const noRoute = rutas.data !== undefined && !id;
+  return (
+    <EmptyState
+      icon="route"
+      title={noRoute ? "No tienes una ruta en curso" : "No pudimos cargar el mapa"}
+      description={noRoute ? "El mapa aparece cuando inicias una ruta." : undefined}
+    />
+  );
+}
+
+// TODO(F3): only the map reads the API so far. Read the next stop from the same route and
+// pass its `donacion_id` (UUID) to registrar-recogida and detalle-donacion. Until then the
+// rest of the screen is preview data and the detail link opens its empty state.
 export function ActiveRouteScreen() {
   return (
     <Screen
@@ -21,7 +49,7 @@ export function ActiveRouteScreen() {
       subtitle="R-045"
       badge={<Badge warning>En progreso</Badge>}
     >
-      <RouteMap />
+      <ActiveRouteMap />
       <Section title="Próxima parada">
         <Card>
           <Copy weight="semibold" style={{ fontSize: 17, lineHeight: 24 }}>
