@@ -21,6 +21,7 @@ function answerFor(queryKey) {
   if (root === "perfil") return fixtures.impactoFixture();
   if (root === "notificaciones" && kind === "list")
     return fixtures.bandejaFixture([fixtures.notificacionFixture()]);
+  if (root === "asignaciones" && kind === "ofertas") return [fixtures.ofertaFixture()];
   if (root !== "donaciones") return undefined;
   if (kind === "detail")
     return fixtures.detalleFixture({ id: arg, estado: "RECIBIDA" });
@@ -362,6 +363,16 @@ try {
   const { NotificationsScreen } = require("../src/screens/notifications.tsx");
   const inboxHtml = renderToStaticMarkup(React.createElement(NotificationsScreen));
   assert(inboxHtml.includes("Donación recibida") && inboxHtml.includes("Marcar todas como leídas"));
+  // The offer shows a real assignment: by its link, else the first one pending.
+  const { OfferScreen } = require("../src/screens/volunteer.tsx");
+  const offerHtml = renderToStaticMarkup(React.createElement(OfferScreen));
+  assert(offerHtml.includes("DON-1048") && offerHtml.includes("Vence 15:10"));
+  routeParams = { asignacionId: "otra" };
+  assert(
+    renderToStaticMarkup(React.createElement(OfferScreen)).includes(
+      "Esta oferta ya no está disponible",
+    ),
+  );
   const { RatingScreen } = require("../src/screens/account.tsx");
   routeParams = { id: fixtures.DONATION_ID };
   const donorRatingHtml = renderToStaticMarkup(React.createElement(RatingScreen));

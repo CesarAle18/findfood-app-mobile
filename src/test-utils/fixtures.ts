@@ -8,6 +8,7 @@ import type {
   DonacionDetalleDto,
   DonacionResumenDto,
 } from "@/services/donaciones";
+import type { OfertaDto } from "@/services/asignaciones";
 import type { CatalogosDto } from "@/services/catalogos";
 import type { BandejaDto, NotificacionDto } from "@/services/notificaciones";
 import type { ImpactoDto } from "@/services/perfil";
@@ -254,5 +255,41 @@ export function bandejaFixture(
     limite,
     desplazamiento,
     no_leidas: no_leidas ?? datos.filter((row) => row.leida_at === null).length,
+  };
+}
+
+/** A live offer of `GET /asignaciones/ofertas` (OFRECIDA: no donor contact yet). */
+export function ofertaFixture(overrides: Partial<OfertaDto> = {}): OfertaDto {
+  return {
+    id: "asg-7",
+    estado: "OFRECIDA",
+    intento: 1,
+    ofrecida_at: "2026-10-13T20:00:00Z",
+    expira_at: "2026-10-13T20:10:00Z",
+    aceptada_at: null,
+    distancia_km: 2.84,
+    ruta_id: null,
+    donacion_id: DONATION_ID,
+    codigo: "DON-1048",
+    titulo: "Supermercado La 14",
+    donacion_estado: "PUBLICADA",
+    peso_estimado_kg: 45,
+    requiere_refrigeracion: true,
+    ventana_recogida_inicio: "2026-10-13T21:00:00Z",
+    ventana_recogida_fin: "2026-10-13T23:00:00Z",
+    direccion_recogida: "Calle 5 # 38-25, Cali",
+    referencia_recogida: "Muelle de carga",
+    lat: 3.42,
+    lng: -76.54,
+    almacen_id: null,
+    almacen_nombre: null,
+    almacen_direccion: null,
+    contacto_nombre: null,
+    contacto_telefono: null,
+    productos: [
+      { tipo: "Lácteos", cantidad: 20, unidad: "L", peso_estimado_kg: 20, requiere_refrigeracion: true },
+      { tipo: "Pan", cantidad: 25, unidad: "KG", peso_estimado_kg: 25, requiere_refrigeracion: false },
+    ],
+    ...overrides,
   };
 }

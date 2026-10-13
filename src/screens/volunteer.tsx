@@ -2,7 +2,7 @@ import { AvailabilityField } from "@/components/findfood/availability-field";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { messageFor } from "@/api/problem-messages";
-import { QueryContent } from "@/components/findfood/feedback";
+import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import { PhotoField } from "@/components/findfood/photo-field";
 import {
   MotivoField,
@@ -12,7 +12,12 @@ import {
 } from "@/components/findfood/motivo-field";
 import type { VolunteerApplication } from "@/domain/models";
 import { useMotivos, useTiposVehiculo, type TipoVehiculoDto } from "@/services/catalogos";
-import { useRechazarOfertaMutation } from "@/services/asignaciones";
+import { offerFromOferta, selectOffer, type OfferView } from "@/domain/mappers/offers";
+import {
+  useAceptarOfertaMutation,
+  useOfertas,
+  useRechazarOfertaMutation,
+} from "@/services/asignaciones";
 import { View } from "react-native";
 import {
   Badge,
@@ -22,6 +27,7 @@ import {
   Copy,
   Detail,
   Field,
+  FormMessage,
   SelectField,
   NavButton,
   Row,
@@ -172,60 +178,131 @@ export function VolunteerRegistrationScreen() {
     </Screen>
   );
 }
+/**
+ * A live offer, opened from its push or inbox row with `?asignacionId=`. Without one, the
+ * first offer still waiting for an answer. An offer no longer listed (expired, taken or
+ * already rejected) says so instead of showing stale data.
+ */
 export function OfferScreen() {
-  const [rejecting, setRejecting] = useState(false);
+  const { asignacionId } = useLocalSearchParams<{ asignacionId?: string }>();
+  const requestedId = typeof asignacionId === "string" && asignacionId !== "" ? asignacionId : undefined;
+  const ofertas = useOfertas();
+  const oferta = ofertas.data ? selectOffer(ofertas.data, requestedId) : null;
+  const offer = oferta ? offerFromOferta(oferta) : null;
   return (
     <Screen
       title="Nueva oferta"
       subtitle="Voluntario"
-      badge={<Badge warning>10:00 min</Badge>}
+      badge={offer && !offer.accepted ? <Badge warning>{`Vence ${offer.expiresAt}`}</Badge> : null}
     >
-      <Card>
-        <Copy weight="bold" style={{ fontSize: 20, lineHeight: 28 }}>
-          DON-1048
-        </Copy>
-        <Copy weight="medium">Supermercado La 14</Copy>
-        <Copy tone="secondary">45 kg · Refrigeración requerida</Copy>
-        <Copy tone="secondary">Ventana: 16:00–18:00</Copy>
-      </Card>
-      <Section title="Información para decidir">
-        <Card>
-          <Detail label="Distancia" value="2,8 km" icon="pin" />
-          <View style={{ height: 1, backgroundColor: colors.border }} />
-          <Detail label="Tiempo" value="18 min" icon="clock" />
-          <View style={{ height: 1, backgroundColor: colors.border }} />
-          <Detail label="Capacidad" value="120 kg" icon="truck" />
-          <View style={{ height: 1, backgroundColor: colors.border }} />
-        </Card>
-      </Section>
-      {rejecting ? (
-        <RejectOffer onBack={() => setRejecting(false)} />
-      ) : (
-        <Row>
-          <View style={{ flex: 1 }}>
-            <Button variant="outline" onPress={() => setRejecting(true)}>
-              Rechazar
-            </Button>
-          </View>
-          <View style={{ flex: 1 }}>
-            <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
-              Aceptar
-            </NavButton>
-          </View>
-        </Row>
-      )}
-      <Copy tone="secondary" style={{ fontSize: 11, textAlign: "center" }}>
-        Al aceptar, la ruta se agregará automáticamente.
-      </Copy>
+      <QueryContent query={ofertas} loadingLabel="Cargando la oferta">
+        {() =>
+          offer ? (
+            <OfferDetails offer={offer} />
+          ) : (
+            <EmptyState
+              icon="truck"
+              title={requestedId ? "Esta oferta ya no está disponible" : "No tienes ofertas pendientes"}
+              description={
+                requestedId
+                  ? "Pudo expirar o asignarse a otro voluntario."
+                  : "Te avisaremos cuando haya una donación cerca de ti."
+              }
+              action={
+                <NavButton href="/voluntario" dismissTo showArrow={false}>
+                  Volver al inicio
+                </NavButton>
+              }
+            />
+          )
+        }
+      </QueryContent>
     </Screen>
   );
 }
-/**
- * Rejects the offer with a RECHAZO_ASIGNACION reason. With `?asignacionId=` it calls
- * `POST /asignaciones/:id/rechazar`; without one (the demo offer) it only goes back home.
- */
-function RejectOffer({ onBack }: { onBack: () => void }) {
-  const { asignacionId } = useLocalSearchParams<{ asignacionId?: string }>();
+
+function OfferDetails({ offer }: { offer: OfferView }) {
+  const [rejecting, setRejecting] = useState(false);
+  const { mutateAsync: aceptar, isPending: accepting } = useAceptarOfertaMutation();
+  const [error, setError] = useState<string>();
+
+  const accept = async () => {
+    setError(undefined);
+    try {
+      await aceptar(offer.id);
+    } catch (failure) {
+      setError(messageFor(failure));
+      return;
+    }
+    router.dismissTo("/voluntario/rutas");
+  };
+
+  return (
+    <>
+      <Card>
+        <Copy weight="bold" style={{ fontSize: 20, lineHeight: 28 }}>
+          {offer.code}
+        </Copy>
+        <Copy weight="medium">{offer.title}</Copy>
+        <Copy tone="secondary">{offer.summary}</Copy>
+        <Copy tone="secondary">{`Ventana: ${offer.pickupWindow}`}</Copy>
+      </Card>
+      <Section title="Información para decidir">
+        <Card>
+          <Detail label="Recogida" value={offer.address} icon="pin" />
+          {offer.distance !== null ? (
+            <>
+              <View style={{ height: 1, backgroundColor: colors.border }} />
+              <Detail label="Distancia" value={offer.distance} icon="truck" />
+            </>
+          ) : null}
+          <View style={{ height: 1, backgroundColor: colors.border }} />
+          <Detail label="Responde antes de" value={offer.expiresAt} icon="clock" />
+        </Card>
+      </Section>
+      {offer.products.length > 0 ? (
+        <Section title="Productos">
+          <Card>
+            {offer.products.map((product) => (
+              <Copy key={product} tone="secondary">
+                {product}
+              </Copy>
+            ))}
+          </Card>
+        </Section>
+      ) : null}
+      {offer.accepted ? (
+        <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
+          Ver mis rutas
+        </NavButton>
+      ) : rejecting ? (
+        <RejectOffer asignacionId={offer.id} onBack={() => setRejecting(false)} />
+      ) : (
+        <>
+          <FormMessage message={error} />
+          <Row>
+            <View style={{ flex: 1 }}>
+              <Button variant="outline" disabled={accepting} onPress={() => setRejecting(true)}>
+                Rechazar
+              </Button>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button loading={accepting} onPress={() => void accept()}>
+                Aceptar
+              </Button>
+            </View>
+          </Row>
+          <Copy tone="secondary" style={{ fontSize: 11, textAlign: "center" }}>
+            Al aceptar, la ruta se agregará automáticamente.
+          </Copy>
+        </>
+      )}
+    </>
+  );
+}
+
+/** Rejects the offer with a RECHAZO_ASIGNACION reason (`POST /asignaciones/:id/rechazar`). */
+function RejectOffer({ asignacionId, onBack }: { asignacionId: string; onBack: () => void }) {
   const { data: motivos } = useMotivos("RECHAZO_ASIGNACION");
   const { mutateAsync: rechazar, isPending } = useRechazarOfertaMutation();
   const [selection, setSelection] = useState<MotivoSelection>({ comentario: "" });
@@ -236,13 +313,11 @@ function RejectOffer({ onBack }: { onBack: () => void }) {
     setError(invalid);
     const { motivoId } = selection;
     if (invalid !== null || motivoId === undefined) return;
-    if (typeof asignacionId === "string" && asignacionId !== "") {
-      try {
-        await rechazar({ id: asignacionId, body: motivoBody({ ...selection, motivoId }) });
-      } catch (failure) {
-        setError(messageFor(failure));
-        return;
-      }
+    try {
+      await rechazar({ id: asignacionId, body: motivoBody({ ...selection, motivoId }) });
+    } catch (failure) {
+      setError(messageFor(failure));
+      return;
     }
     router.dismissTo("/voluntario");
   };

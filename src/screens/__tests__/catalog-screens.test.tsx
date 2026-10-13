@@ -12,7 +12,12 @@ import { NewDonationScreen, WaitingScreen } from "@/screens/donations";
 import { OfferScreen, VolunteerRegistrationScreen } from "@/screens/volunteer";
 import { MobileProvider } from "@/state/mobile-context";
 import type { ApiMock } from "@/test-utils/api";
-import { DONATION_ID, catalogosFixture, detalleFixture } from "@/test-utils/fixtures";
+import {
+  DONATION_ID,
+  catalogosFixture,
+  detalleFixture,
+  ofertaFixture,
+} from "@/test-utils/fixtures";
 import { createTestQueryClient } from "@/test-utils/query";
 
 jest.mock("@/api", () => ({
@@ -47,8 +52,15 @@ async function renderScreen(Component: React.ComponentType, initialUrl = "/panta
   }
   // Where the cancel and reject flows go back to.
   const Home = () => <Text>Inicio</Text>;
+  const Routes = () => <Text>Mis rutas</Text>;
   await renderRouter(
-    { _layout: Layout, pantalla: Pantalla, donante: Home, voluntario: Home },
+    {
+      _layout: Layout,
+      pantalla: Pantalla,
+      donante: Home,
+      voluntario: Home,
+      "voluntario/rutas": Routes,
+    },
     { initialUrl },
   );
 }
@@ -56,6 +68,9 @@ async function renderScreen(Component: React.ComponentType, initialUrl = "/panta
 beforeEach(() => {
   mockApi.get.mockReset().mockImplementation(async (path: string) => {
     if (path === "/catalogos") return catalogosFixture;
+    if (path === "/asignaciones/ofertas") {
+      return [ofertaFixture({ id: "asig-0", estado: "ACEPTADA" }), ofertaFixture({ id: "asig-1" })];
+    }
     throw new Error(`unexpected GET ${path}`);
   });
   mockApi.post.mockReset().mockResolvedValue(detalleFixture());
@@ -146,10 +161,45 @@ describe("WaitingScreen", () => {
 });
 
 describe("OfferScreen", () => {
+  it("shows the assignment of the link, with its pickup and deadline", async () => {
+    await renderScreen(OfferScreen, "/pantalla?asignacionId=asig-1");
+
+    expect(await screen.findByText("DON-1048")).toBeOnTheScreen();
+    expect(screen.getByText("Supermercado La 14")).toBeOnTheScreen();
+    expect(screen.getByText("45 kg · Refrigeración requerida")).toBeOnTheScreen();
+    expect(screen.getByText("Calle 5 # 38-25, Cali · Muelle de carga")).toBeOnTheScreen();
+    expect(screen.getByText("Vence 15:10")).toBeOnTheScreen();
+    expect(screen.getByText("Lácteos · 20 L")).toBeOnTheScreen();
+  });
+
+  it("accepts the offer and opens the routes", async () => {
+    await renderScreen(OfferScreen, "/pantalla?asignacionId=asig-1");
+
+    await fireEvent.press(await screen.findByText("Aceptar"));
+
+    await waitFor(() => expect(mockApi.post).toHaveBeenCalledWith("/asignaciones/asig-1/aceptar"));
+    expect(await screen.findByText("Mis rutas")).toBeOnTheScreen();
+  });
+
+  it("says so when the linked offer is no longer listed", async () => {
+    await renderScreen(OfferScreen, "/pantalla?asignacionId=expirada");
+
+    expect(await screen.findByText("Esta oferta ya no está disponible")).toBeOnTheScreen();
+    expect(screen.queryByText("Aceptar")).toBeNull();
+  });
+
+  it("without a link, shows the first offer waiting for an answer", async () => {
+    await renderScreen(OfferScreen);
+
+    expect(await screen.findByText("DON-1048")).toBeOnTheScreen();
+    await fireEvent.press(screen.getByText("Aceptar"));
+    await waitFor(() => expect(mockApi.post).toHaveBeenCalledWith("/asignaciones/asig-1/aceptar"));
+  });
+
   it("requires the comment of a reason that asks for one before rejecting", async () => {
     await renderScreen(OfferScreen, "/pantalla?asignacionId=asig-1");
 
-    await fireEvent.press(screen.getByText("Rechazar"));
+    await fireEvent.press(await screen.findByText("Rechazar"));
     await fireEvent.press(await screen.findByLabelText("Motivo *: Selecciona"));
     await fireEvent.press(screen.getByText("Otro"));
     await fireEvent.press(screen.getByText("Confirmar rechazo"));
