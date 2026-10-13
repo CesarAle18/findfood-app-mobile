@@ -2,6 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { render, waitFor } from "@testing-library/react-native";
 
 import { api } from "@/api";
+import { useVolunteerLocationTracking } from "@/location/use-volunteer-location-tracking";
 import { usePushRegistration } from "@/notifications/push";
 import { catalogosQuery } from "@/services/catalogos";
 import { resetApiMock, type ApiMock } from "@/test-utils/api";
@@ -18,6 +19,12 @@ const mockAccess = { phase: "loading" as string, canDonor: false, canVolunteer: 
 
 jest.mock("@/notifications/push", () => ({ usePushRegistration: jest.fn() }));
 
+jest.mock("@/location/use-volunteer-location-tracking", () => ({
+  useVolunteerLocationTracking: jest.fn(),
+}));
+
+const mockedLocationTracking = jest.mocked(useVolunteerLocationTracking);
+
 jest.mock("@/state/session", () => ({
   useAccess: () => mockAccess,
 }));
@@ -30,6 +37,7 @@ beforeEach(() => {
   mockAccess.canDonor = false;
   mockAccess.canVolunteer = false;
   mockedPushRegistration.mockClear();
+  mockedLocationTracking.mockClear();
   resetApiMock(mockedApi);
   mockedApi.get.mockResolvedValue(catalogosFixture);
 });
@@ -54,6 +62,7 @@ describe("SignedInEffects", () => {
       expect(mockedApi.get).not.toHaveBeenCalled();
       expect(client.getQueryData(catalogosQuery().queryKey)).toBeUndefined();
       expect(mockedPushRegistration).not.toHaveBeenCalled();
+      expect(mockedLocationTracking).not.toHaveBeenCalled();
     },
   );
 
@@ -74,6 +83,11 @@ describe("SignedInEffects", () => {
     mockAccess.canVolunteer = true;
     await renderEffects("app");
     expect(mockedPushRegistration).toHaveBeenLastCalledWith(true);
+  });
+
+  it("runs the volunteer location tracking while signed in", async () => {
+    await renderEffects("app");
+    expect(mockedLocationTracking).toHaveBeenCalled();
   });
 
   it("renders nothing", async () => {

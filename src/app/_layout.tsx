@@ -24,6 +24,9 @@ import { queryClient, setupQueryManagers } from "@/api/query-client";
 import { LoadingState, OfflineBanner } from "@/components/findfood/feedback";
 import { configResult, type ConfigError } from "@/config/env";
 import { colors } from "@/design/tokens";
+// For its side effect: defines the background location task, which must exist when the OS
+// launches the app headless to deliver locations.
+import "@/location/tracking";
 import { guardsFor, ROUTE_GROUPS, type RouteGroup } from "@/navigation/access-route";
 import { STACK_SCREEN_OPTIONS } from "@/navigation/stack-options";
 import { configureNotificationHandler } from "@/notifications/push";

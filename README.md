@@ -66,6 +66,16 @@ Aunque la variable exista en el entorno, un bundle de release no contiene el tok
 - Al iniciar sesión con rol DONANTE o VOLUNTARIO la app pide permiso (una vez por sesión) y registra el token con `POST /me/dispositivos`; al cerrar sesión lo elimina.
 - Para probar la apertura: genera una oferta (`ASIGNACION_OFRECIDA`) desde el API, toca la notificación con la app cerrada y abierta; debe abrir `/voluntario/oferta` con esa asignación. Las notificaciones recibidas con la app abierta actualizan la bandeja.
 
+### Ubicación del voluntario en segundo plano
+
+Un voluntario aprobado comparte su ubicación (`POST /v1/voluntario/ubicacion`, solo `{ lat, lng }`, como mucho cada 60 s o cada 100 m) mientras está **Disponible** o tiene una ruta `EN_CURSO`. Deja de compartirla al ponerse "No disponible" sin ruta en curso, al cambiar al rol donante o al cerrar sesión (`src/location/`).
+
+- Primero se pide el permiso en primer plano. Antes del permiso en segundo plano se muestra una divulgación destacada ("Continuar" / "Ahora no"), una vez por sesión. Con "Ahora no", o si el sistema lo niega, solo se comparte con la app abierta.
+- En Android, mientras se comparte en segundo plano, se ve la notificación del servicio en primer plano "FindFood está usando tu ubicación". En iOS se muestra el indicador azul de ubicación.
+- El task `findfood-volunteer-location` se define al cargar `src/app/_layout.tsx`, para que exista cuando el sistema lanza la app sin interfaz. Sin token en memoria, recupera la sesión guardada de Supabase. Sin sesión, o ante un 401 o un 403 `sin-perfil-voluntario`, detiene las actualizaciones.
+- Requiere un build de desarrollo (no funciona en Expo Go). En Android, si se cierra la app a la fuerza, el rastreo no se reanuda solo.
+- **Antes de publicar:** declarar el uso de ubicación en segundo plano en Play Console (con video) y justificar "Siempre" en App Store Connect.
+
 ## Acceso con Google
 
 El botón «Continuar con Google» del inicio de sesión usa el inicio de sesión nativo (`@react-native-google-signin/google-signin`, API original y gratuita): Google entrega un ID token y Supabase lo canjea por una sesión con `signInWithIdToken`. No funciona en Expo Go ni en la vista web; requiere un build de EAS (`development`, `preview` o `production`). Sin los client IDs, o con el perfil `local`, el botón aparece deshabilitado.

@@ -90,11 +90,15 @@ jest.mock("expo-location", () => ({
   hasStartedLocationUpdatesAsync: jest.fn(async () => false),
   startLocationUpdatesAsync: jest.fn(async () => undefined),
   stopLocationUpdatesAsync: jest.fn(async () => undefined),
+  watchPositionAsync: jest.fn(async () => ({ remove: jest.fn() })),
 }));
 
 jest.mock("expo-task-manager", () => ({
   ...jest.requireActual("expo-task-manager"),
   isTaskRegisteredAsync: jest.fn(async () => false),
+  // No native task registry under Jest: defining a task only records the call.
+  defineTask: jest.fn(),
+  isTaskDefined: jest.fn(() => false),
 }));
 
 jest.mock("expo-image-picker", () => ({
