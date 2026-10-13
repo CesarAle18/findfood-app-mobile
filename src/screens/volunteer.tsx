@@ -1,5 +1,4 @@
 import { AvailabilityField } from "@/components/findfood/availability-field";
-import { useMobile } from "@/state/mobile-context";
 import { useState } from "react";
 import type { VolunteerApplication } from "@/domain/models";
 import { View } from "react-native";
@@ -20,6 +19,8 @@ import {
   Stack,
 } from "@/components/findfood/ui";
 import { colors } from "@/design/tokens";
+
+import { useDonationId } from "./donation-queries";
 
 export function VolunteerRegistrationScreen() {
   const [form, setForm] = useState<VolunteerApplication>({
@@ -120,7 +121,7 @@ export function VolunteerRegistrationScreen() {
           </Section>
         </Stack>
       </Section>
-      <NavButton href="/inicio-donante" showArrow={false}>
+      <NavButton href="/donante" dismissTo showArrow={false}>
         Enviar
       </NavButton>
     </Screen>
@@ -131,8 +132,6 @@ export function OfferScreen() {
     <Screen
       title="Nueva oferta"
       subtitle="Voluntario"
-      tabs="home"
-      viewRole="volunteer"
       badge={<Badge warning>10:00 min</Badge>}
     >
       <Card>
@@ -158,7 +157,7 @@ export function OfferScreen() {
           <Button variant="outline">Rechazar</Button>
         </View>
         <View style={{ flex: 1 }}>
-          <NavButton href="/ruta-activa" showArrow={false}>
+          <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
             Aceptar
           </NavButton>
         </View>
@@ -169,8 +168,9 @@ export function OfferScreen() {
     </Screen>
   );
 }
+/** Opened from the active route; `?id=` is the stop's donation (UUID), when known. */
 export function CollectionScreen() {
-  const { data } = useMobile();
+  const id = useDonationId();
   const [condition, setCondition] = useState("Bueno");
   const [weight, setWeight] = useState("20 kg");
   const [notes, setNotes] = useState("");
@@ -182,8 +182,8 @@ export function CollectionScreen() {
         <PhotoPlaceholder label="Evidencia fotográfica" />
       </Section>
       <Field label="Observaciones" value={notes} onChangeText={setNotes} placeholder="Describe el estado del producto" multiline />
-      <NavButton href={{ pathname: "/calificar-donante", params: { id: data.donations[0]?.id } }} showArrow={false}>Calificar donante</NavButton>
-      <NavButton href="/ruta-activa" showArrow={false}>
+      <NavButton href={{ pathname: "/voluntario/calificar-donante", params: { id } }} showArrow={false}>Calificar donante</NavButton>
+      <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
         Confirmar recogida
       </NavButton>
     </Screen>

@@ -20,31 +20,106 @@ npx expo start --clear
 
 En la terminal de Expo, pulsar **w** para la vista previa web o escanear el **QR** con Expo Go compatible con SDK 57. También se puede abrir un emulador Android configurado; el simulador iOS requiere macOS y Xcode. La vista web corresponde a la interfaz móvil, no a la aplicación administrativa.
 
+## Entornos
+
+La configuración se lee de variables `EXPO_PUBLIC_*` (plantilla en `.env.example`). Si falta alguna o es inválida, la app muestra una pantalla de configuración inválida (en desarrollo lista las variables con problemas). Hay dos perfiles:
+
+- **real** (por defecto): API desplegada y Supabase. Copiar `.env.example` a `.env.local` (no se versiona) y completar los valores. `npm run start:real` arranca Expo con este perfil y borra el `.env.development.local` generado, si existe.
+- **local** (solo desarrollo): `findfood-api` en tu computador. `npm run start:local` (o `npm run start:local -- voluntario`; por defecto `donante`) firma un token de desarrollo para el usuario de prueba y escribe `.env.development.local`, que tiene prioridad sobre `.env.local` y solo se carga en desarrollo.
+
+Requisitos del perfil local:
+
+1. En `findfood-api`: `npm run datos:prueba` (crea los usuarios de prueba y `postman/FindFood-local.postman_environment.json`) y luego `npm run start:local`.
+2. El script busca la API en `../findfood-api`; si está en otra carpeta, definir `FINDFOOD_API_DIR`.
+3. El teléfono debe estar en la misma red LAN que el computador. Se usa la primera IPv4 de la LAN; si no es la correcta (VPN, WSL, adaptadores virtuales), definir `DEV_API_HOST`. El puerto es `DEV_API_PORT` (3000 por defecto).
+4. En Windows, permitir conexiones entrantes al puerto 3000 en el firewall para redes privadas. Por ejemplo, en PowerShell como administrador: `New-NetFirewallRule -DisplayName "findfood-api 3000" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -Profile Private`.
+
+El token dura 24 h (`DEV_TOKEN_TTL_HOURS`); al vencer, ejecutar de nuevo `npm run start:local`. `EXPO_PUBLIC_DEV_TOKEN` nunca debe ir en `.env`, `.env.local` ni en EAS. Los argumentos extra pasan a `expo start` (`npm run start:local -- donante --android`), y `--no-start` solo genera o borra el archivo.
+
+## Build de desarrollo (EAS)
+
+Las notificaciones push, los mapas y la ubicación en segundo plano no funcionan en Expo Go; la app usa `expo-dev-client`. Identificador nativo: `co.findfood.app` (Android e iOS).
+
+Perfiles de `eas.json`:
+
+| Perfil | Salida | Uso |
+|---|---|---|
+| `development` | APK con dev client (`distribution: internal`) | Instalar en el teléfono y cargar el JS desde `npm run start:local` / `start:real`. |
+| `preview` | APK interno | Probar una versión sin servidor de desarrollo. |
+| `production` | AAB para Google Play | Publicación; incrementa `versionCode` automáticamente. |
+
+Primera vez (requiere una cuenta de Expo):
+
+1. `npx eas-cli@latest login` y `npx eas-cli@latest init` (vincula el proyecto y agrega `extra.eas.projectId` a `app.json`).
+2. Cargar las variables públicas en cada entorno de EAS (`development`, `preview`, `production`): `npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_API_URL --value <url> --visibility plaintext`, y lo mismo para `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` y los client IDs de Google. **Nunca** `EXPO_PUBLIC_DEV_TOKEN` ni `EXPO_PUBLIC_APP_ENV=local`. `src/config/build-config.test.ts` solo impide declararlos en `eas.json`; las variables remotas de EAS no las puede ver, así que revisa `npx eas-cli@latest env:list` antes de cada build.
+3. `npx eas-cli@latest build --profile development --platform android` e instalar el APK desde el enlace que entrega EAS.
+4. En el computador, `npm run start:local` o `npm run start:real` y abrir el proyecto desde el dev client.
+
+Aunque la variable exista en el entorno, un bundle de release no contiene el token de desarrollo: se lee solo bajo `__DEV__` y el minificador elimina esa rama. `npm run check:release-token` lo comprueba exportando el bundle de Android con un token centinela y falla si el centinela aparece. Exporta sin bytecode de Hermes para poder buscar en el JS.
+
+## Acceso con Google
+
+El botón «Continuar con Google» del inicio de sesión usa el inicio de sesión nativo (`@react-native-google-signin/google-signin`, API original y gratuita): Google entrega un ID token y Supabase lo canjea por una sesión con `signInWithIdToken`. No funciona en Expo Go ni en la vista web; requiere un build de EAS (`development`, `preview` o `production`). Sin los client IDs, o con el perfil `local`, el botón aparece deshabilitado.
+
+Configuración, una sola vez:
+
+1. **Google Cloud → APIs y servicios → Credenciales**, en el mismo proyecto:
+   - Cliente OAuth **web**: su ID es `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` y, con su secreto, se registra en Supabase (ver `docs/integracion-backend.md`).
+   - Cliente **Android** con el paquete `co.findfood.app` y la huella SHA-1 de cada certificado que firma la app: el keystore de EAS (`npx eas-cli@latest credentials -p android`) y, al publicar, el certificado de firma de apps de Google Play (Play Console → Integridad de la app → Firma de apps). Con una SHA-1 sin registrar, Google responde `DEVELOPER_ERROR` y la app muestra «No pudimos iniciar sesión con Google».
+   - Cliente **iOS** con el bundle ID `co.findfood.app`: su ID es `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`.
+2. **Variables**: definir `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` y `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` en `.env.local` y en cada entorno de EAS (`--visibility plaintext`; no son secretos).
+3. **Build**: `app.config.ts` agrega el plugin de Google Sign-In con el esquema de URL de iOS (`com.googleusercontent.apps.<id>`) derivado de `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`; sin esa variable no lo agrega, porque Android no necesita configuración nativa. El esquema queda dentro del build de iOS: si cambia el client ID de iOS, hay que generar un build nuevo.
+
+Una cuenta nueva de Google llega sin apellidos ni celular: la raíz abre «Completar perfil» antes de entrar. Cerrar sesión también cierra la sesión de Google en el teléfono, para que el siguiente acceso muestre el selector de cuentas.
+
 ## Recorrer la demostración
 
-La aplicación abre `/login`. Iniciar sesión y Google navegan a `/inicio-donante` sin autenticar. El enlace de registro lleva a `/registro`, después a `/verificar-correo` y al inicio de sesión; el código editable no se verifica contra ningún servicio.
+Sin sesión, la aplicación abre `/login`. Con el perfil `real` (`npm run start:real`), el inicio de sesión, el registro y la verificación de correo usan Supabase Auth:
 
-Desde el menú de cuenta (`/cuenta`), seleccionar «Ver como voluntario» abre `/inicio`; «Ver como donante» vuelve a `/inicio-donante`. Este cambio solo afecta a la demostración local. Los perfiles, las donaciones, el seguimiento, la revisión y la calificación tienen rutas propias. El menú de tres puntos abre la cuenta; su enlace «Ver todas las pantallas» lleva a `/pantallas`, la galería de revisión con las 22 pantallas.
+- **Registro** (`/registro`): nombres, apellidos, correo, celular colombiano (10 dígitos que empiezan por 3, con `+57` opcional), contraseña de al menos 8 caracteres con letras y números, su confirmación y la aceptación de los términos. La cuenta se crea como donante. El tipo y el número de documento no se piden hasta que la API los admita. La aplicación nunca revela si un correo ya está registrado: con un correo existente, el registro responde igual que con uno nuevo y lleva a la verificación, que explica qué hacer si ya se tiene cuenta (iniciar sesión o recuperar la contraseña).
+- **Verificación** (`/verificar-correo?email=…`): Supabase envía un código de 6 dígitos al correo. Tras cada envío correcto hay que esperar 60 segundos para pedir otro código; si el código expiró o no es válido, el reenvío queda disponible de inmediato. Con una sesión iniciada cuyo correo aún no está confirmado, la pantalla verifica el correo de esa sesión y permite pedir un código sin esperar.
+- **Inicio de sesión** (`/login`): si el correo aún no está confirmado, la aplicación abre la verificación de inmediato y esta envía un código nuevo; el contador de reenvío empieza solo cuando el envío se completa.
+- **Recuperar contraseña** (`/recuperar-contrasena`): envía un enlace al correo y responde siempre con el mismo mensaje neutro, exista o no la cuenta; solo muestra como error los límites de envío y la falta de conexión. El enlace funciona únicamente en el teléfono que lo pidió (PKCE).
+- **Restablecer contraseña** (`/restablecer-contrasena`, sin guard): el enlace abre esta pantalla, que canjea el código una sola vez y pide la contraseña nueva con las mismas reglas del registro. Mientras tanto la sesión temporal queda marcada como recuperación (la marca se guarda en el dispositivo: si la app se cierra antes de guardar la contraseña, al abrirla vuelve a esta pantalla) y no abre la app; un enlace inválido abierto durante una recuperación en curso no la interrumpe; al guardar, o con «Cancelar» (que cierra la sesión), la raíz decide a dónde ir. Un enlace vencido o inválido explica el problema y ofrece pedir uno nuevo.
+- **Completar perfil** (`/completar-perfil`): si `GET /me` tiene pendiente el celular o los términos, la raíz abre esta pantalla con los datos que ya tiene la cuenta. Pide apellidos y celular (las cuentas de Google llegan sin ellos) y la aceptación de los términos cuando están pendientes; envía a `PATCH /me` solo lo que cambió.
+- **Cambiar contraseña** (`/cambiar-contrasena`): si la cuenta debe cambiar su contraseña, la raíz abre esta pantalla; al guardar, Supabase actualiza la contraseña y la app vuelve a consultar `GET /me`.
 
-El formulario `/registro-voluntario` tiene scroll, tipo de identificación, datos personales y de vehículo, y espacios para fotos de documento, vehículo y licencia. Los campos y selectores habilitados actualizan estado local; «Enviar» vuelve al inicio donante como navegación de demostración.
+Al iniciar sesión o verificar el código, las pantallas no navegan por su cuenta: la sesión nueva cierra las rutas de autenticación y la raíz abre el inicio del rol. Completar perfil y cambiar contraseña también ofrecen «Cerrar sesión». El acceso con Google sigue el mismo camino (ver [Acceso con Google](#acceso-con-google)); si se cierra el selector de cuentas no se muestra ningún error. Con el perfil `local` (`npm run start:local`) no hay Supabase: los formularios de autenticación quedan deshabilitados con un aviso, y el token de desarrollo abre directamente la vista del rol elegido.
+
+## Navegación
+
+La raíz (`src/app/_layout.tsx`) mantiene el splash hasta resolver la sesión y `GET /me`, y protege cada grupo de rutas con `Stack.Protected` según la fase de acceso: sin sesión solo se alcanzan las rutas de autenticación; una cuenta sin rol móvil o bloqueada va a `/sin-acceso`; una cuenta con pasos pendientes va a `/completar-perfil` o `/cambiar-contrasena`, y una recuperación en curso a `/restablecer-contrasena`, la única ruta sin guard. El índice redirige al inicio del rol activo.
+
+- `/donante`: pestañas nativas Inicio, Donaciones, Alertas y Perfil; requiere el rol `DONANTE`.
+- `/voluntario`: pestañas nativas Inicio, Rutas, Alertas y Perfil; requiere el rol `VOLUNTARIO`.
+
+Un donante sin rol voluntario no puede abrir `/voluntario/*`, ni siquiera por enlace profundo: la ruta bloqueada se descarta y vuelve al índice. El menú de tres puntos abre `/cuenta`, donde «Cambiar vista» solo ofrece los roles que tiene la cuenta y «Cerrar sesión» pide confirmación antes de cerrar la sesión en el teléfono. Mientras se cierra, el menú queda bloqueado con el aviso «Cerrando sesión…»; al terminar, las guardas llevan a `/login` sin navegación manual. El cierre de sesión es local y acotado: se intenta dar de baja el dispositivo de notificaciones (como máximo unos 3 s) y se espera a Supabase como máximo unos 8 s (por ejemplo, sin conexión y con la sesión vencida), más lo que tarde borrar la sesión guardada, que se borra igualmente. Si Supabase responde más tarde, la app vuelve a borrar esa sesión, salvo que entretanto se haya iniciado una nueva.
+
+El formulario `/donante/registro-voluntario` tiene scroll, tipo de identificación, datos personales y de vehículo, y espacios para fotos de documento, vehículo y licencia. Los campos y selectores habilitados actualizan estado local; «Enviar» vuelve al inicio donante como navegación de demostración.
 
 ## Organización
 
-- `src/app`: rutas de Expo Router, layout y galería auxiliar.
+- `src/app`: rutas de Expo Router; segmentos `donante/` y `voluntario/` con sus pestañas.
+- `src/navigation`: grupos de rutas, guards por fase y rol, y barra de pestañas.
 - `src/screens`: composición de pantallas por contexto.
 - `src/components/findfood`: componentes nativos, controles e iconos SVG.
 - `src/design/tokens.ts`: colores, tipografía y espaciado.
 - `src/domain/models.ts`: modelos de presentación tipados.
-- `src/services/mobile-repository.ts`: puerto asíncrono de lectura y repositorio de demostración.
-- `src/data/mobile.ts`: fixtures de perfiles y donaciones; quedan otros fixtures visuales locales en pantallas.
-- `src/state/mobile-context.tsx`: proveedor de datos, rol local e inyección del repositorio.
-- `src/data/preview.ts`: inventario de pantallas de revisión.
+- `src/config/env.ts`: variables `EXPO_PUBLIC_*` validadas por perfil.
+- `src/api`: cliente HTTP (`/v1`, Bearer, problem+json, renovación en 401), `QueryClient` y mensajes de error en español.
+- `src/auth`: cliente de Supabase, almacenamiento seguro de la sesión y reglas de acceso.
+- `src/services`: servicios por módulo (perfil, catálogos, donaciones, asignaciones, rutas, evidencias, notificaciones) con hooks de TanStack Query e invalidación por mutación.
+- `src/domain/mappers`: conversión de fechas, unidades, refrigeración y estados entre la API y la interfaz.
+- `src/state/session.tsx`: sesión, usuario de `GET /me`, rol activo y `cerrarSesion()`.
+- `src/state/mobile-context.tsx`: estado local de interfaz (borrador de donación y disponibilidad).
+- `src/data/preview.ts`: fixtures visuales de actividad y avisos, pendientes de sus endpoints.
 - `assets/brand`: logotipo conservado del diseño proporcionado.
 - `docs/integracion-backend.md`: límites y próximos pasos de integración.
 
 ## Comprobaciones
 
 ```bash
+npm test
 npm run typecheck
 npm run lint
 npx expo export --platform all

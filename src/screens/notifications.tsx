@@ -22,7 +22,7 @@ import { View } from "react-native";
 export function NotificationsScreen() {
   const [filter, setFilter] = useState(0);
   return (
-    <Screen title="Notificaciones" subtitle="Últimas novedades" tabs="bell">
+    <Screen title="Notificaciones" subtitle="Últimas novedades">
       <Choices
         values={["Todas", "Sin leer", "Importantes"]}
         selected={filter}

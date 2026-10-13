@@ -10,8 +10,65 @@ const native = require("react-native-web");
 const root = path.resolve(__dirname, "..");
 const original = Module._load;
 let routeParams = {};
+/** What the fake session reports: `useAccess().phase` and `useMe().data`. */
+let accessPhase = "app";
+let me;
 let fixtures;
 let draft;
+/** Raw answer of a query key (`["donaciones", "detail", id]`…), or undefined. */
+function answerFor(queryKey) {
+  const [root, kind, arg] = queryKey;
+  if (root === "perfil") return fixtures.impactoFixture();
+  if (root !== "donaciones") return undefined;
+  if (kind === "detail")
+    return fixtures.detalleFixture({ id: arg, estado: "RECIBIDA" });
+  if (kind === "list")
+    return fixtures.pageFixture([
+      fixtures.resumenFixture(),
+      fixtures.resumenFixture({
+        id: "uuid-2",
+        codigo: "DON-1051",
+        estado: "RECIBIDA",
+      }),
+    ]);
+  return undefined;
+}
+// TanStack Query without a client or network: each query answers its fixture at once,
+// through the screen's own `select`, as a settled result.
+function settled(data) {
+  return {
+    data,
+    error: null,
+    status: data === undefined ? "pending" : "success",
+    isPending: data === undefined,
+    isFetching: false,
+    refetch() {},
+  };
+}
+const queryStubs = {
+  // Only read by handlers (cache invalidation), never while rendering.
+  useQueryClient: () => ({ invalidateQueries: async () => {} }),
+  // Mutations only run from handlers.
+  useMutation: () => ({ mutateAsync: async () => undefined, isPending: false }),
+  useQuery: (options) => {
+    const raw =
+      options.enabled === false ? undefined : answerFor(options.queryKey);
+    return settled(
+      raw !== undefined && options.select ? options.select(raw) : raw,
+    );
+  },
+  useInfiniteQuery: (options) => {
+    const page = answerFor(options.queryKey);
+    const raw = { pages: [page], pageParams: [options.initialPageParam] };
+    return {
+      ...settled(options.select ? options.select(raw) : raw),
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      isFetchNextPageError: false,
+      fetchNextPage() {},
+    };
+  },
+};
 Module._extensions[".tsx"] = Module._extensions[".ts"] = (module, filename) => {
   module._compile(
     ts.transpileModule(fs.readFileSync(filename, "utf8"), {
@@ -114,28 +171,108 @@ Module._load = function (name, parent, isMain) {
           { href: typeof href === "string" ? href : href.pathname },
           children,
         ),
-      router: { canGoBack: () => false, replace() {}, back() {} },
+      router: {
+        canGoBack: () => false,
+        replace() {},
+        back() {},
+        dismissAll() {},
+      },
       useLocalSearchParams: () => routeParams,
+    };
+  // The account menu reads the roles; the real session needs Supabase and SecureStore.
+  if (name === "@/state/session")
+    return {
+      useAccess: () => ({
+        phase: accessPhase,
+        activeRole: "DONANTE",
+        canDonor: true,
+        canVolunteer: true,
+        setActiveRole() {},
+      }),
+      useMe: () => settled(me),
+      useSession: () => ({ status: "none" }),
+      // Only called from handlers and effects, which server rendering never runs.
+      useSessionActions: () => ({
+        cerrarSesion: async () => {},
+        setRecovering() {},
+      }),
+      deviceIdStorage: {},
     };
   if (name === "@/state/mobile-context")
     return {
       useMobile: () => ({
-        data: fixtures,
         available: true,
         setAvailable() {},
-        ratings: { donor: [5, 4], volunteer: [5, 5] },
-        addRating() {},
-        role: "donor",
-        setRole() {},
         draft,
         setDraft() {},
       }),
+    };
+  // No requests leave this check: the query hooks are stubbed above.
+  if (name === "@/api") return { api: {} };
+  // The real module creates the Supabase client (SecureStore, Expo config); the forms only
+  // call these actions from their handlers.
+  if (name === "@/auth/email-auth") {
+    const unused = async () => {
+      throw new Error("not available in the render check");
+    };
+    return {
+      AUTH_UNAVAILABLE_CODE: "auth_unavailable",
+      isEmailAuthAvailable: () => true,
+      signIn: unused,
+      signUp: unused,
+      verifyEmailOtp: unused,
+      resendSignupOtp: unused,
+      requestPasswordReset: unused,
+      exchangeRecoveryCode: unused,
+      updatePassword: unused,
+    };
+  }
+  // The real module loads Google Sign-In's native module and the Supabase client; the login
+  // only starts it from a handler.
+  if (name === "@/auth/google-auth")
+    return {
+      isGoogleSignInAvailable: () => true,
+      signInWithGoogle: async () => {
+        throw new Error("not available in the render check");
+      },
+      signOutFromGoogle: async () => {},
+    };
+  if (name === "@tanstack/react-query")
+    return {
+      ...original.call(this, name, parent, isMain),
+      ...queryStubs,
+    };
+  // FlashList needs native measurements; a plain map keeps the rows, header and footer.
+  if (name === "@shopify/flash-list")
+    return {
+      FlashList: ({
+        data,
+        renderItem,
+        keyExtractor,
+        ListEmptyComponent,
+        ListFooterComponent,
+      }) =>
+        React.createElement(
+          native.View,
+          null,
+          data.length === 0
+            ? ListEmptyComponent
+            : data.map((item, index) =>
+                React.createElement(
+                  React.Fragment,
+                  { key: keyExtractor(item, index) },
+                  renderItem({ item, index }),
+                ),
+              ),
+          ListFooterComponent,
+        ),
     };
   if (name.startsWith("@/")) name = path.join(root, "src", name.slice(2));
   return original.call(this, name, parent, isMain);
 };
 Slot = require("expo-router/build/ui/Slot").Slot;
-fixtures = require("../src/data/mobile.ts").mobileData;
+fixtures = require("../src/test-utils/fixtures.ts");
+me = fixtures.meFixture();
 const {
   initialDonationDraft,
   appendProduct,
@@ -156,6 +293,8 @@ try {
     "notifications",
     "donor",
     "account",
+    "password",
+    "profile-setup",
   ];
   let count = 0;
   for (const module of modules) {
@@ -172,23 +311,40 @@ try {
     }
   }
   const { ProfileScreen } = require("../src/screens/account.tsx");
-  assert(
-    renderToStaticMarkup(
-      React.createElement(ProfileScreen, { volunteer: true }),
-    ).includes("Carlos Ruiz"),
+  const volunteerProfileHtml = renderToStaticMarkup(
+    React.createElement(ProfileScreen, { volunteer: true }),
   );
+  assert(volunteerProfileHtml.includes("María García López"));
+  assert(volunteerProfileHtml.includes("Camioneta"));
   count++;
-  const { RatingScreen } = require("../src/screens/account.tsx");
-  routeParams = { id: "DON-1051" };
+  // Remote lists and details render their rows: human codes, never the UUIDs.
+  const {
+    DonationsScreen,
+    DonorHomeScreen,
+  } = require("../src/screens/donor.tsx");
+  const donationsHtml = renderToStaticMarkup(
+    React.createElement(DonationsScreen),
+  );
+  assert(donationsHtml.includes("DON-1058") && donationsHtml.includes("DON-1051"));
+  assert(!donationsHtml.includes(fixtures.DONATION_ID));
   assert(
-    renderToStaticMarkup(React.createElement(RatingScreen)).includes(
-      "DON-1051",
+    renderToStaticMarkup(React.createElement(DonorHomeScreen)).includes(
+      "DON-1058",
     ),
   );
-  routeParams = { id: "DON-1056" };
+  const { RatingScreen } = require("../src/screens/account.tsx");
+  routeParams = { id: fixtures.DONATION_ID };
+  const donorRatingHtml = renderToStaticMarkup(React.createElement(RatingScreen));
+  assert(donorRatingHtml.includes("DON-1058") && donorRatingHtml.includes("Carlos Ruiz"));
+  assert(
+    renderToStaticMarkup(
+      React.createElement(RatingScreen, { rater: "VOLUNTARIO" }),
+    ).includes("María García"),
+  );
+  routeParams = {};
   assert(
     renderToStaticMarkup(React.createElement(RatingScreen)).includes(
-      "DON-1056",
+      "No encontramos la donación",
     ),
   );
   const expanded = appendProduct(appendProduct(initialDonationDraft));
@@ -208,8 +364,8 @@ try {
   assert.equal(calendarDays(2026, 8)[0], null);
   const { WaitingScreen } = require("../src/screens/donations.tsx");
   const waitingHtml = renderToStaticMarkup(React.createElement(WaitingScreen));
-  assert(waitingHtml.includes('href="/voluntario-asignado"'));
-  assert(waitingHtml.includes('href="/inicio-donante"'));
+  assert(waitingHtml.includes('href="/donante/voluntario-asignado"'));
+  assert(waitingHtml.includes('href="/donante"'));
   assert.equal(initialDonationDraft.products.length, 1);
   assert.equal(new Set(expanded.products.map((p) => p.id)).size, 3);
   draft = {
@@ -232,25 +388,148 @@ try {
     React.createElement(ReviewDonationScreen),
   );
   assert(reviewHtml.includes("Producto prueba 3") && reviewHtml.includes("ML"));
-  routeParams = { id: "DON-1058" };
-  assert(
-    renderToStaticMarkup(React.createElement(DonationDetailScreen)).includes(
-      'href="/calificar-voluntario"',
-    ),
+  routeParams = { id: fixtures.DONATION_ID };
+  const donorDetailHtml = renderToStaticMarkup(
+    React.createElement(DonationDetailScreen),
   );
+  assert(donorDetailHtml.includes('href="/donante/calificar-voluntario"'));
+  assert(donorDetailHtml.includes('href="/donante/donaciones"'));
+  // Volunteers open the same detail from their route, without the donor actions.
+  const volunteerDetailHtml = renderToStaticMarkup(
+    React.createElement(DonationDetailScreen, { asVolunteer: true }),
+  );
+  assert(!volunteerDetailHtml.includes("Calificar voluntario"));
+  assert(volunteerDetailHtml.includes('href="/voluntario/rutas"'));
+  const { AccountScreen } = require("../src/screens/account.tsx");
+  const accountHtml = renderToStaticMarkup(React.createElement(AccountScreen));
+  assert(
+    accountHtml.includes("Ver como donante") &&
+      accountHtml.includes("Ver como voluntario"),
+  );
+  // Sign-out is an action (confirmed first), not a link to the login.
+  assert(accountHtml.includes("Cerrar sesión") && !accountHtml.includes('href="/login"'));
+  // Without an `email` param the verification links back to login.
   const { VerifyEmailScreen } = require("../src/screens/account.tsx");
   assert(
     renderToStaticMarkup(React.createElement(VerifyEmailScreen)).includes(
       'href="/login"',
     ),
   );
+  routeParams = { email: "maria@correo.com" };
+  const verifyHtml = renderToStaticMarkup(React.createElement(VerifyEmailScreen));
+  assert(verifyHtml.includes("maria@correo.com"));
+  // Nothing was sent from this screen: no cooldown.
+  assert(!verifyHtml.includes("Reenviar código en"));
+  // Only a sign-up shows the neutral note, which never says whether the address existed.
+  assert(!verifyHtml.includes('href="/recuperar-contrasena"'));
+  routeParams = { email: "maria@correo.com", origen: "registro" };
+  const signUpVerifyHtml = renderToStaticMarkup(React.createElement(VerifyEmailScreen));
+  assert(signUpVerifyHtml.includes("Si el correo es nuevo, te enviamos un código."));
+  assert(signUpVerifyHtml.includes('href="/recuperar-contrasena"'));
+  // Supabase just sent the sign-up code: the cooldown runs from the start.
+  assert(signUpVerifyHtml.includes("Reenviar código en 01:00"));
+  routeParams = { email: "maria@correo.com", enviar: "1" };
+  const sendVerifyHtml = renderToStaticMarkup(React.createElement(VerifyEmailScreen));
+  assert(sendVerifyHtml.includes("Enviando un código a tu correo…"));
+  assert(!sendVerifyHtml.includes("Reenviar código en"));
+  routeParams = {};
+  // The auth forms no longer link into the app: the guards open it after signing in.
+  const { LoginScreen, RegisterScreen } = require("../src/screens/auth.tsx");
+  const loginHtml = renderToStaticMarkup(React.createElement(LoginScreen));
+  assert(loginHtml.includes("Iniciar sesión") && loginHtml.includes('href="/registro"'));
+  assert(!loginHtml.includes('href="/donante"'));
+  assert(loginHtml.includes("Continuar con Google") && !loginHtml.includes("próximamente"));
+  const registerHtml = renderToStaticMarkup(React.createElement(RegisterScreen));
+  assert(registerHtml.includes("Apellidos") && registerHtml.includes("Celular"));
+  assert(!/documento/i.test(registerHtml));
+  assert(!registerHtml.includes('href="/verificar-correo"'));
+  // Password recovery and the account steps.
+  const { ForgotPasswordScreen } = require("../src/screens/auth.tsx");
+  const forgotHtml = renderToStaticMarkup(React.createElement(ForgotPasswordScreen));
+  assert(forgotHtml.includes("Enviar enlace") && forgotHtml.includes('href="/login"'));
+  const {
+    ResetPasswordScreen,
+    ChangePasswordScreen,
+  } = require("../src/screens/password.tsx");
+  // Without a link: a way to request one, never the form.
+  const noLinkHtml = renderToStaticMarkup(React.createElement(ResetPasswordScreen));
+  assert(noLinkHtml.includes('href="/recuperar-contrasena"'));
+  assert(!noLinkHtml.includes("Nueva contraseña"));
+  routeParams = { error: "access_denied", error_code: "otp_expired", error_description: "Email link is invalid or has expired" };
+  const expiredHtml = renderToStaticMarkup(React.createElement(ResetPasswordScreen));
+  assert(expiredHtml.includes("expiró o ya se usó") && !expiredHtml.includes("Email link"));
+  routeParams = { code: "auth-code", sb_flow_id: "flow-id-1234" };
+  assert(
+    renderToStaticMarkup(React.createElement(ResetPasswordScreen)).includes("Validando el enlace…"),
+  );
+  routeParams = {};
+  accessPhase = "recovering";
+  const resetFormHtml = renderToStaticMarkup(React.createElement(ResetPasswordScreen));
+  assert(resetFormHtml.includes("Nueva contraseña") && resetFormHtml.includes("Cancelar"));
+  accessPhase = "app";
+  const changeHtml = renderToStaticMarkup(React.createElement(ChangePasswordScreen));
+  assert(changeHtml.includes("Confirmar contraseña") && changeHtml.includes("Cerrar sesión"));
+  const { CompleteProfileScreen } = require("../src/screens/profile-setup.tsx");
+  me = fixtures.meFixture({
+    nombres: "Ana",
+    apellidos: null,
+    telefono: null,
+    pendientes: ["TELEFONO", "ACEPTAR_TERMINOS"],
+  });
+  const profileHtml = renderToStaticMarkup(React.createElement(CompleteProfileScreen));
+  assert(profileHtml.includes('value="Ana"') && profileHtml.includes("Acepto los Términos"));
+  me = fixtures.meFixture({ telefono: null, pendientes: ["TELEFONO"] });
+  assert(
+    !renderToStaticMarkup(React.createElement(CompleteProfileScreen)).includes("Acepto los Términos"),
+  );
+  me = fixtures.meFixture();
   const {
     VolunteerRegistrationScreen,
   } = require("../src/screens/volunteer.tsx");
   assert(
     renderToStaticMarkup(
       React.createElement(VolunteerRegistrationScreen),
-    ).includes('href="/inicio-donante"'),
+    ).includes('href="/donante"'),
+  );
+  const {
+    LoadingState,
+    EmptyState,
+    ErrorState,
+    OfflineBanner,
+  } = require("../src/components/findfood/feedback.tsx");
+  const { Button, Field } = require("../src/components/findfood/ui.tsx");
+  const noop = () => {};
+  const feedbackHtml = renderToStaticMarkup(
+    React.createElement(
+      React.Fragment,
+      null,
+      React.createElement(LoadingState, { label: "Cargando donaciones" }),
+      React.createElement(EmptyState, { title: "Aún no tienes donaciones" }),
+      React.createElement(ErrorState, {
+        error: null,
+        onRetry: noop,
+        secondaryAction: { label: "Cerrar sesión", onPress: noop },
+      }),
+      React.createElement(OfflineBanner),
+      React.createElement(Field, {
+        label: "Correo electrónico",
+        value: "",
+        onChangeText: noop,
+        error: "Ingresa tu correo electrónico.",
+      }),
+      React.createElement(Button, { onPress: noop, loading: true }, "Ingresar"),
+    ),
+  );
+  assert(feedbackHtml.includes("Cargando donaciones"));
+  assert(feedbackHtml.includes("Aún no tienes donaciones"));
+  assert(feedbackHtml.includes("Reintentar") && feedbackHtml.includes("Cerrar sesión"));
+  assert(feedbackHtml.includes("Ingresa tu correo electrónico."));
+  assert(feedbackHtml.includes('aria-invalid="true"'));
+  assert(feedbackHtml.includes('aria-busy="true"'));
+  // Server rendering has no connection state, so the offline banner stays hidden.
+  assert(!feedbackHtml.includes("Sin conexión"));
+  console.log(
+    "PASS: loading, empty and error states, field error and busy button rendered.",
   );
   // Exercise local handlers without requiring a native device or browser.
   const realUseState = React.useState;
@@ -291,7 +570,8 @@ try {
     nodes(choice()).filter((n) => n.props?.role === "radio")[1].props.selected,
     true,
   );
-  const rating = harness(RatingScreen, { donor: true });
+  routeParams = { id: fixtures.DONATION_ID };
+  const rating = harness(RatingScreen, { rater: "VOLUNTARIO" });
   nodes(rating())
     .find((n) => n.props?.accessibilityLabel === "5 estrellas")
     .props.onPress();
@@ -335,7 +615,7 @@ try {
   );
   assert.deepEqual(invalid, [], "React rendering warnings");
   console.log(
-    `PASS: ${count} screen components rendered; identification/license fields, selected donation, preview navigation and Slot/DOM regressions checked.`,
+    `PASS: ${count} screen components rendered; identification/license fields, selected donation, segment links, account views and Slot/DOM regressions checked.`,
   );
   if (warnings.length) console.log("Other renderer notices:", warnings.length);
 } finally {

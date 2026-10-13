@@ -7,8 +7,11 @@
     "icon": "./assets/brand/findfood-logo.png",
     "scheme": "findfoodappmobile",
     "userInterfaceStyle": "light",
-    "ios": {},
+    "ios": {
+      "bundleIdentifier": "co.findfood.app"
+    },
     "android": {
+      "package": "co.findfood.app",
       "adaptiveIcon": {
         "backgroundColor": "#F7FAF8",
         "foregroundImage": "./assets/brand/findfood-logo.png"
@@ -28,7 +31,9 @@
           "image": "./assets/brand/findfood-logo.png",
           "imageWidth": 100
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-dev-client"
     ],
     "experiments": {
       "typedRoutes": true,

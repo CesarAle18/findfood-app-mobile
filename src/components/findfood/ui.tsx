@@ -1,20 +1,22 @@
 import { colors, fonts } from "@/design/tokens";
-import { useMobile } from "@/state/mobile-context";
 import { Link, router, type Href } from "expo-router";
 import { useState, type PropsWithChildren, type ReactNode } from "react";
 import {
+  ActivityIndicator,
   Image,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
   type StyleProp,
+  type TextInputProps,
   type TextStyle,
   type ViewStyle,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, type Edges } from "react-native-safe-area-context";
 import { Icon, type IconName } from "./icon";
 import {
   Animated,
@@ -55,47 +57,70 @@ export function Copy({
   );
 }
 
+/**
+ * Safe-area edges of the screen frame. On iOS the bottom edge is left to the scroll view
+ * (`contentInsetAdjustmentBehavior`), so content scrolls behind the home indicator and the
+ * translucent native tab bar. Android native tabs already lay their screens out above the
+ * tab bar, where this edge measures nothing; on stack screens it clears the navigation bar.
+ */
+const SAFE_AREA_EDGES: Edges =
+  Platform.OS === "ios"
+    ? ["top", "left", "right"]
+    : ["top", "left", "right", "bottom"];
+
 export function Screen({
   children,
   title,
   subtitle,
-  tabs,
   badge,
   back = false,
   center = false,
-  viewRole,
+  scroll = true,
 }: PropsWithChildren<{
   title?: string;
   subtitle?: string;
-  tabs?: "home" | "route" | "bell" | "user";
   badge?: ReactNode;
   back?: boolean;
   center?: boolean;
-  viewRole?: "donor" | "volunteer";
+  /**
+   * False for a screen whose body is a virtualized list: the heading and children fill the
+   * frame without a ScrollView, and the list scrolls (and pads its bottom) on its own.
+   */
+  scroll?: boolean;
 }>) {
-  const { role, setRole } = useMobile();
+  const heading = title ? (
+    <View style={styles.heading}>
+      <View style={styles.headingText}>
+        <Copy weight="bold" style={styles.title}>
+          {title}
+        </Copy>
+        {subtitle ? (
+          <Copy tone="secondary" style={styles.subtitle}>
+            {subtitle}
+          </Copy>
+        ) : null}
+      </View>
+      {badge}
+    </View>
+  ) : null;
   return (
-    <SafeAreaView
-      style={styles.safe}
-      edges={["top", "left", "right", "bottom"]}
-    >
+    <SafeAreaView style={styles.safe} edges={SAFE_AREA_EDGES}>
       <View style={styles.frame}>
         <View style={styles.header}>
-          {back && (
+          {back ? (
             <Pressing
               accessibilityRole="button"
               accessibilityLabel="Volver"
               hitSlop={6}
               surface={styles.iconButton}
+              // Without history (a cold deep link), the gate opens the right home.
               onPress={() =>
-                router.canGoBack()
-                  ? router.back()
-                  : router.replace("/pantallas")
+                router.canGoBack() ? router.back() : router.replace("/")
               }
             >
               <Icon name="back" />
             </Pressing>
-          )}
+          ) : null}
           <View style={styles.brand}>
             <Image
               source={require("../../../assets/brand/findfood-logo.png")}
@@ -111,150 +136,75 @@ export function Screen({
             <Pressing
               accessibilityRole="link"
               accessibilityLabel="Abrir menú de cuenta"
-              onPress={() => setRole(viewRole ?? role)}
               surface={styles.iconButton}
             >
               <Icon name="menu" size={32} />
             </Pressing>
           </Link>
         </View>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={[
-            styles.content,
-            center && styles.centerContent,
-          ]}
-          showsVerticalScrollIndicator
-          keyboardShouldPersistTaps="handled"
-          automaticallyAdjustKeyboardInsets
-        >
-          {title && (
-            <View style={styles.heading}>
-              <View style={styles.headingText}>
-                <Copy weight="bold" style={styles.title}>
-                  {title}
-                </Copy>
-                {subtitle && (
-                  <Copy tone="secondary" style={styles.subtitle}>
-                    {subtitle}
-                  </Copy>
-                )}
-              </View>
-              {badge}
-            </View>
-          )}
-          {children}
-        </ScrollView>
-        {tabs && <BottomNav active={tabs} viewRole={viewRole} />}
+        {scroll ? (
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={[
+              styles.content,
+              center && styles.centerContent,
+            ]}
+            contentInsetAdjustmentBehavior="automatic"
+            showsVerticalScrollIndicator
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets
+          >
+            {heading}
+            {children}
+          </ScrollView>
+        ) : (
+          <View style={[styles.content, styles.fixedContent]}>
+            {heading}
+            {children}
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
 }
 
-function BottomNav({
-  active,
-  viewRole,
-}: {
-  viewRole?: "donor" | "volunteer";
-  active: "home" | "route" | "bell" | "user";
-}) {
-  const { role: currentRole, setRole } = useMobile();
-  const role = viewRole ?? currentRole;
-  const items: { title: string; icon: IconName; href?: Href }[] = [
-    {
-      title: "Inicio",
-      icon: "home",
-      href: role === "donor" ? "/inicio-donante" : "/inicio",
-    },
-    {
-      title: role === "donor" ? "Donaciones" : "Rutas",
-      icon: "route",
-      href: role === "donor" ? "/mis-donaciones" : "/ruta-activa",
-    },
-    { title: "Alertas", icon: "bell", href: "/notificaciones" },
-    {
-      title: "Perfil",
-      icon: "user",
-      href: role === "donor" ? "/perfil-donante" : "/perfil-voluntario",
-    },
-  ];
-  return (
-    <View style={styles.nav}>
-      {items.map((item) => {
-        const selected = item.icon === active;
-        const content = (
-          <>
-            <View style={[styles.navIcon, selected && styles.navSelected]}>
-              <Icon
-                name={item.icon}
-                size={21}
-                color={selected ? colors.primary : colors.secondary}
-              />
-            </View>
-            <Copy
-              style={styles.navLabel}
-              tone={selected ? "primary" : "secondary"}
-              weight={selected ? "semibold" : "regular"}
-            >
-              {item.title}
-            </Copy>
-          </>
-        );
-        return item.href ? (
-          <Link key={item.title} href={item.href} replace asChild>
-            <Pressing
-              accessibilityRole="link"
-              accessibilityState={{ selected }}
-              onPress={() => setRole(role)}
-              style={styles.navItem}
-              surface={styles.navSurface}
-            >
-              {content}
-            </Pressing>
-          </Link>
-        ) : (
-          <View
-            key={item.title}
-            accessible
-            accessibilityLabel="Perfil, pendiente de diseño"
-            accessibilityState={{ disabled: true }}
-            style={styles.navItem}
-          >
-            {content}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-/** Un botón visual sin onPress: nunca ejecuta acciones de negocio. */
+/**
+ * Action button. Without `onPress` it is visual only and stays disabled, as in the
+ * prototype. `loading` shows an indicator and blocks repeated presses.
+ */
 export function Button({
   children,
   variant = "primary",
   icon,
+  onPress,
+  loading = false,
+  disabled = false,
 }: PropsWithChildren<{
   variant?: "primary" | "outline" | "danger";
   icon?: IconName;
+  onPress?: () => void;
+  loading?: boolean;
+  disabled?: boolean;
 }>) {
-  return (
-    <View
-      accessible
-      accessibilityRole="button"
-      accessibilityState={{ disabled: true }}
-      style={[
-        styles.button,
-        variant !== "primary" && styles.outline,
-        variant === "danger" && styles.danger,
-      ]}
-    >
-      {icon && (
+  const surface = [
+    styles.button,
+    variant !== "primary" && styles.outline,
+    variant === "danger" && styles.danger,
+  ];
+  const content = (
+    <>
+      {loading ? (
+        <ActivityIndicator
+          color={variant === "primary" ? colors.surface : colors.primary}
+          size="small"
+        />
+      ) : icon ? (
         <Icon
           name={icon}
           color={variant === "primary" ? colors.surface : colors.primary}
           size={19}
         />
-      )}
+      ) : null}
       <Copy
         weight="bold"
         style={[
@@ -271,17 +221,55 @@ export function Button({
       >
         {children}
       </Copy>
-    </View>
+    </>
   );
+  if (!onPress) {
+    return (
+      <View
+        accessible
+        accessibilityRole="button"
+        accessibilityState={{ disabled: true }}
+        style={surface}
+      >
+        {content}
+      </View>
+    );
+  }
+  const inactive = disabled || loading;
+  return (
+    <Pressing
+      accessibilityRole="button"
+      accessibilityState={{ disabled: inactive }}
+      // aria-busy instead of accessibilityState.busy: react-native-web only reads aria-*.
+      aria-busy={loading}
+      disabled={inactive}
+      onPress={onPress}
+      opacity={disabled && !loading ? 0.45 : 1}
+      surface={surface}
+    >
+      {content}
+    </Pressing>
+  );
+}
+
+/**
+ * Link options shared by TextLink and NavButton. `dismissTo` goes back down the stack to
+ * `href` (a tab of the segment, or an earlier screen) instead of pushing another copy; use it
+ * from stacked screens to return to a tab.
+ */
+interface LinkOptions {
+  href: Href;
+  dismissTo?: boolean;
 }
 
 export function TextLink({
   children,
   href,
+  dismissTo = false,
   align = "center",
-}: PropsWithChildren<{ href: Href; align?: "left" | "center" | "right" }>) {
+}: PropsWithChildren<LinkOptions & { align?: "left" | "center" | "right" }>) {
   return (
-    <Link href={href} asChild>
+    <Link href={href} dismissTo={dismissTo} asChild>
       <Pressing
         accessibilityRole="link"
         scale={1}
@@ -308,16 +296,18 @@ export function TextLink({
 export function NavButton({
   children,
   href,
+  dismissTo = false,
   variant = "primary",
   showArrow = true,
-}: PropsWithChildren<{
-  href: Href;
-  variant?: "primary" | "outline";
-  showArrow?: boolean;
-}>) {
+}: PropsWithChildren<
+  LinkOptions & {
+    variant?: "primary" | "outline";
+    showArrow?: boolean;
+  }
+>) {
   const foreground = variant === "primary" ? colors.surface : colors.primary;
   return (
-    <Link href={href} asChild>
+    <Link href={href} dismissTo={dismissTo} asChild>
       <Pressing
         accessibilityRole="link"
         surface={StyleSheet.flatten([
@@ -343,6 +333,16 @@ export function Field({
   grow = false,
   onChangeText,
   placeholder,
+  error,
+  accessibilityHint,
+  onBlur,
+  onSubmitEditing,
+  keyboardType,
+  autoComplete,
+  textContentType,
+  autoCapitalize,
+  returnKeyType,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -352,9 +352,24 @@ export function Field({
   grow?: boolean;
   onChangeText?: (value: string) => void;
   placeholder?: string;
-}) {
+  /** Validation message: shown below the input and announced with it. */
+  error?: string;
+  accessibilityHint?: string;
+  onBlur?: () => void;
+  onSubmitEditing?: () => void;
+} & Pick<
+  TextInputProps,
+  | "keyboardType"
+  | "autoComplete"
+  | "textContentType"
+  | "autoCapitalize"
+  | "returnKeyType"
+  | "maxLength"
+>) {
   const [focused, setFocused] = useState(false);
   const focusBorder = useActiveStyle(focused, { border: true });
+  const hint =
+    [error, accessibilityHint].filter(Boolean).join(" ") || undefined;
   return (
     <View style={[styles.field, grow && { flex: 1 }]}>
       <Copy style={styles.label} weight="bold">
@@ -369,15 +384,27 @@ export function Field({
       >
         <TextInput
           accessibilityLabel={label}
+          accessibilityHint={hint}
+          aria-invalid={error ? true : undefined}
           editable={!!onChangeText}
           selectTextOnFocus={false}
           value={value}
           onChangeText={onChangeText}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={() => {
+            setFocused(false);
+            onBlur?.();
+          }}
+          onSubmitEditing={onSubmitEditing}
           placeholder={placeholder}
           secureTextEntry={secure}
           multiline={multiline}
+          keyboardType={keyboardType}
+          autoComplete={autoComplete}
+          textContentType={textContentType}
+          autoCapitalize={autoCapitalize}
+          returnKeyType={returnKeyType}
+          maxLength={maxLength}
           style={[
             styles.input,
             multiline && { minHeight: 62, textAlignVertical: "top" },
@@ -391,6 +418,47 @@ export function Field({
           />
         )}
       </Animated.View>
+      {error ? (
+        <View accessibilityLiveRegion="polite">
+          <Copy style={styles.fieldError}>{error}</Copy>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * A message about the whole form (an error that belongs to no single field, a progress note
+ * or a confirmation), announced when it appears. Renders nothing without a message.
+ */
+export function FormMessage({
+  message,
+  tone = "error",
+}: {
+  message: string | undefined;
+  tone?: "error" | "info" | "success";
+}) {
+  if (!message) return null;
+  return (
+    <View
+      accessible
+      accessibilityRole={tone === "error" ? "alert" : "text"}
+      accessibilityLiveRegion="polite"
+      style={[
+        styles.formMessage,
+        tone === "info" && styles.formMessageInfo,
+        tone === "success" && styles.formMessageSuccess,
+      ]}
+    >
+      <Copy
+        weight="medium"
+        style={{
+          color:
+            tone === "error" ? colors.danger : tone === "info" ? colors.secondary : colors.primary,
+        }}
+      >
+        {message}
+      </Copy>
     </View>
   );
 }
@@ -602,6 +670,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   centerContent: { paddingTop: 32 },
+  fixedContent: { flex: 1, paddingBottom: 0 },
   heading: {
     flexDirection: "row",
     alignItems: "center",
@@ -614,6 +683,16 @@ const styles = StyleSheet.create({
   copy: { fontSize: 13, lineHeight: 20 },
   field: { gap: 9 },
   label: { fontSize: 11, lineHeight: 18 },
+  fieldError: { fontSize: 11, lineHeight: 16, color: colors.danger },
+  formMessage: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  formMessageInfo: { borderColor: colors.border, backgroundColor: colors.muted },
+  formMessageSuccess: { borderColor: colors.soft, backgroundColor: colors.soft },
   inputRow: {
     minHeight: 48,
     borderWidth: 1,
@@ -691,25 +770,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  nav: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingTop: 8,
-    paddingBottom: 8,
-  },
-  navItem: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 54,
-    gap: 2,
-  },
-  navSurface: { alignItems: "center", gap: 2 },
-  navIcon: { paddingHorizontal: 18, paddingVertical: 5, borderRadius: 16 },
-  navSelected: { backgroundColor: colors.soft },
-  navLabel: { fontSize: 10, lineHeight: 16 },
 });
 
 /** Selector local reutilizable; su valor pertenece al formulario, sin persistencia. */

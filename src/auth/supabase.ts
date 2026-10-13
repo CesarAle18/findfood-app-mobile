@@ -1,0 +1,216 @@
+/**
+ * Supabase client, used for Auth only (sign-in, session, password recovery); data goes
+ * through findfood-api.
+ *
+ * Null in the `local` profile without Supabase configuration: that profile authenticates
+ * against the local API with a dev token. Also null when the configuration is invalid: the
+ * app shows the configuration error instead of starting.
+ *
+ * No `react-native-url-polyfill`: Expo installs a WHATWG `URL` global (expo/src/winter),
+ * which is what supabase-js needs to build its endpoint URLs.
+ */
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { AppState, Platform } from "react-native";
+
+import { configResult } from "@/config/env";
+
+import { createAccessTokenRefresher } from "./refresh";
+import { secureStorage, type AuthStorage } from "./secure-storage";
+import { createSupabaseFetch } from "./supabase-fetch";
+
+/**
+ * auth-js `storageKey`: the session is stored under this key and every other auth key
+ * starts with it. Fixed (instead of the default `sb-<project>-auth-token`) so sign-out can
+ * remove them all (see signOutLocally).
+ */
+export const AUTH_STORAGE_KEY = "findfood.auth";
+
+function createSupabaseClient(): SupabaseClient | null {
+  if (!configResult.ok) return null;
+  const { supabaseUrl, supabaseAnonKey } = configResult.env;
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      storage: secureStorage,
+      storageKey: AUTH_STORAGE_KEY,
+      autoRefreshToken: true,
+      persistSession: true,
+      // Android and iOS have no URL to read a session from: deep links are exchanged by the
+      // app. With PKCE on React Native, `exchangeCodeForSession` must receive the flow id
+      // that `resetPasswordForEmail` appends to `redirectTo` (no window.location to read).
+      detectSessionInUrl: false,
+      flowType: "pkce",
+    },
+    // Bounds every Supabase request, so a hung token refresh cannot block later ones.
+    global: { fetch: createSupabaseFetch() },
+  });
+}
+
+export const supabase: SupabaseClient | null = createSupabaseClient();
+
+// Outside browsers auth-js runs its refresh ticker all the time; timers are unreliable
+// while the app is in the background, so the ticker only runs in the foreground.
+// Registered once, at module level.
+const managesTicker = supabase !== null && Platform.OS !== "web";
+/** Whether the ticker should run now; sign-out pauses it and restarts it if so. */
+let foreground = AppState.currentState === "active";
+if (supabase && managesTicker) {
+  const { auth } = supabase;
+  AppState.addEventListener("change", (state) => {
+    foreground = state === "active";
+    if (foreground) void auth.startAutoRefresh();
+    else void auth.stopAutoRefresh();
+  });
+}
+
+/**
+ * Moves on with every new session and every sign-out: a sign-out still settling after its
+ * deadline only cleans up while nothing newer happened (see signOutLocally).
+ */
+let sessionGeneration = 0;
+if (supabase) {
+  supabase.auth.onAuthStateChange((event) => {
+    // A new session: a sign-in, a verified code or a reset link. Not TOKEN_REFRESHED: an
+    // abandoned sign-out's own refresh emits it, and that session must still be removed.
+    if (event === "SIGNED_IN" || event === "PASSWORD_RECOVERY") sessionGeneration += 1;
+  });
+}
+
+/** Sign-in requests still running (see trackSignIn). */
+const signInsInFlight = new Set<Promise<unknown>>();
+
+/**
+ * Wraps a Supabase request that may store a new session (a sign-in, a verified code, a reset
+ * link's exchange) and returns it unchanged. auth-js stores the session before it emits
+ * SIGNED_IN, so a late sign-out cleanup that ran in between would remove the new session:
+ * the cleanup waits for every tracked request to settle first, and then only runs when no
+ * new session arrived (a failed sign-in leaves the old session to remove).
+ */
+export function trackSignIn<T>(request: Promise<T>): Promise<T> {
+  signInsInFlight.add(request);
+  const untrack = () => {
+    signInsInFlight.delete(request);
+  };
+  request.then(untrack, untrack);
+  return request;
+}
+
+async function signInsSettled(): Promise<void> {
+  while (signInsInFlight.size > 0) await Promise.allSettled([...signInsInFlight]);
+}
+
+const refresher = supabase ? createAccessTokenRefresher(supabase.auth) : null;
+
+/**
+ * `ApiClientOptions.refreshAccessToken`: the new access token; null when the session is
+ * definitively invalid (or there is no Supabase client); rejects on transient failures
+ * (network, timeouts, 5xx) so the HTTP client keeps the session.
+ */
+export function refreshAccessToken(): Promise<string | null> {
+  return refresher ? refresher() : Promise.resolve(null);
+}
+
+// PKCE keys of auth-js 2.117.3 (lib/helpers.js): an index of pending flow ids, one
+// verifier slot per indexed flow and a fixed verifier key. Flow ids are validated like
+// auth-js does before they become storage keys.
+const PKCE_FLOW_INDEX_KEY = `${AUTH_STORAGE_KEY}-flows-code-verifier`;
+const PKCE_FLOW_ID = /^[a-zA-Z0-9_-]{8,64}$/;
+const pkceSlotKey = (flowId: string) => `${AUTH_STORAGE_KEY}-flow-${flowId}-code-verifier`;
+
+function ignore() {
+  // Best effort: see removeStoredSession and signOutLocally.
+}
+
+async function readPkceFlowIds(storage: AuthStorage): Promise<string[]> {
+  try {
+    const raw = await storage.getItem(PKCE_FLOW_INDEX_KEY);
+    const index: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(index)) return [];
+    return index.filter((id): id is string => typeof id === "string" && PKCE_FLOW_ID.test(id));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Removes every key auth-js 2.117.3 persists under AUTH_STORAGE_KEY, the same set as its
+ * `_removeSession`: the session, the user (`-user`), the fixed PKCE verifier, the PKCE
+ * flow index and each indexed verifier slot. Never rejects; a key that cannot be removed
+ * does not stop the others.
+ */
+async function removeStoredSession(storage: AuthStorage): Promise<void> {
+  const flowIds = await readPkceFlowIds(storage);
+  const keys = [
+    AUTH_STORAGE_KEY,
+    `${AUTH_STORAGE_KEY}-user`,
+    `${AUTH_STORAGE_KEY}-code-verifier`,
+    PKCE_FLOW_INDEX_KEY,
+    ...flowIds.map(pkceSlotKey),
+  ];
+  await Promise.all(keys.map((key) => storage.removeItem(key).catch(ignore)));
+}
+
+/**
+ * How long sign-out waits for auth-js. Offline with an expired session, its `signOut`
+ * retries the refresh for about 25-30 s before giving up.
+ */
+export const SIGN_OUT_DEADLINE_MS = 8_000;
+
+/**
+ * Sign-outs whose wait (auth-js or the deadline, whichever ends first) is still running; the
+ * ticker stays paused while there is one. It restarts as soon as the wait ends, even when
+ * auth-js is still signing out after the deadline.
+ */
+let pendingSignOuts = 0;
+
+/**
+ * Signs out on this device and removes the stored session. Never rejects; does nothing
+ * without a Supabase client. It waits for auth-js at most about SIGN_OUT_DEADLINE_MS, plus
+ * the time storage takes to remove the keys.
+ *
+ * auth-js `signOut` returns early, without removing the stored session, when reading the
+ * current session fails first (e.g. an expired session whose refresh fails offline), and
+ * that session would be restored on the next start. So the keys are removed here once
+ * `signOut` has settled, whatever it returned, or at the deadline if it has not.
+ *
+ * After the deadline, a refresh `signOut` started can still store the session: the keys
+ * are removed again when it settles, unless a new session (or another sign-out) came
+ * first, whose keys those now are. A sign-in still running (see trackSignIn) is waited
+ * for before deciding. The refresh ticker (native only; auth-js manages it on web) is
+ * paused while waiting and runs again afterwards if the app is in the foreground: a next
+ * sign-in needs it, and without a stored session it has nothing to refresh.
+ */
+export async function signOutLocally(): Promise<void> {
+  if (!supabase) return;
+  const { auth } = supabase;
+  const generation = ++sessionGeneration;
+  const removeIfStillCurrent = async () => {
+    await signInsSettled();
+    if (generation === sessionGeneration) await removeStoredSession(secureStorage);
+  };
+  pendingSignOuts += 1;
+  if (managesTicker) await auth.stopAutoRefresh().catch(ignore);
+
+  const settled = (async () => {
+    try {
+      await auth.signOut({ scope: "local" });
+    } catch {
+      // The stored session is removed below either way.
+    }
+    await removeIfStillCurrent();
+  })();
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, SIGN_OUT_DEADLINE_MS);
+  }).then(removeIfStillCurrent);
+  try {
+    await Promise.race([settled, deadline]);
+  } finally {
+    clearTimeout(timer);
+    pendingSignOuts -= 1;
+    if (managesTicker && foreground && pendingSignOuts === 0) {
+      void auth.startAutoRefresh().catch(ignore);
+    }
+  }
+}

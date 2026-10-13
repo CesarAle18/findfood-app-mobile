@@ -170,7 +170,7 @@ export function NewDonationScreen() {
           </Row>
         </Card>
       </Section>
-      <NavButton href="/revisar-donacion" showArrow={false}>
+      <NavButton href="/donante/revisar-donacion" showArrow={false}>
         Publicar donación
       </NavButton>
     </Screen>
@@ -261,10 +261,10 @@ export function WaitingScreen() {
           ))}
         </Stack>
       </Section>
-      <NavButton href="/voluntario-asignado" showArrow={false}>
+      <NavButton href="/donante/voluntario-asignado" showArrow={false}>
         Ver voluntario asignado (demo)
       </NavButton>
-      <NavButton href="/inicio-donante" variant="outline" showArrow={false}>
+      <NavButton href="/donante" dismissTo variant="outline" showArrow={false}>
         Cancelar donación
       </NavButton>
     </Screen>
@@ -295,9 +295,11 @@ export function DeliveryScreen({ donor = false }: { donor?: boolean }) {
       </Stack>
       <View style={{ flex: 1, minHeight: 20 }} />
       {donor ? (
-        <NavButton href="/inicio">Volver al inicio</NavButton>
+        <NavButton href="/donante" dismissTo>
+          Volver al inicio
+        </NavButton>
       ) : (
-        <NavButton href="/inicio" showArrow={false}>
+        <NavButton href="/voluntario" dismissTo showArrow={false}>
           Finalizar ruta
         </NavButton>
       )}

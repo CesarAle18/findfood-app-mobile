@@ -1,101 +1,39 @@
-import {
-  initialDonationDraft,
-  type DonationDraft,
-} from "@/domain/donation-draft";
-import { mobileData } from "@/data/mobile";
+/**
+ * UI-only state shared between screens: the donation draft (new donation → review) and the
+ * volunteer's availability toggle. Remote data lives in TanStack Query (`@/services/*`,
+ * `useMe()`), never here.
+ */
 import {
   createContext,
-  useContext,
-  useEffect,
+  use,
   useState,
-  type PropsWithChildren,
   type Dispatch,
+  type PropsWithChildren,
   type SetStateAction,
 } from "react";
-import type { MobileData, UserRole } from "@/domain/models";
-import {
-  demoRepository,
-  type MobileRepository,
-} from "@/services/mobile-repository";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import { colors } from "@/design/tokens";
-const Context = createContext<{
+
+import { initialDonationDraft, type DonationDraft } from "@/domain/donation-draft";
+
+interface MobileState {
+  // TODO(F3): replace with `me.voluntario.disponible` and PATCH /voluntario/estado.
   available: boolean;
   setAvailable: (value: boolean) => void;
-  ratings: Record<UserRole, number[]>;
-  addRating: (role: UserRole, rating: number) => void;
-  data: MobileData;
   draft: DonationDraft;
   setDraft: Dispatch<SetStateAction<DonationDraft>>;
-  role: UserRole;
-  setRole: (role: UserRole) => void;
-} | null>(null);
-export function MobileProvider({
-  children,
-  repository = demoRepository,
-}: PropsWithChildren<{ repository?: MobileRepository }>) {
-  const [data, setData] = useState<MobileData | null>(
-    repository === demoRepository ? mobileData : null,
-  );
+}
+
+const Context = createContext<MobileState | null>(null);
+
+export function MobileProvider({ children }: PropsWithChildren) {
   const [available, setAvailable] = useState(true);
-  const [ratings, setRatings] = useState<Record<UserRole, number[]>>({ donor: [5, 4, 5, 5, 4], volunteer: [5, 5, 4, 5, 5] });
-  const addRating = (target: UserRole, rating: number) => setRatings(current => ({ ...current, [target]: [...current[target], rating] }));
   const [draft, setDraft] = useState(initialDonationDraft);
-  const [error, setError] = useState(false);
-  const [attempt, retry] = useState(0);
-  const [role, setRole] = useState<UserRole>("donor");
-  useEffect(() => {
-    const controller = new AbortController();
-    repository
-      .load(controller.signal)
-      .then((value) => {
-        if (!controller.signal.aborted) setData(value);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setError(true);
-      });
-    return () => controller.abort();
-  }, [repository, attempt]);
-  if (!data)
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          gap: 20,
-          backgroundColor: colors.surface,
-        }}
-      >
-        {error ? (
-          <>
-            <Text>No fue posible cargar la información.</Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                setError(false);
-                retry((n) => n + 1);
-              }}
-            >
-              <Text>Reintentar</Text>
-            </Pressable>
-          </>
-        ) : (
-          <ActivityIndicator
-            accessibilityLabel="Cargando información"
-            color={colors.primary}
-          />
-        )}
-      </View>
-    );
   return (
-    <Context.Provider value={{ data, role, setRole, draft, setDraft, available, setAvailable, ratings, addRating }}>
-      {children}
-    </Context.Provider>
+    <Context value={{ available, setAvailable, draft, setDraft }}>{children}</Context>
   );
 }
-export function useMobile() {
-  const value = useContext(Context);
+
+export function useMobile(): MobileState {
+  const value = use(Context);
   if (!value) throw new Error("useMobile requiere MobileProvider");
   return value;
 }
