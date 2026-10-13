@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { messageFor } from "@/api/problem-messages";
 import { DateTimeField } from "@/components/findfood/date-time-field";
 import { QueryContent } from "@/components/findfood/feedback";
+import { PhotoField } from "@/components/findfood/photo-field";
 import { Icon } from "@/components/findfood/icon";
 import {
   MotivoField,
@@ -27,7 +28,6 @@ import {
   Copy,
   Field,
   NavButton,
-  PhotoPlaceholder,
   Row,
   Screen,
   Section,
@@ -158,7 +158,12 @@ export function NewDonationScreen() {
                     </Animated.View>
                   )}
                   <Section title="Fotografía">
-                    <PhotoPlaceholder compact />
+                    <PhotoField
+                      label={`Foto del producto ${index + 1}`}
+                      mode="file"
+                      proposito="PRODUCTO"
+                      compact
+                    />
                   </Section>
                 </Section>
               </Animated.View>
@@ -382,7 +387,7 @@ export function DeliveryScreen({ donor = false }: { donor?: boolean }) {
         </Copy>
       </Card>
       <Section title="Evidencia de entrega">
-        <PhotoPlaceholder label="Evidencia de entrega" />
+        <PhotoField label="Evidencia de entrega" mode="evidence" proposito="EVIDENCIA" tipo="ENTREGA" />
       </Section>
       <Stack gap={8}>
         <Copy tone="secondary" style={{ fontSize: 12 }}>

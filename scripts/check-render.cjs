@@ -209,6 +209,30 @@ Module._load = function (name, parent, isMain) {
     };
   // No requests leave this check: the query hooks are stubbed above.
   if (name === "@/api") return { api: {} };
+  // Photo capture and upload need the native picker, manipulator and file system; the
+  // fields only start them from handlers, so their idle state is enough here.
+  if (name === "@/media/use-photo-capture")
+    return {
+      choosePhotoSource: async () => null,
+      usePhotoCapture: () => ({
+        pick: async () => null,
+        cameraGate: "unknown",
+        libraryGate: "unknown",
+        requestCamera: async () => "unknown",
+        requestLibrary: async () => "unknown",
+      }),
+    };
+  if (name === "@/media/use-evidence-upload")
+    return {
+      useEvidenceUpload: () => ({
+        pending: null,
+        status: "idle",
+        error: null,
+        start: async () => {},
+        retry: async () => {},
+      }),
+    };
+  if (name === "expo-image") return { Image: native.Image };
   // The real module creates the Supabase client (SecureStore, Expo config); the forms only
   // call these actions from their handlers.
   if (name === "@/auth/email-auth") {

@@ -597,23 +597,6 @@ export function Choices({
     </View>
   );
 }
-export function PhotoPlaceholder({
-  label = "Fotografía",
-  compact = false,
-}: {
-  label?: string;
-  compact?: boolean;
-}) {
-  return (
-    <View
-      accessible
-      accessibilityLabel={`${label}: espacio de imagen sin captura activa`}
-      style={[styles.photo, compact && { minHeight: 48 }]}
-    >
-      <Icon name="camera" size={30} color={colors.secondary} />
-    </View>
-  );
-}
 export function Detail({
   label,
   value,
@@ -759,16 +742,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-  },
-  photo: {
-    minHeight: 150,
-    backgroundColor: colors.muted,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderStyle: "dashed",
-    justifyContent: "center",
-    alignItems: "center",
   },
 });
 

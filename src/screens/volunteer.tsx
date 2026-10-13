@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { messageFor } from "@/api/problem-messages";
 import { QueryContent } from "@/components/findfood/feedback";
+import { PhotoField } from "@/components/findfood/photo-field";
 import {
   MotivoField,
   motivoBody,
@@ -23,7 +24,6 @@ import {
   Field,
   SelectField,
   NavButton,
-  PhotoPlaceholder,
   Row,
   Screen,
   Section,
@@ -52,6 +52,9 @@ export function VolunteerRegistrationScreen() {
     capacityKg: "",
     refrigerated: true,
     availability: "Lunes · 08:00–18:00",
+    documentPhoto: "",
+    vehiclePhoto: "",
+    licencePhoto: "",
   });
   const tiposVehiculo = useTiposVehiculo();
   const change = (key: keyof VolunteerApplication) => (value: string) =>
@@ -131,17 +134,35 @@ export function VolunteerRegistrationScreen() {
           <Row style={{ alignItems: "flex-start" }}>
             <View style={{ flex: 1 }}>
               <Section title="Foto documento">
-                <PhotoPlaceholder label="Documento" compact />
+                <PhotoField
+                  label="Documento"
+                  mode="file"
+                  proposito="DOCUMENTO_IDENTIDAD"
+                  compact
+                  onUploaded={({ ruta }) => change("documentPhoto")(ruta)}
+                />
               </Section>
             </View>
             <View style={{ flex: 1 }}>
               <Section title="Foto vehículo">
-                <PhotoPlaceholder label="Vehículo" compact />
+                <PhotoField
+                  label="Vehículo"
+                  mode="file"
+                  proposito="VEHICULO"
+                  compact
+                  onUploaded={({ ruta }) => change("vehiclePhoto")(ruta)}
+                />
               </Section>
             </View>
           </Row>
           <Section title="Foto licencia">
-            <PhotoPlaceholder label="Licencia" compact />
+            <PhotoField
+              label="Licencia"
+              mode="file"
+              proposito="DOCUMENTO_IDENTIDAD"
+              compact
+              onUploaded={({ ruta }) => change("licencePhoto")(ruta)}
+            />
           </Section>
         </Stack>
       </Section>
@@ -255,7 +276,7 @@ export function CollectionScreen() {
       <SelectField label="Estado del producto" value={condition} onChange={setCondition} options={["Bueno", "Regular", "Malo"].map(value => ({ label: value, value }))} />
       <Field label="Peso aprox." value={weight} onChangeText={setWeight} />
       <Section title="Evidencia fotográfica">
-        <PhotoPlaceholder label="Evidencia fotográfica" />
+        <PhotoField label="Evidencia fotográfica" mode="evidence" proposito="EVIDENCIA" tipo="RECOGIDA" />
       </Section>
       <Field label="Observaciones" value={notes} onChangeText={setNotes} placeholder="Describe el estado del producto" multiline />
       <NavButton href={{ pathname: "/voluntario/calificar-donante", params: { id } }} showArrow={false}>Calificar donante</NavButton>

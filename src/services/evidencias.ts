@@ -114,10 +114,18 @@ export function getEvidencias(
 
 // --- Queries -----------------------------------------------------------------------------
 
+/**
+ * `url_lectura` expires 5 minutes after it is signed, so the list goes stale at 4 minutes
+ * and a refetch signs fresh URLs before the old ones stop working. Show the thumbnails with
+ * `cacheKey: id`: the URL changes with every signature, the image does not.
+ */
+export const EVIDENCIAS_STALE_TIME_MS = 4 * 60 * 1000;
+
 export function evidenciasQuery(padre: PadreEvidencia) {
   return queryOptions({
     queryKey: queryKeys.evidencias.list(padre),
     queryFn: ({ signal }) => getEvidencias(padre, signal),
+    staleTime: EVIDENCIAS_STALE_TIME_MS,
   });
 }
 

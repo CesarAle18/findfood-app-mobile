@@ -9,6 +9,7 @@ import {
   getEvidencias,
   registrarEvidencia,
   solicitarSubida,
+  evidenciasQuery,
   useEvidencias,
   useRegistrarEvidenciaMutation,
   useSolicitarSubidaMutation,
@@ -72,6 +73,10 @@ describe("queries", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(client.getQueryData(evidencias.list({ parada_id: "p-1" }))).toEqual([]);
+  });
+
+  it("goes stale before the signed read URLs (5 min) expire", () => {
+    expect(evidenciasQuery({ parada_id: "p-1" }).staleTime).toBe(4 * 60 * 1000);
   });
 });
 
