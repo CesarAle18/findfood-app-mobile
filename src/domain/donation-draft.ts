@@ -1,6 +1,8 @@
+import type { Coordenada } from "@/api/types";
 import { fromRequiereRefrigeracion } from "@/domain/mappers/refrigeration";
 import { idToUnidad, isQuantityUnit } from "@/domain/mappers/units";
 import type { TipoAlimentoDto, UnidadMedidaDto } from "@/services/catalogos";
+import type { CrearDonacionBody } from "@/services/donaciones";
 
 export type QuantityUnit = "KG" | "L" | "ML" | "G";
 export interface DraftProduct {
@@ -22,6 +24,12 @@ export interface DonationDraft {
   products: DraftProduct[];
   pickupFrom: string;
   pickupUntil: string;
+  /** The address the donor typed; the map never overwrites it. */
+  direccion: string;
+  /** Optional landmark for the volunteer ("Portería norte"). */
+  referencia: string;
+  /** The point picked on the map; null until the donor moves it or uses their location. */
+  ubicacionRecogida: Coordenada | null;
 }
 
 function blankProduct(id: number): DraftProduct {
@@ -42,6 +50,9 @@ export const initialDonationDraft: DonationDraft = {
   products: [blankProduct(1)],
   pickupFrom: "16:00",
   pickupUntil: "18:00",
+  direccion: "",
+  referencia: "",
+  ubicacionRecogida: null,
 };
 export function appendProduct(draft: DonationDraft): DonationDraft {
   const id = Math.max(0, ...draft.products.map((p) => p.id)) + 1;
@@ -100,4 +111,34 @@ function defaultUnit(
   } catch {
     return undefined;
   }
+}
+
+/** `direccion_recogida` bounds of `POST /donaciones` (after trimming). */
+const DIRECCION_MIN = 5;
+
+export type PickupBody = Pick<
+  CrearDonacionBody,
+  "direccion_recogida" | "referencia_recogida" | "ubicacion_recogida"
+>;
+
+/**
+ * The pickup part of `POST /donaciones`: the typed address as is (trimmed) and the picked
+ * point as `{ lat, lng }`. Null until both are usable.
+ */
+export function draftPickupBody(draft: DonationDraft): PickupBody | null {
+  const direccion = draft.direccion.trim();
+  if (!draft.ubicacionRecogida || direccion.length < DIRECCION_MIN) return null;
+  const { lat, lng } = draft.ubicacionRecogida;
+  const referencia = draft.referencia.trim();
+  return {
+    direccion_recogida: direccion,
+    ...(referencia ? { referencia_recogida: referencia } : {}),
+    ubicacion_recogida: { lat, lng },
+  };
+}
+
+/** Applies an address suggested by the map only while the donor has not typed one. */
+export function suggestDireccion(draft: DonationDraft, suggestion: string): DonationDraft {
+  if (draft.direccion.trim() !== "") return draft;
+  return { ...draft, direccion: suggestion };
 }

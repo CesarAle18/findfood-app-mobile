@@ -91,6 +91,19 @@ jest.mock("expo-location", () => ({
   startLocationUpdatesAsync: jest.fn(async () => undefined),
   stopLocationUpdatesAsync: jest.fn(async () => undefined),
   watchPositionAsync: jest.fn(async () => ({ remove: jest.fn() })),
+  getCurrentPositionAsync: jest.fn(async () => ({
+    coords: {
+      latitude: 4.65,
+      longitude: -74.06,
+      altitude: null,
+      accuracy: 20,
+      altitudeAccuracy: null,
+      heading: null,
+      speed: null,
+    },
+    timestamp: 0,
+  })),
+  reverseGeocodeAsync: jest.fn(async () => []),
 }));
 
 jest.mock("expo-task-manager", () => ({

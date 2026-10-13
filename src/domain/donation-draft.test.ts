@@ -3,8 +3,10 @@ import { catalogosFixture } from "@/test-utils/fixtures";
 import {
   appendProduct,
   applyTipoAlimento,
+  draftPickupBody,
   foodTypeOptions,
   initialDonationDraft,
+  suggestDireccion,
   unitOptions,
   type DraftProduct,
 } from "./donation-draft";
@@ -76,5 +78,55 @@ describe("initialDonationDraft", () => {
   it("starts with one product without a food type", () => {
     expect(initialDonationDraft.products).toHaveLength(1);
     expect(initialDonationDraft.products[0].tipoAlimentoId).toBeNull();
+  });
+});
+
+describe("draftPickupBody", () => {
+  const point = { lat: 4.65, lng: -74.06 };
+
+  it("starts without a pickup point or address", () => {
+    expect(initialDonationDraft.ubicacionRecogida).toBeNull();
+    expect(initialDonationDraft.direccion).toBe("");
+    expect(draftPickupBody(initialDonationDraft)).toBeNull();
+  });
+
+  it("sends the typed address and the picked point as {lat,lng}", () => {
+    const draft = {
+      ...initialDonationDraft,
+      direccion: "  Cra 45 #12-30, Bogotá ",
+      ubicacionRecogida: point,
+    };
+    expect(draftPickupBody(draft)).toStrictEqual({
+      direccion_recogida: "Cra 45 #12-30, Bogotá",
+      ubicacion_recogida: { lat: 4.65, lng: -74.06 },
+    });
+  });
+
+  it("adds the reference only when the donor wrote one", () => {
+    const draft = {
+      ...initialDonationDraft,
+      direccion: "Cra 45 #12-30",
+      referencia: " Portería norte ",
+      ubicacionRecogida: point,
+    };
+    expect(draftPickupBody(draft)?.referencia_recogida).toBe("Portería norte");
+  });
+
+  it("is not ready without a point or with an address shorter than 5 characters", () => {
+    expect(draftPickupBody({ ...initialDonationDraft, direccion: "Cra 45 #12-30" })).toBeNull();
+    expect(
+      draftPickupBody({ ...initialDonationDraft, direccion: "Cra", ubicacionRecogida: point }),
+    ).toBeNull();
+  });
+});
+
+describe("suggestDireccion", () => {
+  it("fills an empty address with the map's suggestion", () => {
+    expect(suggestDireccion(initialDonationDraft, "Calle 76 15-20").direccion).toBe("Calle 76 15-20");
+  });
+
+  it("never overwrites an address the donor typed", () => {
+    const typed = { ...initialDonationDraft, direccion: "Cra 45 #12-30" };
+    expect(suggestDireccion(typed, "Calle 76 15-20")).toBe(typed);
   });
 });
