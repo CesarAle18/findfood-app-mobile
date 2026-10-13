@@ -8,6 +8,7 @@ import type {
   DonacionDetalleDto,
   DonacionResumenDto,
 } from "@/services/donaciones";
+import type { CatalogosDto } from "@/services/catalogos";
 import type { ImpactoDto } from "@/services/perfil";
 
 export const DONATION_ID = "7d4f6a1e-0c2b-4f7e-9a51-3b8f2d1c9e10";
@@ -164,3 +165,63 @@ export function detalleFixture(overrides: Partial<DonacionDetalleDto> = {}): Don
 export function pageFixture<T>(datos: T[], total = datos.length, desplazamiento = 0): Paged<T> {
   return { datos, total, limite: 20, desplazamiento };
 }
+
+/** `GET /catalogos` with every catalog; ids are deliberately not in code order. */
+export const catalogosFixture: CatalogosDto = {
+  categorias_alimento: [
+    { id: 1, codigo: "LACTEOS", nombre: "Lácteos", requiere_refrigeracion: true, vida_util_dias_ref: 10 },
+  ],
+  tipos_alimento: [
+    {
+      id: 11,
+      codigo: "LECHE",
+      nombre: "Leche",
+      categoria_alimento_id: 1,
+      unidad_medida_id: 22,
+      requiere_refrigeracion: true,
+      tipo_almacenamiento: "REFRIGERADO",
+      perecedero: true,
+      vida_util_dias: 10,
+    },
+    {
+      id: 12,
+      codigo: "ARROZ",
+      nombre: "Arroz",
+      categoria_alimento_id: 2,
+      unidad_medida_id: 21,
+      requiere_refrigeracion: false,
+      tipo_almacenamiento: "SECO",
+      perecedero: false,
+      vida_util_dias: null,
+    },
+    {
+      id: 13,
+      codigo: "PAN",
+      nombre: "Pan",
+      categoria_alimento_id: 3,
+      unidad_medida_id: 23,
+      requiere_refrigeracion: false,
+      tipo_almacenamiento: "SECO",
+      perecedero: true,
+      vida_util_dias: 3,
+    },
+  ],
+  unidades_medida: [
+    { id: 21, codigo: "KG", nombre: "Kilogramo", factor_a_kg: 1 },
+    { id: 22, codigo: "L", nombre: "Litro", factor_a_kg: 1 },
+    { id: 23, codigo: "UN", nombre: "Unidad", factor_a_kg: null },
+    { id: 24, codigo: "G", nombre: "Gramo", factor_a_kg: 0.001 },
+  ],
+  tipos_vehiculo: [
+    { id: 31, codigo: "MOTO", nombre: "Motocicleta", capacidad_referencia_kg: 30, permite_refrigeracion: false },
+    { id: 32, codigo: "CAMIONETA", nombre: "Camioneta", capacidad_referencia_kg: 800, permite_refrigeracion: true },
+  ],
+  motivos: [
+    { id: 41, ambito: "RECHAZO_ASIGNACION", codigo: "MUY_LEJOS", nombre: "Queda muy lejos", requiere_comentario: false },
+    { id: 42, ambito: "RECHAZO_ASIGNACION", codigo: "OTRO_RECHAZO", nombre: "Otro", requiere_comentario: true },
+    { id: 43, ambito: "CANCELACION_DONACION", codigo: "DONANTE_CANCELA", nombre: "Ya no está disponible", requiere_comentario: false },
+    { id: 44, ambito: "ABANDONO_ASIGNACION", codigo: "IMPREVISTO", nombre: "Imprevisto", requiere_comentario: true },
+  ],
+  tipos_incidencia: [],
+  tipos_destino_distribucion: [],
+};

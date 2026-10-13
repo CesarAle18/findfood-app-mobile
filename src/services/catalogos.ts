@@ -1,8 +1,9 @@
 /**
  * Active catalogs for the forms (`GET /catalogos`): food types, units, vehicles, reasons…
  *
- * Catalogs change rarely, so they stay fresh for an hour. Requests are normalized (each
- * catalog once, sorted) so the same set of catalogs always shares one cache entry.
+ * The app loads every catalog in one request per session (prefetched by `SignedInEffects`)
+ * and each form reads its slice through `select`. Catalogs change rarely and the API has no
+ * ETag, so the entry stays fresh for a day and is never garbage-collected.
  */
 import { queryOptions, useQuery } from "@tanstack/react-query";
 
@@ -11,7 +12,7 @@ import type { TipoAlmacenamiento } from "@/api/types";
 
 import { queryKeys, sortedUnique } from "./query-keys";
 
-const CATALOGOS_STALE_TIME_MS = 60 * 60 * 1000;
+const CATALOGOS_STALE_TIME_MS = 24 * 60 * 60 * 1000;
 
 // --- DTOs ------------------------------------------------------------------------------
 
@@ -77,7 +78,7 @@ export interface MotivoDto {
   ambito: AmbitoMotivo;
   codigo: string;
   nombre: string;
-  /** The request must then include an `observacion`. */
+  /** The request must then include an `observacion` (else 422 `comentario-requerido`). */
   requiere_comentario: boolean;
 }
 
@@ -121,15 +122,72 @@ export function getCatalogos<K extends Catalogo>(
 
 // --- Queries -----------------------------------------------------------------------------
 
-export function catalogosQuery<K extends Catalogo>(incluir: readonly K[], ambito?: AmbitoMotivo) {
+/** Every catalog, in the order the API documents them. */
+export const ALL_CATALOGOS: readonly Catalogo[] = [
+  "categorias_alimento",
+  "tipos_alimento",
+  "unidades_medida",
+  "tipos_vehiculo",
+  "motivos",
+  "tipos_incidencia",
+  "tipos_destino_distribucion",
+];
+
+const EMPTY_CATALOGOS: CatalogosDto = {
+  categorias_alimento: [],
+  tipos_alimento: [],
+  unidades_medida: [],
+  tipos_vehiculo: [],
+  motivos: [],
+  tipos_incidencia: [],
+  tipos_destino_distribucion: [],
+};
+
+/** The whole catalog, once per session; a catalog missing from the response reads as empty. */
+export function catalogosQuery() {
   return queryOptions({
-    queryKey: queryKeys.catalogos.byIncluir(incluir, ambito),
-    queryFn: ({ signal }) => getCatalogos(incluir, ambito, signal),
+    queryKey: queryKeys.catalogos.byIncluir(ALL_CATALOGOS),
+    queryFn: async ({ signal }): Promise<CatalogosDto> => ({
+      ...EMPTY_CATALOGOS,
+      ...(await getCatalogos(ALL_CATALOGOS, undefined, signal)),
+    }),
     staleTime: CATALOGOS_STALE_TIME_MS,
+    gcTime: Infinity,
   });
 }
 
-/** e.g. `useCatalogos(["tipos_alimento", "unidades_medida"])`. */
-export function useCatalogos<K extends Catalogo>(incluir: readonly K[], ambito?: AmbitoMotivo) {
-  return useQuery(catalogosQuery(incluir, ambito));
+// Module-level selectors: stable references, so `select` only reruns when the data changes.
+
+export const selectTiposAlimento = (catalogos: CatalogosDto) => catalogos.tipos_alimento;
+export const selectUnidades = (catalogos: CatalogosDto) => catalogos.unidades_medida;
+export const selectTiposVehiculo = (catalogos: CatalogosDto) => catalogos.tipos_vehiculo;
+
+type MotivoSelector = (catalogos: CatalogosDto) => MotivoDto[];
+
+const motivoSelectors = new Map<AmbitoMotivo, MotivoSelector>();
+
+/** The reasons of one scope; the same function every time for the same scope. */
+export function selectMotivos(ambito: AmbitoMotivo): MotivoSelector {
+  let selector = motivoSelectors.get(ambito);
+  if (!selector) {
+    selector = (catalogos) => catalogos.motivos.filter((motivo) => motivo.ambito === ambito);
+    motivoSelectors.set(ambito, selector);
+  }
+  return selector;
+}
+
+export function useTiposAlimento() {
+  return useQuery({ ...catalogosQuery(), select: selectTiposAlimento });
+}
+
+export function useUnidades() {
+  return useQuery({ ...catalogosQuery(), select: selectUnidades });
+}
+
+export function useTiposVehiculo() {
+  return useQuery({ ...catalogosQuery(), select: selectTiposVehiculo });
+}
+
+export function useMotivos(ambito: AmbitoMotivo) {
+  return useQuery({ ...catalogosQuery(), select: selectMotivos(ambito) });
 }

@@ -29,6 +29,7 @@ import { STACK_SCREEN_OPTIONS } from "@/navigation/stack-options";
 import { ConfigErrorScreen } from "@/screens/access";
 import { MobileProvider } from "@/state/mobile-context";
 import { SessionProvider, useAccess } from "@/state/session";
+import { SignedInEffects } from "@/state/signed-in-effects";
 
 // At module scope: called from a component it can run after the splash is already gone.
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -116,6 +117,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
+        <SignedInEffects />
         <MobileProvider>
           <StatusBar style="dark" />
           <View style={styles.root}>
