@@ -36,7 +36,7 @@ The data layer exists (`src/services/{catalogos,evidencias,notificaciones,perfil
 | ID | Task | Route | Status | Commit | Review |
 |---|---|---|---|---|---|
 | T0 | Native deps, config plugins, env keys, jest mocks, permission gate + notice | delegated writer (2+ non-trivial files) | [x] | `4fed226` | medium (slice_budget_reached) → declined (candidate only); writer checks: typecheck 0, lint 0, jest 1098/1098; parent spot check typecheck 0 |
-| T1 | MOV-20 catalogs: single prefetched query, selectors, replace mocks, `MotivoField`, signed-in effects | delegated writer | [ ] | | |
+| T1 | MOV-20 catalogs: single prefetched query, selectors, replace mocks, `MotivoField`, signed-in effects | delegated writer (2+ non-trivial files) | [x] | `8b44b36` | medium (slice_budget_reached) → declined (candidate only); writer: typecheck 0, lint 0, jest 1131/1131, test:render 3 PASS; parent spot check catalog+motivo tests 16/16 |
 | T2 | MOV-21 resumable evidence upload pipeline, `usePhotoCapture`, `PhotoField` | delegated writer | [ ] | | |
 | T3 | MOV-23 inbox: `routeForNotification`, infinite query, FlashList screen, optimistic read | delegated writer | [ ] | | |
 | T4 | MOV-22 push: handler, channel, registration, response routing, real offer screen | delegated writer | [ ] | | |
@@ -53,9 +53,13 @@ The data layer exists (`src/services/{catalogos,evidencias,notificaciones,perfil
 ## Progress / evidence
 - Branch created from `develop` @ `b77e10b`.
 - T0 `4fed226`: RED→GREEN for permissions helper, PermissionNotice, problem slugs. Notification icon omitted (no 96x96 white asset) → follow-up. Maps plugin and `extra.eas.projectId` only applied when env vars set. Review boundary → `4fed226`.
+- T1 `8b44b36`: RED→GREEN for catalog selectors, draft helpers, signed-in effects. `useCatalogos` replaced by `catalogosQuery()` + `useTiposAlimento/useUnidades/useTiposVehiculo/useMotivos`. Reason body field is `observacion`. Reject offer / cancel donation call the API only when the route carries `asignacionId` / `id`. Review boundary → `8b44b36`.
 
 ## Follow-ups
 - Live volunteer position for donors (API-06 / Realtime). Push code for routes. Profile metrics (API-07).
+- Donation create body mapper from draft (`tipoAlimentoId`, `unidadToId`) and "Publicar donación" submit are not wired (pre-existing gap).
+- Volunteer registration submit (`solicitarVoluntario`, `Number(vehicleType)`) not wired. No abandon-assignment UI (ABANDONO_ASIGNACION).
+- Notification icon asset (96x96 white PNG). Unit tests for env-gated branches of `app.config.ts`.
 
 ## Next step
-T1 (MOV-20 catalogs).
+T2 (MOV-21 evidence).
