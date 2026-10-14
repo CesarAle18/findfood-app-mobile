@@ -23,7 +23,7 @@ export function HomeScreen() {
       subtitle="Vista voluntario"
       badge={voluntario ? <Badge>{availabilityLabel(voluntario.disponible)}</Badge> : undefined}
     >
-      <AvailabilityToggle setupHref="/voluntario/perfil" />
+      <AvailabilityToggle />
       <Card soft>
         <Copy weight="medium" style={{ fontSize: 12 }}>
           Resumen de hoy
