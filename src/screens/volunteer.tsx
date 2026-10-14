@@ -11,6 +11,7 @@ import {
   type MotivoSelection,
 } from "@/components/findfood/motivo-field";
 import type { VolunteerApplication } from "@/domain/models";
+import { validateFranjas } from "@/domain/mappers/franjas";
 import { useMotivos, useTiposVehiculo, type TipoVehiculoDto } from "@/services/catalogos";
 import { offerFromOferta, selectOffer, type OfferView } from "@/domain/mappers/offers";
 import {
@@ -57,7 +58,7 @@ export function VolunteerRegistrationScreen() {
     vehicleType: "",
     capacityKg: "",
     refrigerated: true,
-    availability: "Lunes · 08:00–18:00",
+    availability: [{ dia_semana: 1, hora_inicio: "08:00", hora_fin: "18:00" }],
     documentPhoto: "",
     vehiclePhoto: "",
     licencePhoto: "",
@@ -136,7 +137,11 @@ export function VolunteerRegistrationScreen() {
             Cadena de frío
           </Copy>
           <Choices values={["Sí, dispone", "No dispone"]} selected={form.refrigerated ? 0 : 1} onChange={(index) => setForm(current => ({ ...current, refrigerated: index === 0 }))} />
-          <AvailabilityField onChange={change("availability")} />
+          <AvailabilityField
+            value={form.availability}
+            onChange={(availability) => setForm((current) => ({ ...current, availability }))}
+            error={validateFranjas(form.availability)}
+          />
           <Row style={{ alignItems: "flex-start" }}>
             <View style={{ flex: 1 }}>
               <Section title="Foto documento">

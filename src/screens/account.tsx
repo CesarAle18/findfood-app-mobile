@@ -138,6 +138,15 @@ function ImpactMetrics({ volunteer }: { volunteer: boolean }) {
   );
 }
 
+/** Names and phone, for any role. */
+function EditProfileAction() {
+  return (
+    <NavButton href="/editar-perfil" variant="outline" showArrow={false}>
+      Editar perfil
+    </NavButton>
+  );
+}
+
 function DonorProfile({ me }: { me: MeDto }) {
   const profile = profileFromMe(me);
   return (
@@ -158,6 +167,7 @@ function DonorProfile({ me }: { me: MeDto }) {
             ["Rol activo", "Donante"],
           ]}
         />
+        <EditProfileAction />
       </Section>
     </>
   );
@@ -193,10 +203,20 @@ function VolunteerProfile({ me }: { me: MeDto }) {
             ["Placa", voluntario.placa_vehiculo],
             ["Capacidad", formatKg(voluntario.capacidad_carga_kg)],
             ["Cadena de frío", voluntario.tiene_refrigeracion ? "Sí dispone" : "No dispone"],
-            ["Disponibilidad", formatFranjas(voluntario.disponibilidad)],
             ["Zona de operación", `Hasta ${voluntario.radio_cobertura_km} km de tu base`],
           ]}
         />
+        <EditProfileAction />
+      </Section>
+      <Section title="Disponibilidad">
+        <Card soft>
+          <Copy>{formatFranjas(voluntario.disponibilidad)}</Copy>
+        </Card>
+        {voluntario.estado_verificacion === "APROBADA" ? (
+          <NavButton href="/voluntario/editar-disponibilidad" variant="outline" showArrow={false}>
+            Editar disponibilidad
+          </NavButton>
+        ) : null}
       </Section>
     </>
   );

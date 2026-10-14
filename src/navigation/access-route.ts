@@ -25,7 +25,7 @@ export const ROUTE_GROUPS = {
   /** The volunteer segment: its tabs and route screens. */
   volunteer: ["voluntario"],
   /** Screens of any mobile role. */
-  app: ["cuenta"],
+  app: ["cuenta", "editar-perfil"],
 } as const satisfies Record<string, readonly string[]>;
 
 export type RouteGroup = keyof typeof ROUTE_GROUPS;

@@ -340,6 +340,8 @@ try {
     "account",
     "password",
     "profile-setup",
+    "edit-profile",
+    "edit-availability",
   ];
   let count = 0;
   for (const module of modules) {
@@ -666,21 +668,28 @@ try {
   const {
     AvailabilityField,
   } = require("../src/components/findfood/availability-field.tsx");
-  let schedule;
-  const availability = harness(AvailabilityField, {
-    onChange: (value) => {
-      schedule = value;
-    },
-  });
+  // Controlled: each render reads the windows the last change reported.
+  let schedule = [{ dia_semana: 1, hora_inicio: "08:00", hora_fin: "18:00" }];
+  const availability = () =>
+    harness(AvailabilityField, {
+      value: schedule,
+      onChange: (value) => {
+        schedule = value;
+      },
+    })();
+  const endOf = () =>
+    nodes(availability()).find((n) => n.props?.label === "Hasta · Lunes").props;
   nodes(availability())
     .find((n) => n.props?.label === "Desde · Lunes")
     .props.onChange("23:00");
-  assert.equal(
-    nodes(availability()).find((n) => n.props?.label === "Hasta · Lunes").props
-      .value,
-    "23:30",
-  );
-  assert(schedule.includes("23:00–23:30"));
+  assert.equal(endOf().value, "23:30");
+  assert.deepEqual(schedule, [{ dia_semana: 1, hora_inicio: "23:00", hora_fin: "23:30" }]);
+  // The last start ends at 23:59: a window never crosses midnight.
+  nodes(availability())
+    .find((n) => n.props?.label === "Desde · Lunes")
+    .props.onChange("23:30");
+  assert.equal(endOf().value, "23:59");
+  assert.deepEqual(endOf().options.map((o) => o.value), ["23:59"]);
   console.log(
     "PASS: option selection, five-star aspect lock/unlock and availability time boundaries.",
   );

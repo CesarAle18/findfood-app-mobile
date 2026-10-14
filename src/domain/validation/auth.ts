@@ -119,6 +119,11 @@ export function completeProfileSchema(termsPending: boolean) {
   });
 }
 
+/** `PATCH /me` from the profile editor: the same rules as the profile completion. */
+export const editProfileSchema = z.object({ nombres, apellidos, telefono });
+
+export type EditProfileData = z.output<typeof editProfileSchema>;
+
 export type CompleteProfileData = z.output<ReturnType<typeof completeProfileSchema>>;
 
 export const OTP_LENGTH = 6;

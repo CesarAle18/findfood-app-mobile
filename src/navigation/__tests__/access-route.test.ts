@@ -155,6 +155,12 @@ describe("route groups", () => {
     expect(blocked).toEqual([]);
   });
 
+  it("opens the profile editor to any mobile role and the availability editor to volunteers", () => {
+    expect(groupOf("editar-perfil")).toBe("app");
+    // `voluntario/editar-disponibilidad` lives in the volunteer segment.
+    expect(groupOf("voluntario")).toBe("volunteer");
+  });
+
   it("guards every route file except the gate, each segment exactly once", () => {
     // The route files expo-router finds (`./donante/(tabs)/index.tsx`), relative to the
     // project root. The root Stack guards top-level names: a file or a segment directory.

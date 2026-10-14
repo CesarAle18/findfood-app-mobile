@@ -44,8 +44,14 @@ function retryTracking() {
   void startLocationTracking({ allowBackground: true });
 }
 
-/** `setupHref`: where the volunteer fixes a missing schedule or base location. */
-export function AvailabilityToggle({ setupHref }: { setupHref?: Href }) {
+/** Where the volunteer adds the windows that turning availability on needs. */
+export const EDIT_AVAILABILITY_HREF = "/voluntario/editar-disponibilidad" satisfies Href;
+
+/**
+ * `setupHref`: where the volunteer fixes a missing schedule or base location; the
+ * availability editor unless a screen says otherwise.
+ */
+export function AvailabilityToggle({ setupHref = EDIT_AVAILABILITY_HREF }: { setupHref?: Href }) {
   const { hasProfile, disponible, setDisponible, errorMessage, needsSetup } =
     useAvailabilityToggle();
   const tracking = useLocationTrackingStatus();

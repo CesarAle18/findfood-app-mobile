@@ -1,6 +1,6 @@
 import type { FranjaDto } from "@/api/types";
 
-import { formatFranjas, formatKg, formatRating, profileFromMe } from "./profile";
+import { formatFranjas, formatKg, formatRating, profileChanges, profileFromMe } from "./profile";
 
 const me = {
   email: "maria@correo.com",
@@ -82,5 +82,30 @@ describe("formatFranjas", () => {
 
   it("says when there is no schedule", () => {
     expect(formatFranjas([])).toBe("Sin horario registrado");
+  });
+});
+
+describe("profileChanges", () => {
+  const me = { nombres: "Ana", apellidos: "Ruiz", telefono: "3001234567" };
+
+  it("sends nothing when nothing changed (the phone compares normalized)", () => {
+    expect(
+      profileChanges(me, { nombres: "Ana", apellidos: "Ruiz", telefono: "+573001234567" }),
+    ).toEqual({});
+  });
+
+  it("sends only the changed fields", () => {
+    expect(
+      profileChanges(me, { nombres: "Ana María", apellidos: "Ruiz", telefono: "+573109876543" }),
+    ).toEqual({ nombres: "Ana María", telefono: "+573109876543" });
+  });
+
+  it("fills what the account was missing", () => {
+    expect(
+      profileChanges(
+        { nombres: null, apellidos: null, telefono: null },
+        { nombres: "Ana", apellidos: "Ruiz", telefono: "+573001234567" },
+      ),
+    ).toEqual({ nombres: "Ana", apellidos: "Ruiz", telefono: "+573001234567" });
   });
 });
