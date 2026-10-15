@@ -42,7 +42,7 @@ The data layer exists (`src/services/{catalogos,evidencias,notificaciones,perfil
 | T4 | MOV-22 push: handler, channel, registration, response routing, real offer screen | delegated writer (2+ non-trivial files) | [x] | `40cd379` + `84af196` | medium (slice_budget_reached) → declined (candidate only); writer: typecheck 0, lint 0, jest 1224/1224, test:render 3 PASS; parent spot check src/notifications 46/46 |
 | T5 | MOV-24 background location task, availability toggle from `/me`, stop on sign-out | delegated writer (2+ non-trivial files) | [x] | `244f68c` + `c08a937` | medium (slice_budget_reached) → declined (candidate only); writer: typecheck 0, lint 0, jest 1267/1267, test:render 3 PASS; parent spot check src/location 35/35 |
 | T6 | MOV-25 maps: `FindFoodMap`, `LocationPicker`, `RouteMapView` | delegated writer (2+ non-trivial files) | [x] | `0743880` + `eeb33a7` | medium (slice_budget_reached) → declined (candidate only); writer: typecheck 0, lint 0, jest 1292/1292, test:render 3 PASS; parent spot check geo+map 19/19 |
-| T7 | MOV-26 profile edit, franjas mapper, controlled `AvailabilityField`, edit availability | delegated writer | [ ] | | |
+| T7 | MOV-26 profile edit, franjas mapper, controlled `AvailabilityField`, edit availability | delegated writer (2+ non-trivial files; first writer cut off by usage limit, resumed) | [x] | `68d3319` + `2eb1a89` | high (hot_path auth.ts) → user chose decline; decline invocation could not run (gentle-ai binary permission denied) → no review record; independent parent verification: typecheck 0, lint 0, jest 1329/1329, test:render 3 PASS |
 
 ## External prerequisites (user)
 1. `eas init` → `extra.eas.projectId`; FCM V1 + APNs credentials in EAS.
@@ -59,6 +59,7 @@ The data layer exists (`src/services/{catalogos,evidencias,notificaciones,perfil
 - T4 `40cd379` + `84af196`: offer screen loads the real offer by `asignacionId` (RED→GREEN offers mapper); push registration skips with typed reasons (web, simulator, no projectId, denied); taps wait for navigator ready + phase app, then shared `openNotification`. Push/response tests written after code (no RED evidence). Push path uses plain mark-read mutation (existing suites mock notificaciones narrowly). Device-only behaviour unverified. Review boundary → `84af196`.
 - T5 `244f68c` + `c08a937`: RED→GREEN only for `shouldSend` throttle; other tests written after code. Background task posts only {lat,lng}, stops on no session/401/403 `sin-perfil-voluntario`; headless launch restores the Supabase session into `sessionStore`. Disclosure via native Alert, answer kept per session. `cerrarSesion` stops tracking first (2 s bound). Toggle is optimistic on `queryKeys.me`; `available` removed from mobile-context. Device-only behaviour unverified. Review boundary → `c08a937`.
 - T6 `0743880` + `eeb33a7`: RED→GREEN geo mapper and draft pickup fields; map component tests written after code. `draftPickupBody` sends `ubicacion_recogida {lat,lng}` and keeps the typed `direccion_recogida`; reverse-geocode only fills an empty address. Active route map uses real `GET /rutas?estado=EN_CURSO` + `/rutas/:id` (rest of screen still preview). Review boundary → `eeb33a7`.
+- T7 `68d3319` + `2eb1a89`: RED→GREEN franjas mapper (24) and `profileChanges`; screen tests for both editors. Midnight-crossing windows rejected (API 422 `franja-invalida`); enter as two windows. PATCH /me sends only changed fields and writes the response with `setQueryData`. Availability editor merges windows into the `me` cache; empty list confirmed first. Home toggle now links to the editor.
 
 ## Follow-ups
 - Live volunteer position for donors (API-06 / Realtime). Push code for routes. Profile metrics (API-07).
@@ -69,6 +70,8 @@ The data layer exists (`src/services/{catalogos,evidencias,notificaciones,perfil
 - Inbox: role switch from a notification keeps history (account screen uses dismissAll); read rows linger in Sin leer until refetch.
 - Location: import cycle session → tracking → perfil → session (safe, call-time only); point availability 422 link to `editar-disponibilidad` after T7.
 - Maps: full create-donation body mapper (needs `peso_estimado_kg` and ISO pickup window) and submit not wired; map-in-ScrollView gestures to check on device; active-route screen details still preview data.
+- Profile: `profile-setup.tsx` keeps a private duplicate of `profileChanges`; profile editor uses `useZodForm` initial values (not fallback-state). API-07 metrics still missing.
+- RDD: T7 decline not recorded (tooling unavailable); run `gentle-ai review status` for range `7203d1c..2eb1a89` when the binary works again if a record is wanted.
 
 ## Next step
-T7 (MOV-26 profile).
+All tasks done. User: `eas init` + EAS_PROJECT_ID, FCM/APNs credentials, Google Maps keys, notification icon, then a new development build to verify the device-only acceptance criteria (push tap → /voluntario/oferta, background location stop, map picks). Push/PRs per feature-branch-chain are the user's decision.
