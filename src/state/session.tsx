@@ -39,6 +39,7 @@ import { signOutFromGoogle } from "@/auth/google-auth";
 import { sessionStore, type SessionSnapshot, type SessionStatus } from "@/auth/session-store";
 import { signOutLocally, supabase } from "@/auth/supabase";
 import { env } from "@/config/env";
+import { stopLocationTracking } from "@/location/tracking";
 import { queryKeys } from "@/services/query-keys";
 
 const ACTIVE_ROLE_KEY = "findfood.activeRole";
@@ -50,6 +51,7 @@ const RECOVERING_KEY = "findfood.recovering";
 /** Written by the push registration (see deviceIdStorage); unregistered on sign-out. */
 const DEVICE_ID_KEY = "findfood.deviceId";
 const DEVICE_UNREGISTER_TIMEOUT_MS = 3_000;
+const LOCATION_STOP_TIMEOUT_MS = 2_000;
 
 const SIGNED_OUT: SessionSnapshot = { status: "none", accessToken: null };
 
@@ -159,6 +161,25 @@ async function unregisterDevice(): Promise<void> {
       signal: controller.signal,
       timeoutMs: DEVICE_UNREGISTER_TIMEOUT_MS,
     });
+  } catch {
+    // Ignored on purpose (see above).
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Stops sharing the volunteer's location before the session ends. Bounded and never
+ * rejects: a stop stuck behind a start (e.g. a permission prompt still open) finishes later
+ * on its own, and that start gives up instead of starting.
+ */
+async function stopTrackingForSignOut(): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, LOCATION_STOP_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([stopLocationTracking({ endSession: true }), deadline]);
   } catch {
     // Ignored on purpose (see above).
   } finally {
@@ -297,6 +318,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     function cerrarSesion(): Promise<void> {
       signingOut.current ??= (async () => {
         try {
+          await stopTrackingForSignOut();
           await unregisterDevice();
           await endSession();
           queryClient.clear();

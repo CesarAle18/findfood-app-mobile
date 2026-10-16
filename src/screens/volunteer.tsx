@@ -1,6 +1,24 @@
 import { AvailabilityField } from "@/components/findfood/availability-field";
+import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
+import { messageFor } from "@/api/problem-messages";
+import { EmptyState, QueryContent } from "@/components/findfood/feedback";
+import { PhotoField } from "@/components/findfood/photo-field";
+import {
+  MotivoField,
+  motivoBody,
+  validateMotivo,
+  type MotivoSelection,
+} from "@/components/findfood/motivo-field";
 import type { VolunteerApplication } from "@/domain/models";
+import { validateFranjas } from "@/domain/mappers/franjas";
+import { useMotivos, useTiposVehiculo, type TipoVehiculoDto } from "@/services/catalogos";
+import { offerFromOferta, selectOffer, type OfferView } from "@/domain/mappers/offers";
+import {
+  useAceptarOfertaMutation,
+  useOfertas,
+  useRechazarOfertaMutation,
+} from "@/services/asignaciones";
 import { View } from "react-native";
 import {
   Badge,
@@ -10,9 +28,9 @@ import {
   Copy,
   Detail,
   Field,
+  FormMessage,
   SelectField,
   NavButton,
-  PhotoPlaceholder,
   Row,
   Screen,
   Section,
@@ -21,6 +39,14 @@ import {
 import { colors } from "@/design/tokens";
 
 import { useDonationId } from "./donation-queries";
+
+/**
+ * The catalog vehicle types, keyed by their id as text (the select's value); the request
+ * sends it back as the numeric `tipo_vehiculo_id` (`Number(form.vehicleType)`).
+ */
+export function vehicleTypeOptions(tipos: readonly TipoVehiculoDto[]) {
+  return tipos.map((tipo) => ({ label: tipo.nombre, value: String(tipo.id) }));
+}
 
 export function VolunteerRegistrationScreen() {
   const [form, setForm] = useState<VolunteerApplication>({
@@ -32,8 +58,12 @@ export function VolunteerRegistrationScreen() {
     vehicleType: "",
     capacityKg: "",
     refrigerated: true,
-    availability: "Lunes · 08:00–18:00",
+    availability: [{ dia_semana: 1, hora_inicio: "08:00", hora_fin: "18:00" }],
+    documentPhoto: "",
+    vehiclePhoto: "",
+    licencePhoto: "",
   });
+  const tiposVehiculo = useTiposVehiculo();
   const change = (key: keyof VolunteerApplication) => (value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
   return (
@@ -83,16 +113,20 @@ export function VolunteerRegistrationScreen() {
       </Section>
       <Section title="Información del vehículo">
         <Stack>
-          <SelectField
-            label="Tipo de vehículo *"
-            value={form.vehicleType}
-            onChange={change("vehicleType")}
-            options={[
-              { label: "Camioneta", value: "Camioneta" },
-              { label: "Automóvil", value: "Automóvil" },
-              { label: "Motocicleta", value: "Motocicleta" },
-            ]}
-          />
+          <QueryContent
+            query={tiposVehiculo}
+            loadingLabel="Cargando tipos de vehículo"
+            errorTitle="No pudimos cargar los tipos de vehículo"
+          >
+            {(tipos) => (
+              <SelectField
+                label="Tipo de vehículo *"
+                value={form.vehicleType}
+                onChange={change("vehicleType")}
+                options={vehicleTypeOptions(tipos)}
+              />
+            )}
+          </QueryContent>
           <Field
             label="Capacidad de carga *"
             value={form.capacityKg}
@@ -103,21 +137,43 @@ export function VolunteerRegistrationScreen() {
             Cadena de frío
           </Copy>
           <Choices values={["Sí, dispone", "No dispone"]} selected={form.refrigerated ? 0 : 1} onChange={(index) => setForm(current => ({ ...current, refrigerated: index === 0 }))} />
-          <AvailabilityField onChange={change("availability")} />
+          <AvailabilityField
+            value={form.availability}
+            onChange={(availability) => setForm((current) => ({ ...current, availability }))}
+            error={validateFranjas(form.availability)}
+          />
           <Row style={{ alignItems: "flex-start" }}>
             <View style={{ flex: 1 }}>
               <Section title="Foto documento">
-                <PhotoPlaceholder label="Documento" compact />
+                <PhotoField
+                  label="Documento"
+                  mode="file"
+                  proposito="DOCUMENTO_IDENTIDAD"
+                  compact
+                  onUploaded={({ ruta }) => change("documentPhoto")(ruta)}
+                />
               </Section>
             </View>
             <View style={{ flex: 1 }}>
               <Section title="Foto vehículo">
-                <PhotoPlaceholder label="Vehículo" compact />
+                <PhotoField
+                  label="Vehículo"
+                  mode="file"
+                  proposito="VEHICULO"
+                  compact
+                  onUploaded={({ ruta }) => change("vehiclePhoto")(ruta)}
+                />
               </Section>
             </View>
           </Row>
           <Section title="Foto licencia">
-            <PhotoPlaceholder label="Licencia" compact />
+            <PhotoField
+              label="Licencia"
+              mode="file"
+              proposito="DOCUMENTO_IDENTIDAD"
+              compact
+              onUploaded={({ ruta }) => change("licencePhoto")(ruta)}
+            />
           </Section>
         </Stack>
       </Section>
@@ -127,47 +183,168 @@ export function VolunteerRegistrationScreen() {
     </Screen>
   );
 }
+/**
+ * A live offer, opened from its push or inbox row with `?asignacionId=`. Without one, the
+ * first offer still waiting for an answer. An offer no longer listed (expired, taken or
+ * already rejected) says so instead of showing stale data.
+ */
 export function OfferScreen() {
+  const { asignacionId } = useLocalSearchParams<{ asignacionId?: string }>();
+  const requestedId = typeof asignacionId === "string" && asignacionId !== "" ? asignacionId : undefined;
+  const ofertas = useOfertas();
+  const oferta = ofertas.data ? selectOffer(ofertas.data, requestedId) : null;
+  const offer = oferta ? offerFromOferta(oferta) : null;
   return (
     <Screen
       title="Nueva oferta"
       subtitle="Voluntario"
-      badge={<Badge warning>10:00 min</Badge>}
+      badge={offer && !offer.accepted ? <Badge warning>{`Vence ${offer.expiresAt}`}</Badge> : null}
     >
-      <Card>
-        <Copy weight="bold" style={{ fontSize: 20, lineHeight: 28 }}>
-          DON-1048
-        </Copy>
-        <Copy weight="medium">Supermercado La 14</Copy>
-        <Copy tone="secondary">45 kg · Refrigeración requerida</Copy>
-        <Copy tone="secondary">Ventana: 16:00–18:00</Copy>
-      </Card>
-      <Section title="Información para decidir">
-        <Card>
-          <Detail label="Distancia" value="2,8 km" icon="pin" />
-          <View style={{ height: 1, backgroundColor: colors.border }} />
-          <Detail label="Tiempo" value="18 min" icon="clock" />
-          <View style={{ height: 1, backgroundColor: colors.border }} />
-          <Detail label="Capacidad" value="120 kg" icon="truck" />
-          <View style={{ height: 1, backgroundColor: colors.border }} />
-        </Card>
-      </Section>
-      <Row>
-        <View style={{ flex: 1 }}>
-          <Button variant="outline">Rechazar</Button>
-        </View>
-        <View style={{ flex: 1 }}>
-          <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
-            Aceptar
-          </NavButton>
-        </View>
-      </Row>
-      <Copy tone="secondary" style={{ fontSize: 11, textAlign: "center" }}>
-        Al aceptar, la ruta se agregará automáticamente.
-      </Copy>
+      <QueryContent query={ofertas} loadingLabel="Cargando la oferta">
+        {() =>
+          offer ? (
+            <OfferDetails offer={offer} />
+          ) : (
+            <EmptyState
+              icon="truck"
+              title={requestedId ? "Esta oferta ya no está disponible" : "No tienes ofertas pendientes"}
+              description={
+                requestedId
+                  ? "Pudo expirar o asignarse a otro voluntario."
+                  : "Te avisaremos cuando haya una donación cerca de ti."
+              }
+              action={
+                <NavButton href="/voluntario" dismissTo showArrow={false}>
+                  Volver al inicio
+                </NavButton>
+              }
+            />
+          )
+        }
+      </QueryContent>
     </Screen>
   );
 }
+
+function OfferDetails({ offer }: { offer: OfferView }) {
+  const [rejecting, setRejecting] = useState(false);
+  const { mutateAsync: aceptar, isPending: accepting } = useAceptarOfertaMutation();
+  const [error, setError] = useState<string>();
+
+  const accept = async () => {
+    setError(undefined);
+    try {
+      await aceptar(offer.id);
+    } catch (failure) {
+      setError(messageFor(failure));
+      return;
+    }
+    router.dismissTo("/voluntario/rutas");
+  };
+
+  return (
+    <>
+      <Card>
+        <Copy weight="bold" style={{ fontSize: 20, lineHeight: 28 }}>
+          {offer.code}
+        </Copy>
+        <Copy weight="medium">{offer.title}</Copy>
+        <Copy tone="secondary">{offer.summary}</Copy>
+        <Copy tone="secondary">{`Ventana: ${offer.pickupWindow}`}</Copy>
+      </Card>
+      <Section title="Información para decidir">
+        <Card>
+          <Detail label="Recogida" value={offer.address} icon="pin" />
+          {offer.distance !== null ? (
+            <>
+              <View style={{ height: 1, backgroundColor: colors.border }} />
+              <Detail label="Distancia" value={offer.distance} icon="truck" />
+            </>
+          ) : null}
+          <View style={{ height: 1, backgroundColor: colors.border }} />
+          <Detail label="Responde antes de" value={offer.expiresAt} icon="clock" />
+        </Card>
+      </Section>
+      {offer.products.length > 0 ? (
+        <Section title="Productos">
+          <Card>
+            {offer.products.map((product) => (
+              <Copy key={product} tone="secondary">
+                {product}
+              </Copy>
+            ))}
+          </Card>
+        </Section>
+      ) : null}
+      {offer.accepted ? (
+        <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
+          Ver mis rutas
+        </NavButton>
+      ) : rejecting ? (
+        <RejectOffer asignacionId={offer.id} onBack={() => setRejecting(false)} />
+      ) : (
+        <>
+          <FormMessage message={error} />
+          <Row>
+            <View style={{ flex: 1 }}>
+              <Button variant="outline" disabled={accepting} onPress={() => setRejecting(true)}>
+                Rechazar
+              </Button>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button loading={accepting} onPress={() => void accept()}>
+                Aceptar
+              </Button>
+            </View>
+          </Row>
+          <Copy tone="secondary" style={{ fontSize: 11, textAlign: "center" }}>
+            Al aceptar, la ruta se agregará automáticamente.
+          </Copy>
+        </>
+      )}
+    </>
+  );
+}
+
+/** Rejects the offer with a RECHAZO_ASIGNACION reason (`POST /asignaciones/:id/rechazar`). */
+function RejectOffer({ asignacionId, onBack }: { asignacionId: string; onBack: () => void }) {
+  const { data: motivos } = useMotivos("RECHAZO_ASIGNACION");
+  const { mutateAsync: rechazar, isPending } = useRechazarOfertaMutation();
+  const [selection, setSelection] = useState<MotivoSelection>({ comentario: "" });
+  const [error, setError] = useState<string | null>(null);
+
+  const confirm = async () => {
+    const invalid = validateMotivo(selection, motivos ?? []);
+    setError(invalid);
+    const { motivoId } = selection;
+    if (invalid !== null || motivoId === undefined) return;
+    try {
+      await rechazar({ id: asignacionId, body: motivoBody({ ...selection, motivoId }) });
+    } catch (failure) {
+      setError(messageFor(failure));
+      return;
+    }
+    router.dismissTo("/voluntario");
+  };
+
+  return (
+    <Section title="Rechazar oferta">
+      <MotivoField
+        ambito="RECHAZO_ASIGNACION"
+        value={selection}
+        onChange={setSelection}
+        error={error}
+      />
+      <Button variant="danger" loading={isPending} onPress={() => void confirm()}>
+        Confirmar rechazo
+      </Button>
+      <Button variant="outline" disabled={isPending} onPress={onBack}>
+        Volver
+      </Button>
+    </Section>
+  );
+}
+
 /** Opened from the active route; `?id=` is the stop's donation (UUID), when known. */
 export function CollectionScreen() {
   const id = useDonationId();
@@ -179,7 +356,7 @@ export function CollectionScreen() {
       <SelectField label="Estado del producto" value={condition} onChange={setCondition} options={["Bueno", "Regular", "Malo"].map(value => ({ label: value, value }))} />
       <Field label="Peso aprox." value={weight} onChangeText={setWeight} />
       <Section title="Evidencia fotográfica">
-        <PhotoPlaceholder label="Evidencia fotográfica" />
+        <PhotoField label="Evidencia fotográfica" mode="evidence" proposito="EVIDENCIA" tipo="RECOGIDA" />
       </Section>
       <Field label="Observaciones" value={notes} onChangeText={setNotes} placeholder="Describe el estado del producto" multiline />
       <NavButton href={{ pathname: "/voluntario/calificar-donante", params: { id } }} showArrow={false}>Calificar donante</NavButton>

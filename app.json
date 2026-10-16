@@ -33,7 +33,32 @@
         }
       ],
       "expo-secure-store",
-      "expo-dev-client"
+      "expo-dev-client",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Find Food usa la cámara para tomar las fotos de evidencia de tus donaciones y entregas.",
+          "photosPermission": "Find Food accede a tus fotos para que elijas la evidencia de tus donaciones y entregas.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1F7A5A",
+          "defaultChannel": "default"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Find Food usa tu ubicación para mostrarte en el mapa y elegir puntos de recogida.",
+          "locationAlwaysAndWhenInUsePermission": "Find Food usa tu ubicación, también en segundo plano, para ofrecerte donaciones cercanas mientras estás disponible como voluntario.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

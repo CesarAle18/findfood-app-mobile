@@ -9,7 +9,8 @@ import {
   ErrorState,
   QueryContent,
 } from "@/components/findfood/feedback";
-import { Icon, RouteMap } from "@/components/findfood/icon";
+import { Icon } from "@/components/findfood/icon";
+import { PointMap } from "@/components/findfood/map";
 import {
   Badge,
   Button,
@@ -413,8 +414,11 @@ function DonationDetailContent({
           </Card>
         </Section>
       ) : null}
-      <Section title="Ubicación en tiempo real">
-        <RouteMap />
+      <Section title="Punto de recogida">
+        <PointMap point={dto.ubicacion_recogida} title={d.address || "Punto de recogida"} />
+        <Copy tone="secondary">
+          La ubicación en vivo del voluntario aún no está disponible.
+        </Copy>
       </Section>
       {!asVolunteer && volunteer && isDelivered(d.estado) ? (
         <NavButton
@@ -463,7 +467,15 @@ export function ReviewDonationScreen() {
     >
       <Card soft>
         <Copy weight="semibold">Punto general de recogida</Copy>
-        <Copy>Ubicación pendiente de seleccionar en el mapa</Copy>
+        <Copy>{draft.direccion.trim() || "Dirección pendiente"}</Copy>
+        {draft.referencia.trim() ? (
+          <Copy tone="secondary">Referencia: {draft.referencia.trim()}</Copy>
+        ) : null}
+        {draft.ubicacionRecogida ? (
+          <PointMap point={draft.ubicacionRecogida} title="Punto de recogida" height={160} />
+        ) : (
+          <Copy tone="secondary">Punto pendiente de seleccionar en el mapa</Copy>
+        )}
         <Copy tone="secondary">
           Ventana: {draft.pickupFrom} – {draft.pickupUntil}
         </Copy>

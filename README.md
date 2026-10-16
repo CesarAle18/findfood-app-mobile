@@ -50,12 +50,31 @@ Perfiles de `eas.json`:
 
 Primera vez (requiere una cuenta de Expo):
 
-1. `npx eas-cli@latest login` y `npx eas-cli@latest init` (vincula el proyecto y agrega `extra.eas.projectId` a `app.json`).
+1. `npx eas-cli@latest login` y `npx eas-cli@latest init` (vincula el proyecto y agrega `extra.eas.projectId` a `app.json`). Si prefieres no versionar el ID, defínelo como `EAS_PROJECT_ID` (en `.env.local` y en EAS): `app.config.ts` lo copia a `extra.eas.projectId`, que las notificaciones push necesitan para obtener el token.
+   - Mapas: definir `GOOGLE_MAPS_ANDROID_API_KEY` y `GOOGLE_MAPS_IOS_API_KEY` (variables de compilación, no `EXPO_PUBLIC_*`) en `.env.local` y en cada entorno de EAS con `--visibility sensitive`. `app.config.ts` agrega el plugin de `react-native-maps` solo si existe alguna de las dos; cambiarlas exige un build nuevo.
 2. Cargar las variables públicas en cada entorno de EAS (`development`, `preview`, `production`): `npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_API_URL --value <url> --visibility plaintext`, y lo mismo para `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` y los client IDs de Google. **Nunca** `EXPO_PUBLIC_DEV_TOKEN` ni `EXPO_PUBLIC_APP_ENV=local`. `src/config/build-config.test.ts` solo impide declararlos en `eas.json`; las variables remotas de EAS no las puede ver, así que revisa `npx eas-cli@latest env:list` antes de cada build.
 3. `npx eas-cli@latest build --profile development --platform android` e instalar el APK desde el enlace que entrega EAS.
 4. En el computador, `npm run start:local` o `npm run start:real` y abrir el proyecto desde el dev client.
 
 Aunque la variable exista en el entorno, un bundle de release no contiene el token de desarrollo: se lee solo bajo `__DEV__` y el minificador elimina esa rama. `npm run check:release-token` lo comprueba exportando el bundle de Android con un token centinela y falla si el centinela aparece. Exporta sin bytecode de Hermes para poder buscar en el JS.
+
+### Probar las notificaciones push
+
+- Hace falta un build de desarrollo (o `preview`) instalado en un **teléfono físico**: Expo Go en Android no recibe push remotas y los emuladores/simuladores no obtienen token. En ellos la app simplemente omite el registro.
+- `extra.eas.projectId` debe existir (`eas init` o `EAS_PROJECT_ID`); sin él la app avisa en consola de desarrollo y no registra el dispositivo.
+- Credenciales en EAS: FCM V1 (Android, `npx eas-cli@latest credentials`) y una clave APNs (iOS). Sin ellas el API no puede entregar la push.
+- Al iniciar sesión con rol DONANTE o VOLUNTARIO la app pide permiso (una vez por sesión) y registra el token con `POST /me/dispositivos`; al cerrar sesión lo elimina.
+- Para probar la apertura: genera una oferta (`ASIGNACION_OFRECIDA`) desde el API, toca la notificación con la app cerrada y abierta; debe abrir `/voluntario/oferta` con esa asignación. Las notificaciones recibidas con la app abierta actualizan la bandeja.
+
+### Ubicación del voluntario en segundo plano
+
+Un voluntario aprobado comparte su ubicación (`POST /v1/voluntario/ubicacion`, solo `{ lat, lng }`, como mucho cada 60 s o cada 100 m) mientras está **Disponible** o tiene una ruta `EN_CURSO`. Deja de compartirla al ponerse "No disponible" sin ruta en curso, al cambiar al rol donante o al cerrar sesión (`src/location/`).
+
+- Primero se pide el permiso en primer plano. Antes del permiso en segundo plano se muestra una divulgación destacada ("Continuar" / "Ahora no"), una vez por sesión. Con "Ahora no", o si el sistema lo niega, solo se comparte con la app abierta.
+- En Android, mientras se comparte en segundo plano, se ve la notificación del servicio en primer plano "FindFood está usando tu ubicación". En iOS se muestra el indicador azul de ubicación.
+- El task `findfood-volunteer-location` se define al cargar `src/app/_layout.tsx`, para que exista cuando el sistema lanza la app sin interfaz. Sin token en memoria, recupera la sesión guardada de Supabase. Sin sesión, o ante un 401 o un 403 `sin-perfil-voluntario`, detiene las actualizaciones.
+- Requiere un build de desarrollo (no funciona en Expo Go). En Android, si se cierra la app a la fuerza, el rastreo no se reanuda solo.
+- **Antes de publicar:** declarar el uso de ubicación en segundo plano en Play Console (con video) y justificar "Siempre" en App Store Connect.
 
 ## Acceso con Google
 

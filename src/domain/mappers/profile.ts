@@ -3,6 +3,7 @@
  * Numbers use a decimal comma; no Intl formatter is needed (Hermes support varies).
  */
 import type { FranjaDto, MeDto } from "@/api/types";
+import { normalizeColombianMobile } from "@/domain/validation/auth";
 
 export interface ProfileView {
   /** Given names and surnames, or the email while the profile has no names. */
@@ -59,4 +60,27 @@ export function formatFranjas(franjas: readonly FranjaDto[]): string {
         `${WEEKDAYS[dia_semana] ?? "?"} ${hora_inicio.slice(0, 5)}–${hora_fin.slice(0, 5)}`,
     )
     .join(" · ");
+}
+
+/** The profile editor's validated values (the phone already as `+57XXXXXXXXXX`). */
+export interface ProfileValues {
+  nombres: string;
+  apellidos: string;
+  telefono: string;
+}
+
+/**
+ * The `PATCH /me` body of the profile editor: only the fields that differ from the account,
+ * so nothing else is rewritten. The stored phone is compared normalized.
+ */
+export function profileChanges(
+  me: Pick<MeDto, "nombres" | "apellidos" | "telefono">,
+  data: ProfileValues,
+): Partial<ProfileValues> {
+  const body: Partial<ProfileValues> = {};
+  if (data.nombres !== (me.nombres ?? "")) body.nombres = data.nombres;
+  if (data.apellidos !== (me.apellidos ?? "")) body.apellidos = data.apellidos;
+  const currentPhone = me.telefono === null ? null : normalizeColombianMobile(me.telefono);
+  if (data.telefono !== currentPhone) body.telefono = data.telefono;
+  return body;
 }

@@ -12,7 +12,6 @@ import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import {
   Badge,
   Chip,
-  Choices,
   Card,
   Copy,
   Button,
@@ -42,7 +41,7 @@ import {
   profileFromMe,
 } from "@/domain/mappers/profile";
 import { useImpacto } from "@/services/perfil";
-import { useMobile } from "@/state/mobile-context";
+import { AvailabilityToggle } from "@/location/availability-toggle";
 import { useAccess, useMe, useSession } from "@/state/session";
 import { useSignOut } from "@/state/use-sign-out";
 import { colors, fonts } from "@/design/tokens";
@@ -139,6 +138,15 @@ function ImpactMetrics({ volunteer }: { volunteer: boolean }) {
   );
 }
 
+/** Names and phone, for any role. */
+function EditProfileAction() {
+  return (
+    <NavButton href="/editar-perfil" variant="outline" showArrow={false}>
+      Editar perfil
+    </NavButton>
+  );
+}
+
 function DonorProfile({ me }: { me: MeDto }) {
   const profile = profileFromMe(me);
   return (
@@ -159,13 +167,13 @@ function DonorProfile({ me }: { me: MeDto }) {
             ["Rol activo", "Donante"],
           ]}
         />
+        <EditProfileAction />
       </Section>
     </>
   );
 }
 
 function VolunteerProfile({ me }: { me: MeDto }) {
-  const { available, setAvailable } = useMobile();
   const voluntario = me.voluntario;
   if (!voluntario) {
     return (
@@ -183,12 +191,7 @@ function VolunteerProfile({ me }: { me: MeDto }) {
         caption={VERIFICATION[voluntario.estado_verificacion] ?? "Voluntario"}
         average={voluntario.calificacion_promedio}
       >
-        {/* TODO(F3): persist with PATCH /voluntario/estado (useCambiarDisponibleMutation). */}
-        <Choices
-          values={["Disponible", "No disponible"]}
-          selected={available ? 0 : 1}
-          onChange={(i) => setAvailable(i === 0)}
-        />
+        <AvailabilityToggle />
       </ProfileCard>
       <Section title="Resumen operativo">
         <ImpactMetrics volunteer />
@@ -200,10 +203,20 @@ function VolunteerProfile({ me }: { me: MeDto }) {
             ["Placa", voluntario.placa_vehiculo],
             ["Capacidad", formatKg(voluntario.capacidad_carga_kg)],
             ["Cadena de frío", voluntario.tiene_refrigeracion ? "Sí dispone" : "No dispone"],
-            ["Disponibilidad", formatFranjas(voluntario.disponibilidad)],
             ["Zona de operación", `Hasta ${voluntario.radio_cobertura_km} km de tu base`],
           ]}
         />
+        <EditProfileAction />
+      </Section>
+      <Section title="Disponibilidad">
+        <Card soft>
+          <Copy>{formatFranjas(voluntario.disponibilidad)}</Copy>
+        </Card>
+        {voluntario.estado_verificacion === "APROBADA" ? (
+          <NavButton href="/voluntario/editar-disponibilidad" variant="outline" showArrow={false}>
+            Editar disponibilidad
+          </NavButton>
+        ) : null}
       </Section>
     </>
   );

@@ -9,9 +9,16 @@ import { signOutFromGoogle } from "@/auth/google-auth";
 import { sessionStore } from "@/auth/session-store";
 import { signOutLocally, supabase } from "@/auth/supabase";
 import { env } from "@/config/env";
+import { stopLocationTracking } from "@/location/tracking";
 import { queryKeys } from "@/services/query-keys";
 
 import { SessionProvider, useAccess, useMe, useSession, useSessionActions } from "./session";
+
+jest.mock("@/location/tracking", () => ({
+  stopLocationTracking: jest.fn(async () => undefined),
+}));
+
+const mockedStopLocationTracking = jest.mocked(stopLocationTracking);
 
 jest.mock("@/config/env", () => ({
   env: { appEnv: "local", apiUrl: "http://api.test", devToken: "dev-token" },
@@ -314,6 +321,46 @@ describe("cerrarSesion", () => {
       });
 
       expect(done).toBe(true);
+      expect(result.current.session.status).toBe("none");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("stops sharing the location first, forgetting this session's answers", async () => {
+    mockSecureValues.set("findfood.deviceId", "device-1");
+    const calls = serve((call) =>
+      call.method === "DELETE" ? { status: 204 } : { status: 200, body: me() },
+    );
+    const { result } = await renderSession();
+    await waitFor(() => expect(result.current.access.phase).toBe("app"));
+    mockedStopLocationTracking.mockClear();
+    let deletesWhenStopped = -1;
+    mockedStopLocationTracking.mockImplementationOnce(async () => {
+      deletesWhenStopped = calls.filter((call) => call.method === "DELETE").length;
+    });
+
+    await act(() => result.current.actions.cerrarSesion());
+
+    expect(mockedStopLocationTracking).toHaveBeenCalledWith({ endSession: true });
+    expect(deletesWhenStopped).toBe(0);
+    expect(result.current.session.status).toBe("none");
+  });
+
+  it("signs out even when stopping the location hangs", async () => {
+    serve(() => ({ status: 200, body: me() }));
+    const { result } = await renderSession();
+    await waitFor(() => expect(result.current.access.phase).toBe("app"));
+    mockedStopLocationTracking.mockImplementationOnce(() => new Promise<void>(() => {}));
+    jest.useFakeTimers();
+    try {
+      let signOut: Promise<void> = Promise.resolve();
+      await act(async () => {
+        signOut = result.current.actions.cerrarSesion();
+        await jest.advanceTimersByTimeAsync(2_000);
+        await signOut;
+      });
+
       expect(result.current.session.status).toBe("none");
     } finally {
       jest.useRealTimers();

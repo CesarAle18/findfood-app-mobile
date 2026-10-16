@@ -4,13 +4,13 @@
  * `GET /me` itself is read with `useMe()` from `@/state/session`: the session owns that
  * query (it gates navigation), so this module only invalidates `queryKeys.me`.
  */
-import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQuery, type QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api";
 import type { Coordenada, EstadoVerificacion, FranjaDto, MeDto } from "@/api/types";
 import { deviceIdStorage } from "@/state/session";
 
-import { invalidateOnSuccess, queryKeys, type Invalidation } from "./query-keys";
+import { invalidateKeys, invalidateOnSuccess, queryKeys, type Invalidation } from "./query-keys";
 
 // --- DTOs ------------------------------------------------------------------------------
 
@@ -212,10 +212,36 @@ export function useActualizarDisponibilidadMutation() {
   });
 }
 
+/** Sets `me.voluntario.disponible` in the `/me` cache at once; returns the previous account. */
+async function setDisponibleOptimistically(
+  client: QueryClient,
+  disponible: boolean,
+): Promise<MeDto | undefined> {
+  await client.cancelQueries({ queryKey: queryKeys.me });
+  const previous = client.getQueryData<MeDto>(queryKeys.me);
+  if (previous?.voluntario) {
+    client.setQueryData<MeDto>(queryKeys.me, {
+      ...previous,
+      voluntario: { ...previous.voluntario, disponible },
+    });
+  }
+  return previous;
+}
+
+/**
+ * Optimistic: the toggle moves at once; a refusal (422 `sin-horario` / `sin-ubicacion-base`)
+ * restores the cached account, and `/me` is fetched again either way.
+ */
 export function useCambiarDisponibleMutation() {
   return useMutation({
     mutationFn: cambiarDisponible,
-    onSuccess: invalidateOnSuccess(invalidates.cambiarDisponible),
+    onMutate: ({ disponible }: EstadoVoluntarioBody, { client }) =>
+      setDisponibleOptimistically(client, disponible),
+    onError: (_error, _variables, previous, { client }) => {
+      if (previous) client.setQueryData(queryKeys.me, previous);
+    },
+    onSettled: (_data, _error, _variables, _previous, { client }) =>
+      invalidateKeys(client, invalidates.cambiarDisponible()),
   });
 }
 

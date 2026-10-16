@@ -1,9 +1,12 @@
-import { waitFor } from "@testing-library/react-native";
+import { act, waitFor } from "@testing-library/react-native";
 import * as SecureStore from "expo-secure-store";
 
 import { api } from "@/api";
+import { ApiError } from "@/api/errors";
+import type { MeDto } from "@/api/types";
 import { queryKeys } from "@/services/query-keys";
 import { resetApiMock, sentRequests, type ApiMock, type SentRequest } from "@/test-utils/api";
+import { meFixture } from "@/test-utils/fixtures";
 import { mutationCase, renderWithClient } from "@/test-utils/query";
 
 import {
@@ -225,5 +228,35 @@ describe("mutations invalidate exactly the queries they change", () => {
     mutationCase("DELETE /me/dispositivos/:id", useEliminarDispositivoMutation, "dev-1", []),
   ])("$name", async ({ invalidated, expected }) => {
     expect(await invalidated()).toEqual(expected);
+  });
+});
+
+describe("useCambiarDisponibleMutation is optimistic", () => {
+  async function toggle(reply: () => Promise<unknown>) {
+    mockedApi.patch.mockImplementationOnce(reply);
+    const { result, client } = await renderWithClient(useCambiarDisponibleMutation);
+    client.setQueryData(queryKeys.me, meFixture());
+    const seen: (boolean | undefined)[] = [];
+    client.getQueryCache().subscribe(() => {
+      seen.push(client.getQueryData<MeDto>(queryKeys.me)?.voluntario?.disponible);
+    });
+    await act(async () => {
+      await result.current.mutateAsync({ disponible: false }).catch(() => undefined);
+    });
+    return { client, seen };
+  }
+
+  it("turns the toggle off at once", async () => {
+    const { seen } = await toggle(async () => ({ disponible: false }));
+    expect(seen).toContain(false);
+  });
+
+  it("rolls back when the API refuses (422 sin-horario)", async () => {
+    const { client, seen } = await toggle(() =>
+      Promise.reject(new ApiError({ status: 422, type: "sin-horario", title: "Sin horario" })),
+    );
+
+    expect(seen).toContain(false);
+    expect(client.getQueryData<MeDto>(queryKeys.me)?.voluntario?.disponible).toBe(true);
   });
 });

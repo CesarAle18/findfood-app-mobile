@@ -19,6 +19,9 @@ let draft;
 function answerFor(queryKey) {
   const [root, kind, arg] = queryKey;
   if (root === "perfil") return fixtures.impactoFixture();
+  if (root === "notificaciones" && kind === "list")
+    return fixtures.bandejaFixture([fixtures.notificacionFixture()]);
+  if (root === "asignaciones" && kind === "ofertas") return [fixtures.ofertaFixture()];
   if (root !== "donaciones") return undefined;
   if (kind === "detail")
     return fixtures.detalleFixture({ id: arg, estado: "RECIBIDA" });
@@ -201,14 +204,56 @@ Module._load = function (name, parent, isMain) {
   if (name === "@/state/mobile-context")
     return {
       useMobile: () => ({
-        available: true,
-        setAvailable() {},
         draft,
         setDraft() {},
       }),
     };
+  // The real module defines a native background task (expo-location, expo-task-manager);
+  // the screens only read its status and start it from handlers.
+  if (name === "@/location/tracking")
+    return {
+      startLocationTracking: async () => "denied",
+      stopLocationTracking: async () => {},
+      trackingStatusStore: { get: () => "off", subscribe: () => () => {} },
+    };
   // No requests leave this check: the query hooks are stubbed above.
   if (name === "@/api") return { api: {} };
+  // Photo capture and upload need the native picker, manipulator and file system; the
+  // fields only start them from handlers, so their idle state is enough here.
+  if (name === "@/media/use-photo-capture")
+    return {
+      choosePhotoSource: async () => null,
+      usePhotoCapture: () => ({
+        pick: async () => null,
+        cameraGate: "unknown",
+        libraryGate: "unknown",
+        requestCamera: async () => "unknown",
+        requestLibrary: async () => "unknown",
+      }),
+    };
+  if (name === "@/media/use-evidence-upload")
+    return {
+      useEvidenceUpload: () => ({
+        pending: null,
+        status: "idle",
+        error: null,
+        start: async () => {},
+        retry: async () => {},
+      }),
+    };
+  if (name === "expo-image") return { Image: native.Image };
+  // react-native-maps needs its native module; each map renders as a labelled box here
+  // (the map components are covered by Jest).
+  if (name === "@/components/findfood/map") {
+    const mapStub = (label) => () =>
+      React.createElement(native.View, { "aria-label": label });
+    return {
+      FindFoodMap: mapStub("Mapa"),
+      LocationPicker: mapStub("Mapa para elegir el punto de recogida"),
+      PointMap: mapStub("Mapa del punto de recogida"),
+      RouteMapView: mapStub("Mapa de la ruta"),
+    };
+  }
   // The real module creates the Supabase client (SecureStore, Expo config); the forms only
   // call these actions from their handlers.
   if (name === "@/auth/email-auth") {
@@ -295,6 +340,8 @@ try {
     "account",
     "password",
     "profile-setup",
+    "edit-profile",
+    "edit-availability",
   ];
   let count = 0;
   for (const module of modules) {
@@ -330,6 +377,20 @@ try {
   assert(
     renderToStaticMarkup(React.createElement(DonorHomeScreen)).includes(
       "DON-1058",
+    ),
+  );
+  // The inbox renders its rows from the API, not the old preview data.
+  const { NotificationsScreen } = require("../src/screens/notifications.tsx");
+  const inboxHtml = renderToStaticMarkup(React.createElement(NotificationsScreen));
+  assert(inboxHtml.includes("Donación recibida") && inboxHtml.includes("Marcar todas como leídas"));
+  // The offer shows a real assignment: by its link, else the first one pending.
+  const { OfferScreen } = require("../src/screens/volunteer.tsx");
+  const offerHtml = renderToStaticMarkup(React.createElement(OfferScreen));
+  assert(offerHtml.includes("DON-1048") && offerHtml.includes("Vence 15:10"));
+  routeParams = { asignacionId: "otra" };
+  assert(
+    renderToStaticMarkup(React.createElement(OfferScreen)).includes(
+      "Esta oferta ya no está disponible",
     ),
   );
   const { RatingScreen } = require("../src/screens/account.tsx");
@@ -383,17 +444,33 @@ try {
   } = require("../src/screens/donor.tsx");
   const newHtml = renderToStaticMarkup(React.createElement(NewDonationScreen));
   assert.equal((newHtml.match(/Ubicación de la entrega/g) || []).length, 1);
+  // The typed address and the map live side by side; nothing is picked yet.
+  assert(newHtml.includes("Dirección de recogida"));
+  assert(newHtml.includes("Mapa para elegir el punto de recogida"));
+  assert(newHtml.includes("Mueve el mapa hasta tu punto de recogida"));
   assert(newHtml.includes("Añadir otro producto"));
   const reviewHtml = renderToStaticMarkup(
     React.createElement(ReviewDonationScreen),
   );
   assert(reviewHtml.includes("Producto prueba 3") && reviewHtml.includes("ML"));
+  assert(reviewHtml.includes("Punto pendiente de seleccionar en el mapa"));
+  draft = {
+    ...draft,
+    direccion: "Cra 45 #12-30",
+    ubicacionRecogida: { lat: 4.65, lng: -74.06 },
+  };
+  const pickedHtml = renderToStaticMarkup(
+    React.createElement(ReviewDonationScreen),
+  );
+  assert(pickedHtml.includes("Cra 45 #12-30"));
+  assert(pickedHtml.includes("Mapa del punto de recogida"));
   routeParams = { id: fixtures.DONATION_ID };
   const donorDetailHtml = renderToStaticMarkup(
     React.createElement(DonationDetailScreen),
   );
   assert(donorDetailHtml.includes('href="/donante/calificar-voluntario"'));
   assert(donorDetailHtml.includes('href="/donante/donaciones"'));
+  assert(donorDetailHtml.includes("Mapa del punto de recogida"));
   // Volunteers open the same detail from their route, without the donor actions.
   const volunteerDetailHtml = renderToStaticMarkup(
     React.createElement(DonationDetailScreen, { asVolunteer: true }),
@@ -591,21 +668,28 @@ try {
   const {
     AvailabilityField,
   } = require("../src/components/findfood/availability-field.tsx");
-  let schedule;
-  const availability = harness(AvailabilityField, {
-    onChange: (value) => {
-      schedule = value;
-    },
-  });
+  // Controlled: each render reads the windows the last change reported.
+  let schedule = [{ dia_semana: 1, hora_inicio: "08:00", hora_fin: "18:00" }];
+  const availability = () =>
+    harness(AvailabilityField, {
+      value: schedule,
+      onChange: (value) => {
+        schedule = value;
+      },
+    })();
+  const endOf = () =>
+    nodes(availability()).find((n) => n.props?.label === "Hasta · Lunes").props;
   nodes(availability())
     .find((n) => n.props?.label === "Desde · Lunes")
     .props.onChange("23:00");
-  assert.equal(
-    nodes(availability()).find((n) => n.props?.label === "Hasta · Lunes").props
-      .value,
-    "23:30",
-  );
-  assert(schedule.includes("23:00–23:30"));
+  assert.equal(endOf().value, "23:30");
+  assert.deepEqual(schedule, [{ dia_semana: 1, hora_inicio: "23:00", hora_fin: "23:30" }]);
+  // The last start ends at 23:59: a window never crosses midnight.
+  nodes(availability())
+    .find((n) => n.props?.label === "Desde · Lunes")
+    .props.onChange("23:30");
+  assert.equal(endOf().value, "23:59");
+  assert.deepEqual(endOf().options.map((o) => o.value), ["23:59"]);
   console.log(
     "PASS: option selection, five-star aspect lock/unlock and availability time boundaries.",
   );

@@ -1,6 +1,6 @@
 /**
- * UI-only state shared between screens: the donation draft (new donation → review) and the
- * volunteer's availability toggle. Remote data lives in TanStack Query (`@/services/*`,
+ * UI-only state shared between screens: the donation draft (new donation → review). The
+ * volunteer's availability is `me.voluntario.disponible` (see AvailabilityToggle). Remote data lives in TanStack Query (`@/services/*`,
  * `useMe()`), never here.
  */
 import {
@@ -15,9 +15,6 @@ import {
 import { initialDonationDraft, type DonationDraft } from "@/domain/donation-draft";
 
 interface MobileState {
-  // TODO(F3): replace with `me.voluntario.disponible` and PATCH /voluntario/estado.
-  available: boolean;
-  setAvailable: (value: boolean) => void;
   draft: DonationDraft;
   setDraft: Dispatch<SetStateAction<DonationDraft>>;
 }
@@ -25,10 +22,9 @@ interface MobileState {
 const Context = createContext<MobileState | null>(null);
 
 export function MobileProvider({ children }: PropsWithChildren) {
-  const [available, setAvailable] = useState(true);
   const [draft, setDraft] = useState(initialDonationDraft);
   return (
-    <Context value={{ available, setAvailable, draft, setDraft }}>{children}</Context>
+    <Context value={{ draft, setDraft }}>{children}</Context>
   );
 }
 

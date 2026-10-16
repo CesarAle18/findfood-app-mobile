@@ -1,6 +1,6 @@
-import Svg, { Circle, Path, Rect, G, Text as SvgText } from "react-native-svg";
+import Svg, { Path } from "react-native-svg";
 import { Platform } from "react-native";
-import { colors, fonts } from "@/design/tokens";
+import { colors } from "@/design/tokens";
 
 export type IconName =
   | "calendar"
@@ -79,75 +79,6 @@ export function Icon({
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </Svg>
-  );
-}
-
-/** Esquema ilustrativo local. No consulta mapas ni ubicación del dispositivo. */
-export function RouteMap() {
-  return (
-    <Svg
-      width="100%"
-      height="264"
-      viewBox="0 0 342 264"
-      accessibilityLabel="Esquema de la ruta R-045, con cuatro paradas de ejemplo"
-      role="img"
-    >
-      <Rect width="342" height="264" rx="14" fill="#EEF3EE" />
-      <Path
-        d="M0 60 342 20M0 126 342 86M0 196 342 158M54 0 80 264M142 0 161 264M239 0 258 264M310 0 335 264"
-        stroke="#FFFFFF"
-        strokeWidth="17"
-      />
-      <Path
-        d="M0 60 342 20M0 126 342 86M0 196 342 158M54 0 80 264M142 0 161 264M239 0 258 264"
-        stroke="#D6E2D7"
-        strokeWidth="1"
-      />
-      <Rect x="177" y="108" width="52" height="47" rx="8" fill="#D8E7D6" />
-      <Rect x="84" y="32" width="40" height="42" rx="8" fill="#D8E7D6" />
-      <Path
-        d="M47 207 77 203 70 133 153 124 148 61 243 49 248 96 290 91"
-        fill="none"
-        stroke="#FFFFFF"
-        strokeWidth="9"
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M47 207 77 203 70 133 153 124 148 61 243 49 248 96 290 91"
-        fill="none"
-        stroke={colors.primary}
-        strokeWidth="5"
-        strokeLinejoin="round"
-      />
-      {[
-        { x: 47, y: 207 },
-        { x: 70, y: 133 },
-        { x: 148, y: 61 },
-        { x: 290, y: 91 },
-      ].map((p, i) => (
-        <G key={i}>
-          <Circle
-            cx={p.x}
-            cy={p.y}
-            r="12"
-            fill={i === 2 ? colors.primary : "#FFFFFF"}
-            stroke={colors.primary}
-            strokeWidth="2"
-          />
-          <SvgText
-            x={p.x}
-            y={p.y + 4}
-            textAnchor="middle"
-            fontSize="12"
-            fontWeight="700"
-            fontFamily={fonts.bold}
-            fill={i === 2 ? "#FFFFFF" : colors.primary}
-          >
-            {i + 1}
-          </SvgText>
-        </G>
-      ))}
     </Svg>
   );
 }
