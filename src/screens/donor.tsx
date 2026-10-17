@@ -1,8 +1,11 @@
 import { FlashList, type ListRenderItemInfo } from "@shopify/flash-list";
-import type { Href } from "expo-router";
+import { Image } from "expo-image";
+import { router, type Href } from "expo-router";
 import { memo, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
+import { isApiError } from "@/api/errors";
+import { messageFor } from "@/api/problem-messages";
 import type { EstadoDonacion } from "@/api/types";
 import {
   EmptyState,
@@ -18,6 +21,7 @@ import {
   Choices,
   Copy,
   Detail,
+  FormMessage,
   NavButton,
   Row,
   Screen,
@@ -28,11 +32,24 @@ import {
 import { donorActivity } from "@/data/preview";
 import { colors } from "@/design/tokens";
 import {
+  newDonationDraft,
+  toCrearDonacionBody,
+  validateDraft,
+  type DraftProduct,
+} from "@/domain/donation-draft";
+import {
   assignedVolunteerFromDetalle,
   type AssignedVolunteerView,
   type DonationView,
 } from "@/domain/mappers/donations";
 import { formatKg } from "@/domain/mappers/profile";
+import { useUnidades } from "@/services/catalogos";
+import {
+  useActualizarDonacionMutation,
+  useCrearDonacionMutation,
+  usePublicarDonacionMutation,
+  type CrearDonacionBody,
+} from "@/services/donaciones";
 import { useMobile } from "@/state/mobile-context";
 import { useMe } from "@/state/session";
 
@@ -457,8 +474,99 @@ export function DonationDetailScreen({ asVolunteer = false }: { asVolunteer?: bo
   );
 }
 
+/** Shown when the API refuses to update a draft it already moved on (published, cancelled…). */
+const NOT_EDITABLE_MESSAGE =
+  "Esta donación ya no se puede editar. Revisa Mis donaciones antes de confirmar de nuevo: se creará una donación nueva.";
+const INCOMPLETE_MESSAGE = "Faltan datos de la donación. Toca Editar información para completarlos.";
+
+/**
+ * Creates the donation (or updates the draft already created by an earlier attempt) and
+ * publishes it. The API id is kept in the draft as soon as it exists, so a failed publish
+ * retried later PATCHes the same BORRADOR instead of creating another one.
+ */
+function useConfirmDonation() {
+  const { draft, setDraft } = useMobile();
+  const { data: unidades } = useUnidades();
+  const crear = useCrearDonacionMutation();
+  const actualizar = useActualizarDonacionMutation();
+  const publicar = usePublicarDonacionMutation();
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string>();
+
+  const confirm = async () => {
+    setError(undefined);
+    // The window may have closed since the form was checked.
+    const invalid = validateDraft(draft, Date.now());
+    if (invalid) {
+      setError(Object.values(invalid)[0] ?? INCOMPLETE_MESSAGE);
+      return;
+    }
+    let body: CrearDonacionBody | null = null;
+    try {
+      body = unidades ? toCrearDonacionBody(draft, { unidades }) : null;
+    } catch (failure) {
+      setError(messageFor(failure));
+      return;
+    }
+    if (!body) {
+      setError(INCOMPLETE_MESSAGE);
+      return;
+    }
+    setSending(true);
+    const existing = draft.apiId;
+    try {
+      let id: string;
+      if (existing) {
+        await actualizar.mutateAsync({ id: existing, body });
+        id = existing;
+      } else {
+        id = (await crear.mutateAsync(body)).id;
+        setDraft((current) => ({ ...current, apiId: id }));
+      }
+      await publicar.mutateAsync(id);
+      setDraft(newDonationDraft());
+      router.replace({ pathname: "/donante/espera-voluntario", params: { id } });
+    } catch (failure) {
+      if (existing && isApiError(failure) && failure.type === "donacion-no-editable") {
+        // It may have been published by an attempt whose answer was lost: never retry it
+        // silently; the next confirmation creates a new donation.
+        setDraft((current) => ({ ...current, apiId: null }));
+        setError(NOT_EDITABLE_MESSAGE);
+      } else {
+        setError(messageFor(failure));
+      }
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return { confirm, sending, error, ready: unidades !== undefined };
+}
+
+function ProductPhoto({ product }: { product: DraftProduct }) {
+  if (!product.fotoUri) {
+    return (
+      <View style={[styles.photo, styles.noPhoto]}>
+        <Copy tone="secondary" style={{ fontSize: 11 }}>
+          Sin foto
+        </Copy>
+      </View>
+    );
+  }
+  return (
+    <Image
+      source={{ uri: product.fotoUri }}
+      contentFit="cover"
+      recyclingKey={product.fotoUri}
+      style={styles.photo}
+      accessibilityLabel={`Foto de ${product.name || "producto"}`}
+    />
+  );
+}
+
 export function ReviewDonationScreen() {
   const { draft } = useMobile();
+  const { confirm, sending, error, ready } = useConfirmDonation();
   return (
     <Screen
       title="Revisar donación"
@@ -477,9 +585,9 @@ export function ReviewDonationScreen() {
           <Copy tone="secondary">Punto pendiente de seleccionar en el mapa</Copy>
         )}
         <Copy tone="secondary">
-          Ventana: {draft.pickupFrom} – {draft.pickupUntil}
+          Ventana: {draft.pickupDate ? `${draft.pickupDate} · ` : ""}
+          {draft.pickupFrom} – {draft.pickupUntil}
         </Copy>
-        <Copy tone="secondary">Fotografías pendientes</Copy>
       </Card>
       <Section title="Productos agregados">
         <Copy tone="secondary">
@@ -487,25 +595,34 @@ export function ReviewDonationScreen() {
         </Copy>
         {draft.products.map((product, i) => (
           <Card key={product.id}>
-            <Copy tone="secondary">Producto {i + 1}</Copy>
-            <Copy weight="bold">{product.name || "Producto sin nombre"}</Copy>
-            <Copy>
-              Cantidad / peso: {product.quantity || "—"} {product.unit}
-            </Copy>
-            <Copy tone="secondary">
-              Vence: {product.expiresOn || "Pendiente"}
-            </Copy>
-            <Badge>{product.coldChain}</Badge>
-            <TextLink href="/donante/nueva-donacion">Editar información</TextLink>
+            <Row style={{ alignItems: "flex-start" }}>
+              <ProductPhoto product={product} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Copy tone="secondary">Producto {i + 1}</Copy>
+                <Copy weight="bold">{product.name || "Producto sin nombre"}</Copy>
+                <Copy>
+                  Cantidad / peso: {product.quantity || "—"} {product.unit}
+                </Copy>
+                <Copy tone="secondary">
+                  Vence: {product.expiresOn || "Sin fecha"}
+                </Copy>
+                <Badge>{product.coldChain}</Badge>
+              </View>
+            </Row>
+            <TextLink href="/donante/nueva-donacion" dismissTo>
+              Editar información
+            </TextLink>
           </Card>
         ))}
       </Section>
-      <NavButton href="/donante/espera-voluntario" showArrow={false}>
+      <FormMessage message={error} />
+      <Button onPress={() => void confirm()} loading={sending} disabled={!ready}>
         Confirmar
-      </NavButton>
+      </Button>
     </Screen>
   );
 }
+
 
 const styles = StyleSheet.create({
   spread: { justifyContent: "space-between", flexWrap: "wrap" },
@@ -521,4 +638,6 @@ const styles = StyleSheet.create({
   },
   stepReached: { backgroundColor: colors.soft },
   stepPending: { backgroundColor: colors.muted },
+  photo: { width: 64, height: 64, borderRadius: 10, backgroundColor: colors.muted },
+  noPhoto: { alignItems: "center", justifyContent: "center" },
 });
