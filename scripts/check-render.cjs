@@ -354,8 +354,8 @@ try {
       const html = renderToStaticMarkup(React.createElement(component));
       assert(html.includes("Find Food"), `${name} did not render its header`);
       if (name === "VolunteerRegistrationScreen") {
-        assert(html.includes("Tipo de identificación"));
-        assert(html.includes("Foto licencia"));
+        // The default account is an approved volunteer: the status, not the form.
+        assert(html.includes("Ya eres voluntario") && html.includes("Ir al modo voluntario"));
       }
       count++;
     }
@@ -582,11 +582,18 @@ try {
   const {
     VolunteerRegistrationScreen,
   } = require("../src/screens/volunteer.tsx");
-  assert(
-    renderToStaticMarkup(
-      React.createElement(VolunteerRegistrationScreen),
-    ).includes('href="/donante"'),
-  );
+  // A donor without a request sees the form; a pending request only its status.
+  me = fixtures.meFixture({ voluntario: null });
+  const requestFormHtml = renderToStaticMarkup(React.createElement(VolunteerRegistrationScreen));
+  assert(requestFormHtml.includes("Tipo de vehículo") && requestFormHtml.includes("Placa"));
+  assert(requestFormHtml.includes("Documento (frente)") && requestFormHtml.includes("Enviar solicitud"));
+  me = fixtures.meFixture({
+    voluntario: { ...fixtures.meFixture().voluntario, estado_verificacion: "PENDIENTE" },
+  });
+  const pendingHtml = renderToStaticMarkup(React.createElement(VolunteerRegistrationScreen));
+  assert(pendingHtml.includes("Tu solicitud está en revisión"));
+  assert(!pendingHtml.includes("Enviar solicitud") && pendingHtml.includes('href="/donante"'));
+  me = fixtures.meFixture();
   const {
     LoadingState,
     EmptyState,
@@ -725,7 +732,7 @@ try {
   );
   assert.deepEqual(invalid, [], "React rendering warnings");
   console.log(
-    `PASS: ${count} screen components rendered; identification/license fields, selected donation, segment links, account views and Slot/DOM regressions checked.`,
+    `PASS: ${count} screen components rendered; volunteer request form/status, selected donation, segment links, account views and Slot/DOM regressions checked.`,
   );
   if (warnings.length) console.log("Other renderer notices:", warnings.length);
 } finally {

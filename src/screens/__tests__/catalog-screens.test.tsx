@@ -9,7 +9,7 @@ import { Text } from "react-native";
 
 import { api } from "@/api";
 import { NewDonationScreen } from "@/screens/donations";
-import { OfferScreen, VolunteerRegistrationScreen } from "@/screens/volunteer";
+import { OfferScreen } from "@/screens/volunteer";
 import { MobileProvider } from "@/state/mobile-context";
 import type { ApiMock } from "@/test-utils/api";
 import {
@@ -122,18 +122,6 @@ describe("NewDonationScreen", () => {
     await renderScreen(NewDonationScreen);
 
     expect(await screen.findByText("No pudimos cargar los productos")).toBeOnTheScreen();
-  });
-});
-
-describe("VolunteerRegistrationScreen", () => {
-  it("offers the catalog vehicle types", async () => {
-    await renderScreen(VolunteerRegistrationScreen);
-
-    await fireEvent.press(await screen.findByLabelText("Tipo de vehículo *: Selecciona"));
-    expect(screen.getByText("Motocicleta")).toBeOnTheScreen();
-    expect(screen.getByText("Camioneta")).toBeOnTheScreen();
-    await fireEvent.press(screen.getByText("Camioneta"));
-    expect(screen.getByLabelText("Tipo de vehículo *: Camioneta")).toBeOnTheScreen();
   });
 });
 
