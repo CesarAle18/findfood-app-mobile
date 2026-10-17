@@ -37,7 +37,7 @@ Mobile: `npm run typecheck` · `npm run lint` · `npm test` · `npm run test:ren
 | ID | Task | Route | Status | Commit | Review |
 |---|---|---|---|---|---|
 | T0 | Feature document | inline | [x] | (this commit) | passive |
-| A1 | API-08 rating aspects (findfood-api) | delegated writer (2+ non-trivial files) | [ ] | | |
+| A1 | API-08 rating aspects (findfood-api) | delegated writer (2+ non-trivial files) | [x] | api `b0c2ce1` | RDD unavailable; writer: lint 0, typecheck 0, jest 62/62; test:e2e **not run** (no local Postgres/Docker: ECONNREFUSED 127.0.0.1:54329); parent spot check aspectos.spec 4/4 |
 | M1 | MOV-30 Nueva donación: draft → create body, validation, photos, date | delegated writer | [x] | `2ceb525` | RDD unavailable (gentle-ai not executable); writer: typecheck 0 errors, lint 0 problems, jest 1353/1353 (73 suites), test:render 3/3 PASS |
 | M2 | MOV-31 Revisar: POST/PATCH + publicar, errors, thumbnails | delegated writer | [x] | `ea97412` | RDD unavailable (gentle-ai not executable); writer: typecheck 0 errors, lint 0 problems, jest 1359/1359 (73 suites), test:render 3/3 PASS |
 | M3 | MOV-32 Donación publicada: detail + history, polling + push, cancel | delegated writer | [ ] | | |
@@ -58,5 +58,7 @@ Mobile: `npm run typecheck` · `npm run lint` · `npm test` · `npm run test:ren
 - M2 (`ea97412`): RED 6 failing in `src/screens/__tests__/donor-draft-screens.test.tsx` → GREEN (9 tests: validation, POST+publicar, PATCH when `apiId`, 422 `ventana-muy-corta` then retry PATCHes, 409 `donacion-no-editable`, re-validation, thumbnails). Confirmar re-validates, stores `apiId` right after POST, publishes, resets the draft and `router.replace`s to `espera-voluntario?id=`. Editar uses `dismissTo` back to the form, keeping `apiId`.
 - M2 decision: on 409 `donacion-no-editable` for an existing `apiId` the app clears `apiId` and asks the donor to check Mis donaciones before confirming again (which creates a new donation); it never re-creates silently, because the earlier publish may have succeeded with a lost answer. Problem messages for the publish/PATCH/file codes already existed in `problem-messages.ts`.
 
+- A1 `b0c2ce1` (findfood-api): migration `20261016000000_aspectos_calificacion.sql` (`aspecto_calificacion`, `calificacion_aspecto`, RLS, 5 VOLUNTARIO aspects); `validarAspectos` → 422 `aspecto-invalido` + `codigos_invalidos`; rating repeat now 200 with the original data (409 `ya-calificada` removed); `GET /catalogos?incluir=aspectos_calificacion&rol_calificado=`; detail `asignacion.calificada_por_mi`. RED→GREEN unit only; e2e written but not run (needs Docker + `npm run db:local`).
+
 ## Next step
-A1 (API-08) if still pending, then M3 (MOV-32).
+M3 (MOV-32), M4 (MOV-33), M5 (MOV-34).
