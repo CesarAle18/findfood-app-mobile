@@ -25,6 +25,7 @@ function answerFor(queryKey) {
   if (root !== "donaciones") return undefined;
   if (kind === "detail")
     return fixtures.detalleFixture({ id: arg, estado: "RECIBIDA" });
+  if (kind === "historial") return [];
   if (kind === "list")
     return fixtures.pageFixture([
       fixtures.resumenFixture(),
@@ -424,8 +425,17 @@ try {
   assert.equal(calendarDays(2027, 1).filter(Boolean).length, 28);
   assert.equal(calendarDays(2026, 8)[0], null);
   const { WaitingScreen } = require("../src/screens/donations.tsx");
+  // Without an id it asks to open the donation again; with one it shows the live donation.
+  assert(
+    renderToStaticMarkup(React.createElement(WaitingScreen)).includes(
+      "No encontramos la donación",
+    ),
+  );
+  routeParams = { id: fixtures.DONATION_ID };
   const waitingHtml = renderToStaticMarkup(React.createElement(WaitingScreen));
-  assert(waitingHtml.includes('href="/donante/voluntario-asignado"'));
+  routeParams = {};
+  assert(waitingHtml.includes("DON-1058") && waitingHtml.includes("Ver voluntario asignado"));
+  assert(!waitingHtml.includes("15–30 minutos") && !waitingHtml.includes("(demo)"));
   assert(waitingHtml.includes('href="/donante"'));
   assert.equal(initialDonationDraft.products.length, 1);
   assert.equal(new Set(expanded.products.map((p) => p.id)).size, 3);

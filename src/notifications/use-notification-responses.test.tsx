@@ -9,7 +9,11 @@ import { queryKeys } from "@/services/query-keys";
 import { resetApiMock, type ApiMock } from "@/test-utils/api";
 import { createTestQueryClient } from "@/test-utils/query";
 
-import { notificationFromData, useNotificationResponses } from "./use-notification-responses";
+import {
+  donationKeysForPush,
+  notificationFromData,
+  useNotificationResponses,
+} from "./use-notification-responses";
 
 jest.mock("@/api", () => ({
   api: jest.requireActual<typeof import("@/test-utils/api")>("@/test-utils/api").createApiMock(),
@@ -203,4 +207,36 @@ describe("useNotificationResponses", () => {
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.notificaciones.all });
   });
+
+  it("refreshes the donation a foreground push is about", async () => {
+    await renderResponses();
+    const invalidate = jest.spyOn(client!, "invalidateQueries");
+    const received = mocked.addNotificationReceivedListener.mock.calls.at(-1)![0];
+    const notification = {
+      request: { content: { data: { tipo: "ASIGNACION_ACEPTADA", donacion_id: "don-3" } } },
+    } as unknown as Notifications.Notification;
+
+    await act(() => received(notification));
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.donaciones.detail("don-3") });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.donaciones.historial("don-3") });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.donaciones.lists() });
+  });
+});
+
+describe("donationKeysForPush", () => {
+  it("names the donation detail, history and lists", () => {
+    expect(donationKeysForPush({ donacion_id: "don-3" })).toEqual([
+      queryKeys.donaciones.detail("don-3"),
+      queryKeys.donaciones.historial("don-3"),
+      queryKeys.donaciones.lists(),
+    ]);
+  });
+
+  it.each([undefined, null, {}, { donacion_id: "" }, { donacion_id: 7 }])(
+    "is empty without a donation (%p)",
+    (data) => {
+      expect(donationKeysForPush(data as Record<string, unknown> | null | undefined)).toEqual([]);
+    },
+  );
 });

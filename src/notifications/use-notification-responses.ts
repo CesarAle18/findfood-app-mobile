@@ -1,5 +1,6 @@
 /**
- * Tapped pushes open their screen; pushes received in the foreground refresh the inbox.
+ * Tapped pushes open their screen; pushes received in the foreground refresh the inbox and
+ * the donation they are about.
  *
  * A tap can arrive before the app can navigate: on a cold start the session is still
  * loading and `Stack.Protected` has not mounted the signed-in routes. The tap is kept as
@@ -37,6 +38,20 @@ export function notificationFromData(
     donacion_id: optionalString(data?.donacion_id),
     asignacion_id: optionalString(data?.asignacion_id),
   };
+}
+
+/**
+ * What a received push about a donation leaves stale: its detail, its history and the lists
+ * (a state change moves it between tabs). Empty when the push names no donation.
+ */
+export function donationKeysForPush(data: Record<string, unknown> | null | undefined) {
+  const id = optionalString(data?.donacion_id);
+  if (id === null) return [];
+  return [
+    queryKeys.donaciones.detail(id),
+    queryKeys.donaciones.historial(id),
+    queryKeys.donaciones.lists(),
+  ];
 }
 
 /** Only a tap on the notification itself opens it (not an action button). */
@@ -88,8 +103,12 @@ export function useNotificationResponses(navigatorReady: boolean): void {
       const next = claim(pendingFromResponse(response));
       if (next) setPending(next);
     });
-    const received = Notifications.addNotificationReceivedListener(() => {
+    const received = Notifications.addNotificationReceivedListener((notification) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.notificaciones.all });
+      // Optional chaining: a push without content still refreshes the inbox.
+      for (const queryKey of donationKeysForPush(notification?.request?.content?.data)) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
     });
     return () => {
       tapped.remove();

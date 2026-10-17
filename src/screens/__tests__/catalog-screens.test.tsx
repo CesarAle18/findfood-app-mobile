@@ -8,12 +8,11 @@ import { fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-li
 import { Text } from "react-native";
 
 import { api } from "@/api";
-import { NewDonationScreen, WaitingScreen } from "@/screens/donations";
+import { NewDonationScreen } from "@/screens/donations";
 import { OfferScreen, VolunteerRegistrationScreen } from "@/screens/volunteer";
 import { MobileProvider } from "@/state/mobile-context";
 import type { ApiMock } from "@/test-utils/api";
 import {
-  DONATION_ID,
   catalogosFixture,
   detalleFixture,
   ofertaFixture,
@@ -50,7 +49,7 @@ async function renderScreen(Component: React.ComponentType, initialUrl = "/panta
   function Pantalla() {
     return <Component />;
   }
-  // Where the cancel and reject flows go back to.
+  // Where the reject flows go back to.
   const Home = () => <Text>Inicio</Text>;
   const Routes = () => <Text>Mis rutas</Text>;
   await renderRouter(
@@ -135,28 +134,6 @@ describe("VolunteerRegistrationScreen", () => {
     expect(screen.getByText("Camioneta")).toBeOnTheScreen();
     await fireEvent.press(screen.getByText("Camioneta"));
     expect(screen.getByLabelText("Tipo de vehículo *: Camioneta")).toBeOnTheScreen();
-  });
-});
-
-describe("WaitingScreen", () => {
-  it("cancels the donation with a catalog reason", async () => {
-    await renderScreen(WaitingScreen, `/pantalla?id=${DONATION_ID}`);
-
-    await fireEvent.press(screen.getByText("Cancelar donación"));
-    await fireEvent.press(await screen.findByText("Confirmar cancelación"));
-    expect(screen.getByText("Selecciona un motivo.")).toBeOnTheScreen();
-    expect(mockApi.post).not.toHaveBeenCalled();
-
-    await fireEvent.press(screen.getByLabelText("Motivo *: Selecciona"));
-    await fireEvent.press(screen.getByText("Ya no está disponible"));
-    await fireEvent.press(screen.getByText("Confirmar cancelación"));
-
-    await waitFor(() =>
-      expect(mockApi.post).toHaveBeenCalledWith(`/donaciones/${DONATION_ID}/cancelar`, {
-        body: { motivo_id: 43 },
-      }),
-    );
-    expect(await screen.findByText("Inicio")).toBeOnTheScreen();
   });
 });
 
