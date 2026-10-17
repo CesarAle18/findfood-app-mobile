@@ -1,5 +1,6 @@
 import { FlashList, type ListRenderItemInfo } from "@shopify/flash-list";
 import { Image } from "expo-image";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { router, type Href } from "expo-router";
 import { memo, useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
@@ -14,6 +15,7 @@ import {
 } from "@/components/findfood/feedback";
 import { Icon } from "@/components/findfood/icon";
 import { PointMap } from "@/components/findfood/map";
+import { Pressing } from "@/components/findfood/motion";
 import {
   Badge,
   Button,
@@ -29,7 +31,6 @@ import {
   Stack,
   TextLink,
 } from "@/components/findfood/ui";
-import { donorActivity } from "@/data/preview";
 import { colors } from "@/design/tokens";
 import {
   newDonationDraft,
@@ -43,6 +44,11 @@ import {
   type DonationView,
 } from "@/domain/mappers/donations";
 import { formatKg } from "@/domain/mappers/profile";
+import { relativeTime } from "@/notifications/relative-time";
+import {
+  useOpenNotification,
+  type OpenableNotification,
+} from "@/notifications/use-open-notification";
 import { useUnidades } from "@/services/catalogos";
 import {
   useActualizarDonacionMutation,
@@ -50,6 +56,8 @@ import {
   usePublicarDonacionMutation,
   type CrearDonacionBody,
 } from "@/services/donaciones";
+import { notificacionesQuery, type BandejaPages } from "@/services/notificaciones";
+import { useImpacto } from "@/services/perfil";
 import { useMobile } from "@/state/mobile-context";
 import { useMe } from "@/state/session";
 
@@ -150,10 +158,83 @@ function MissingDonation({ href }: { href: Href }) {
   );
 }
 
+/** A row of "Actividad reciente": an inbox notification, ready to render and open. */
+interface ActivityRow extends OpenableNotification {
+  id: string;
+  tipo: string;
+  titulo: string;
+  cuerpo: string;
+  time: string | null;
+  unread: boolean;
+}
+
+const RECENT_ACTIVITY = 5;
+
+/** The newest notifications of the inbox's first page (the same cache as the alerts tab). */
+function selectRecentActivity(data: BandejaPages): ActivityRow[] {
+  const now = Date.now();
+  return (data.pages[0]?.datos ?? []).slice(0, RECENT_ACTIVITY).map((dto) => ({
+    id: dto.id,
+    tipo: dto.tipo,
+    titulo: dto.titulo,
+    cuerpo: dto.cuerpo,
+    donacion_id: dto.donacion_id,
+    asignacion_id: dto.asignacion_id,
+    time: relativeTime(dto.created_at, now),
+    unread: dto.leida_at === null,
+  }));
+}
+
+function RecentActivity() {
+  const activity = useInfiniteQuery({ ...notificacionesQuery(), select: selectRecentActivity });
+  const openNotification = useOpenNotification();
+  return (
+    <QueryContent query={activity} loadingLabel="Cargando tu actividad">
+      {(rows) =>
+        rows.length === 0 ? (
+          <Copy tone="secondary">Aún no tienes actividad reciente.</Copy>
+        ) : (
+          <Stack gap={12}>
+            {rows.map((row) => (
+              <Pressing
+                key={row.id}
+                accessibilityRole="button"
+                accessibilityLabel={row.unread ? `${row.titulo}, sin leer` : row.titulo}
+                accessibilityHint="Abre la notificación"
+                onPress={() => openNotification(row)}
+                scale={1}
+                surface={styles.activityRow}
+              >
+                <Row>
+                  <Icon name={row.unread ? "bell" : "check"} />
+                  <View style={styles.activityText}>
+                    <Copy weight={row.unread ? "bold" : "medium"}>{row.titulo}</Copy>
+                    <Copy tone="secondary">
+                      {row.time ? `${row.cuerpo} · ${row.time}` : row.cuerpo}
+                    </Copy>
+                  </View>
+                </Row>
+              </Pressing>
+            ))}
+          </Stack>
+        )
+      }
+    </QueryContent>
+  );
+}
+
 export function DonorHomeScreen() {
   const me = useMe();
+  const impacto = useImpacto();
   const latest = useLatestDonation();
-  const donante = me.data?.donante;
+  // Same query (and cache) as Mis donaciones. It counts the loaded pages only, the first
+  // page of 20 newest on Inicio: donations under way are recent, so they are almost always
+  // there. The API has no count by state.
+  const pages = useDonationPages();
+  const tracking = pages.data?.rows.filter((d) => isTracking(d.estado)).length;
+  // The account totals of `GET /me` while the impact loads (or fails).
+  const impact = impacto.data?.donante;
+  const totals = impact ?? me.data?.donante;
   return (
     <Screen
       title="Inicio"
@@ -164,8 +245,10 @@ export function DonorHomeScreen() {
         <Copy weight="semibold">Resumen de donaciones</Copy>
         <Metrics
           values={[
-            [donante ? String(donante.total_donaciones) : "—", "realizadas"],
-            [donante ? formatKg(donante.total_kg_donados) : "—", "donados"],
+            [totals ? String(totals.total_donaciones) : "—", "realizadas"],
+            [totals ? formatKg(totals.total_kg_donados) : "—", "donados"],
+            [impact ? String(impact.donaciones_entregadas) : "—", "entregadas"],
+            [tracking === undefined ? "—" : String(tracking), "en seguimiento"],
           ]}
         />
       </Card>
@@ -185,15 +268,7 @@ export function DonorHomeScreen() {
         </QueryContent>
       </Section>
       <Section title="Actividad reciente">
-        {donorActivity.map(({ title, detail }) => (
-          <Row key={title}>
-            <Icon name="check" />
-            <View style={{ flex: 1 }}>
-              <Copy weight="medium">{title}</Copy>
-              <Copy tone="secondary">{detail}</Copy>
-            </View>
-          </Row>
-        ))}
+        <RecentActivity />
       </Section>
     </Screen>
   );
@@ -635,6 +710,8 @@ const styles = StyleSheet.create({
   separator: { height: 16 },
   listContent: { paddingTop: 0, paddingBottom: 32 },
   footer: { paddingVertical: 16 },
+  activityRow: { minHeight: 48, justifyContent: "center" },
+  activityText: { flex: 1 },
   stepIcon: {
     width: 30,
     height: 30,

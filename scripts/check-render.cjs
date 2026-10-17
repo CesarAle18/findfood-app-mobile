@@ -375,11 +375,10 @@ try {
   );
   assert(donationsHtml.includes("DON-1058") && donationsHtml.includes("DON-1051"));
   assert(!donationsHtml.includes(fixtures.DONATION_ID));
-  assert(
-    renderToStaticMarkup(React.createElement(DonorHomeScreen)).includes(
-      "DON-1058",
-    ),
-  );
+  // Inicio: impact metrics, the latest donation and the inbox as recent activity.
+  const homeHtml = renderToStaticMarkup(React.createElement(DonorHomeScreen));
+  assert(homeHtml.includes("DON-1058") && homeHtml.includes("en seguimiento"));
+  assert(homeHtml.includes("Donación recibida") && !homeHtml.includes("Ayer 18:40"));
   // The inbox renders its rows from the API, not the old preview data.
   const { NotificationsScreen } = require("../src/screens/notifications.tsx");
   const inboxHtml = renderToStaticMarkup(React.createElement(NotificationsScreen));

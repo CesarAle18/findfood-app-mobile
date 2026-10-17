@@ -12,11 +12,3 @@ export const activity = [
   },
   { title: "Oferta aceptada", detail: "DON-1048", icon: "box" as const },
 ];
-
-// TODO(F3): replace with the state history of the donor's latest donations
-// (GET /donaciones/:id/historial).
-export const donorActivity = [
-  { title: "Donación entregada", detail: "DON-1051 · Ayer 18:40" },
-  { title: "Voluntario aceptado", detail: "DON-1058 · Hoy 14:12" },
-  { title: "Donación publicada", detail: "DON-1058 · Hoy 13:55" },
-];

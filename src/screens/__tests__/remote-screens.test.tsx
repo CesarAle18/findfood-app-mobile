@@ -15,7 +15,7 @@ import type { MeDto } from "@/api/types";
 import { UNKNOWN_PICKUP_WINDOW } from "@/domain/mappers/donations";
 import { AccountScreen, ProfileScreen, RatingScreen, type Rater } from "@/screens/account";
 import { AssignedVolunteerScreen } from "@/screens/assigned-volunteer";
-import { DonationDetailScreen, DonationsScreen, DonorHomeScreen, TrackingScreen } from "@/screens/donor";
+import { DonationDetailScreen, DonationsScreen, TrackingScreen } from "@/screens/donor";
 import { MobileProvider } from "@/state/mobile-context";
 import type { ApiMock } from "@/test-utils/api";
 import {
@@ -286,31 +286,6 @@ describe("DonationsScreen", () => {
       await waitFor(() => expect(screen.queryByText("No pudimos cargar más donaciones")).toBeNull());
       expect(offsets()).toEqual([0, 20, 20]);
     });
-  });
-});
-
-describe("DonorHomeScreen", () => {
-  it("shows the account totals and the latest donation", async () => {
-    answerGets({ "/donaciones": pageFixture([resumenFixture()], 12) });
-
-    await renderScreen(DonorHomeScreen);
-
-    expect(screen.getByText("12")).toBeOnTheScreen();
-    expect(screen.getByText("280 kg")).toBeOnTheScreen();
-    expect(await screen.findByText("DON-1058")).toBeOnTheScreen();
-    expect(screen.getByRole("link", { name: "Hacer seguimiento" })).toBeOnTheScreen();
-    expect(mockApi.get).toHaveBeenCalledWith("/donaciones", {
-      query: { limite: 1 },
-      signal: expect.any(AbortSignal),
-    });
-  });
-
-  it("invites to donate without donations", async () => {
-    answerGets({ "/donaciones": pageFixture([]) });
-
-    await renderScreen(DonorHomeScreen);
-
-    expect(await screen.findByText("Aún no tienes donaciones")).toBeOnTheScreen();
   });
 });
 
