@@ -98,7 +98,7 @@ async function renderHome() {
     );
   }
   await renderRouter(
-    { _layout: Layout, pantalla: DonorHomeScreen, "donante/detalle-donacion": Detail },
+    { _layout: Layout, pantalla: DonorHomeScreen, "donante/entrega-donacion": Detail },
     { initialUrl: "/pantalla" },
   );
 }

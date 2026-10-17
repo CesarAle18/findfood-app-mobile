@@ -339,6 +339,7 @@ try {
     "route",
     "notifications",
     "donor",
+    "donor-delivery",
     "account",
     "password",
     "profile-setup",
@@ -483,6 +484,12 @@ try {
   assert(donorDetailHtml.includes("Mapa del punto de recogida"));
   // The history timeline, and the call once the API shares the volunteer's phone.
   assert(donorDetailHtml.includes("Historial") && donorDetailHtml.includes("Contactar voluntario"));
+  assert(donorDetailHtml.includes('href="/donante/entrega-donacion"'));
+  // The donor's delivery confirmation (MOV-39): real data and the rating CTA.
+  const { DonorDeliveryScreen } = require("../src/screens/donor-delivery.tsx");
+  const deliveryHtml = renderToStaticMarkup(React.createElement(DonorDeliveryScreen));
+  assert(deliveryHtml.includes("Tu donación fue entregada") && deliveryHtml.includes("Carlos Ruiz"));
+  assert(deliveryHtml.includes('href="/donante/calificar-voluntario"'));
   // Volunteers open the same detail from their route, without the donor actions.
   const volunteerDetailHtml = renderToStaticMarkup(
     React.createElement(DonationDetailScreen, { asVolunteer: true }),

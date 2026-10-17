@@ -589,7 +589,8 @@ function CancelDonation({ id }: { id: string }) {
     </Section>
   );
 }
-export function DeliveryScreen({ donor = false }: { donor?: boolean }) {
+/** The volunteer hands the route over at the bank; the donor has `DonorDeliveryScreen`. */
+export function DeliveryScreen() {
   return (
     <Screen title="Entrega en banco" subtitle="Ruta R-045" back>
       <Card soft>
@@ -613,15 +614,9 @@ export function DeliveryScreen({ donor = false }: { donor?: boolean }) {
         </Copy>
       </Stack>
       <View style={{ flex: 1, minHeight: 20 }} />
-      {donor ? (
-        <NavButton href="/donante" dismissTo>
-          Volver al inicio
-        </NavButton>
-      ) : (
-        <NavButton href="/voluntario" dismissTo showArrow={false}>
-          Finalizar ruta
-        </NavButton>
-      )}
+      <NavButton href="/voluntario" dismissTo showArrow={false}>
+        Finalizar ruta
+      </NavButton>
     </Screen>
   );
 }

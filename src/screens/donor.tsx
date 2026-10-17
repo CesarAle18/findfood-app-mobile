@@ -529,7 +529,12 @@ function DonationDetailContent({
       <Section title="Historial">
         <DonationTimeline donationId={d.id} />
       </Section>
-      {!asVolunteer && volunteer && isDelivered(d.estado) ? (
+      {!asVolunteer && isDelivered(d.estado) ? (
+        <TextLink href={{ pathname: "/donante/entrega-donacion", params: { id: d.id } }}>
+          Ver confirmación de entrega
+        </TextLink>
+      ) : null}
+      {!asVolunteer && volunteer && isDelivered(d.estado) && !dto.asignacion?.calificada_por_mi ? (
         <NavButton
           href={{ pathname: "/donante/calificar-voluntario", params: { id: d.id } }}
           showArrow={false}

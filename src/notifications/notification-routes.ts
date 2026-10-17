@@ -49,8 +49,9 @@ export const ALERTS_HREF: Record<MobileRole, Href> = {
 const DONOR_DONATION_SCREENS = {
   ASIGNACION_ACEPTADA: "/donante/voluntario-asignado",
   DONACION_RECOGIDA: "/donante/seguimiento",
-  DONACION_ENTREGADA: "/donante/detalle-donacion",
-  DONACION_RECIBIDA: "/donante/detalle-donacion",
+  // Delivery confirmation, with "Calificar voluntario" while not rated yet.
+  DONACION_ENTREGADA: "/donante/entrega-donacion",
+  DONACION_RECIBIDA: "/donante/entrega-donacion",
   DONACION_RECHAZADA: "/donante/detalle-donacion",
   DONACION_EXPIRADA: "/donante/detalle-donacion",
 } as const;

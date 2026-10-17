@@ -63,7 +63,7 @@ async function renderInbox() {
     {
       _layout: Layout,
       alertas: NotificationsScreen,
-      "donante/detalle-donacion": Stub,
+      "donante/entrega-donacion": Stub,
       "voluntario/oferta": Stub,
     },
     { initialUrl: "/alertas" },
@@ -120,7 +120,7 @@ it("marks an unread row read and opens its donation", async () => {
 
   await fireEvent.press(await screen.findByRole("button", { name: "Donación recibida, sin leer" }));
 
-  await waitFor(() => expect(rendered.getPathname()).toBe("/donante/detalle-donacion"));
+  await waitFor(() => expect(rendered.getPathname()).toBe("/donante/entrega-donacion"));
   expect(rendered.getSearchParams()).toEqual({ id: DONATION_ID });
   expect(mockApi.post).toHaveBeenCalledWith("/me/notificaciones/n-1/leer");
   expect(mockSetActiveRole).not.toHaveBeenCalled();
