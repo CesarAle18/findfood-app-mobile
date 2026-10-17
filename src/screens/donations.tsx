@@ -28,6 +28,7 @@ import {
   Card,
   Copy,
   Field,
+  FormMessage,
   NavButton,
   Row,
   Screen,
@@ -40,9 +41,11 @@ import {
   appendProduct,
   applyTipoAlimento,
   foodTypeOptions,
+  productErrorKey,
   removeProduct,
   suggestDireccion,
   unitOptions,
+  validateDraft,
   type DraftProduct,
 } from "@/domain/donation-draft";
 import { formatCoordenada } from "@/domain/mappers/geo";
@@ -55,17 +58,41 @@ import {
 } from "@/services/catalogos";
 import { useCancelarDonacionMutation } from "@/services/donaciones";
 import { useMobile } from "@/state/mobile-context";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import { useDonationId } from "./donation-queries";
 
 const COLD_CHAIN_SELECT = COLD_CHAIN_OPTIONS.map((value) => ({ label: value, value }));
 const NO_UNIDADES: UnidadMedidaDto[] = [];
 
+/** A validation message under a control that has no `error` prop of its own. */
+function FieldError({ message }: { message: string | undefined }) {
+  if (!message) return null;
+  return (
+    <View accessibilityLiveRegion="polite">
+      <Copy style={formStyles.fieldError}>{message}</Copy>
+    </View>
+  );
+}
+
+const formStyles = StyleSheet.create({
+  fieldError: { fontSize: 11, lineHeight: 16, color: colors.danger },
+});
+
 export function NewDonationScreen() {
   const { draft, setDraft } = useMobile();
   const tiposAlimento = useTiposAlimento();
   const { data: unidades = NO_UNIDADES } = useUnidades();
+  /** When the donor last tried to continue; errors show from then on. */
+  const [checkedAt, setCheckedAt] = useState<number | null>(null);
+  const errors = checkedAt === null ? null : validateDraft(draft, checkedAt);
+  const productError = (id: number, field: Parameters<typeof productErrorKey>[1]) =>
+    errors?.[productErrorKey(id, field)];
+  const proceed = () => {
+    const now = Date.now();
+    setCheckedAt(now);
+    if (validateDraft(draft, now) === null) router.push("/donante/revisar-donacion");
+  };
   const update = (id: number, patch: Partial<DraftProduct>) =>
     setDraft((current) => ({
       ...current,
@@ -105,11 +132,14 @@ export function NewDonationScreen() {
                     }}
                     options={foodTypeOptions(tipos)}
                   />
-                  <Row style={{ alignItems: "flex-end" }}>
+                  <FieldError message={productError(product.id, "tipoAlimentoId")} />
+                  <Row style={{ alignItems: "flex-start" }}>
                     <Field
                       label="Cantidad / peso"
                       value={product.quantity}
                       onChangeText={(quantity) => update(product.id, { quantity })}
+                      keyboardType="decimal-pad"
+                      error={productError(product.id, "quantity")}
                       grow
                     />
                     <View style={{ width: 110 }}>
@@ -130,6 +160,7 @@ export function NewDonationScreen() {
                     label="Fecha de vencimiento"
                     value={product.expiresOn}
                     onChange={(expiresOn) => update(product.id, { expiresOn })}
+                    error={productError(product.id, "expiresOn")}
                   />
                   <SelectField
                     label="Cadena de frío"
@@ -166,6 +197,9 @@ export function NewDonationScreen() {
                       mode="file"
                       proposito="PRODUCTO"
                       compact
+                      onUploadedFile={({ ruta, localUri }) =>
+                        update(product.id, { rutaFoto: ruta, fotoUri: localUri || null })
+                      }
                     />
                   </Section>
                 </Section>
@@ -190,8 +224,17 @@ export function NewDonationScreen() {
           Añadir otro producto
         </Copy>
       </Pressing>
+      <FieldError message={errors?.products} />
       <Section title="Ventana de recogida">
-        <Row>
+        <DateTimeField
+          label="Fecha de recogida"
+          value={draft.pickupDate}
+          onChange={(pickupDate) =>
+            setDraft((current) => ({ ...current, pickupDate }))
+          }
+          error={errors?.pickupDate}
+        />
+        <Row style={{ alignItems: "flex-start" }}>
           <DateTimeField
             mode="time"
             label="Desde"
@@ -199,6 +242,7 @@ export function NewDonationScreen() {
             onChange={(pickupFrom) =>
               setDraft((current) => ({ ...current, pickupFrom }))
             }
+            error={errors?.pickupFrom}
           />
           <DateTimeField
             mode="time"
@@ -207,8 +251,12 @@ export function NewDonationScreen() {
             onChange={(pickupUntil) =>
               setDraft((current) => ({ ...current, pickupUntil }))
             }
+            error={errors?.pickupUntil}
           />
         </Row>
+        <Copy tone="secondary">
+          Si la hora de fin es anterior a la de inicio, la recogida termina al día siguiente.
+        </Copy>
       </Section>
       <Section title="Ubicación de la entrega">
         <Field
@@ -219,6 +267,7 @@ export function NewDonationScreen() {
           onChangeText={(direccion) =>
             setDraft((current) => ({ ...current, direccion }))
           }
+          error={errors?.direccion}
         />
         <Field
           label="Referencia (opcional)"
@@ -256,10 +305,12 @@ export function NewDonationScreen() {
             </View>
           </Row>
         </Card>
+        <FieldError message={errors?.ubicacionRecogida} />
       </Section>
-      <NavButton href="/donante/revisar-donacion" showArrow={false}>
-        Publicar donación
-      </NavButton>
+      <FormMessage
+        message={errors ? "Revisa los campos marcados antes de continuar." : undefined}
+      />
+      <Button onPress={proceed}>Continuar</Button>
     </Screen>
   );
 }

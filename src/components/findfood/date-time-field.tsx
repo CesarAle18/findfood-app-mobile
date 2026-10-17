@@ -36,11 +36,14 @@ export function DateTimeField({
   value,
   onChange,
   mode = "date",
+  error,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   mode?: "date" | "time";
+  /** Validation message, shown below the field and announced with it. */
+  error?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(new Date());
@@ -70,6 +73,7 @@ export function DateTimeField({
       <Pressing
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${value || "Seleccionar"}`}
+        accessibilityHint={error}
         onPress={show}
         surface={[
           {
@@ -90,6 +94,13 @@ export function DateTimeField({
         </Copy>
         <Icon name={mode === "date" ? "calendar" : "clock"} size={18} />
       </Pressing>
+      {error ? (
+        <View accessibilityLiveRegion="polite">
+          <Copy style={{ fontSize: 11, lineHeight: 16, color: colors.danger }}>
+            {error}
+          </Copy>
+        </View>
+      ) : null}
       <Modal
         visible={open}
         transparent

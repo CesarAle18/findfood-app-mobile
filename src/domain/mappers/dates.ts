@@ -212,6 +212,29 @@ export function toPickupWindow({ date, start, end }: PickupWindowInput): PickupW
   };
 }
 
+/** Epoch milliseconds of both bounds of a window (the end moves to the next day as above). */
+export function pickupWindowBounds(input: PickupWindowInput): { start: number; end: number } {
+  const body = toPickupWindow(input);
+  return {
+    start: parseTimestamp(body.ventana_recogida_inicio),
+    end: parseTimestamp(body.ventana_recogida_fin),
+  };
+}
+
+// --- Today --------------------------------------------------------------------------------
+
+/** `DD/MM/AAAA` of the Bogotá calendar day of `now` (epoch milliseconds). */
+export function todayInBogota(now: number): string {
+  return formatDate(bogotaParts(now).date);
+}
+
+const dateKey = ({ year, month, day }: CalendarDate) => year * 10000 + month * 100 + day;
+
+/** Whether a `DD/MM/AAAA` date is before the Bogotá calendar day of `now`. */
+export function isBeforeTodayInBogota(date: string, now: number): boolean {
+  return dateKey(parseDate(date)) < dateKey(bogotaParts(now).date);
+}
+
 /** Names today and tomorrow (in Bogotá) when `now` is given; other days by their date. */
 function dayLabeler(now: number | undefined): (date: CalendarDate) => string {
   if (now === undefined) return formatDate;

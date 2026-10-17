@@ -12,7 +12,7 @@ import {
   type SetStateAction,
 } from "react";
 
-import { initialDonationDraft, type DonationDraft } from "@/domain/donation-draft";
+import { newDonationDraft, type DonationDraft } from "@/domain/donation-draft";
 
 interface MobileState {
   draft: DonationDraft;
@@ -21,8 +21,11 @@ interface MobileState {
 
 const Context = createContext<MobileState | null>(null);
 
-export function MobileProvider({ children }: PropsWithChildren) {
-  const [draft, setDraft] = useState(initialDonationDraft);
+export function MobileProvider({
+  children,
+  initialDraft,
+}: PropsWithChildren<{ /** Starting draft (tests); a fresh one by default. */ initialDraft?: DonationDraft }>) {
+  const [draft, setDraft] = useState(() => initialDraft ?? newDonationDraft());
   return (
     <Context value={{ draft, setDraft }}>{children}</Context>
   );

@@ -11,7 +11,7 @@
  * not register it; registration happens once the screen knows its parent.
  */
 import { Image } from "expo-image";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 
 import type { EvidenceTarget } from "@/media/evidence-upload";
@@ -33,9 +33,16 @@ export interface PhotoFieldProps {
   /** Parent entity; without it an evidence is uploaded but not registered (see above). */
   padre?: PadreEvidencia;
   onUploaded?: (result: UploadedPhoto) => void;
+  /** Like `onUploaded`, plus the picked file on the device (for thumbnails elsewhere). */
+  onUploadedFile?: (result: UploadedFieldPhoto) => void;
   disabled?: boolean;
   /** Shorter empty state, for side-by-side fields. */
   compact?: boolean;
+}
+
+/** The upload result plus the picked file on the device, to show it elsewhere. */
+export interface UploadedFieldPhoto extends UploadedPhoto {
+  localUri: string;
 }
 
 const THUMBNAIL = 72;
@@ -47,12 +54,20 @@ export function PhotoField({
   tipo,
   padre,
   onUploaded,
+  onUploadedFile,
   disabled = false,
   compact = false,
 }: PhotoFieldProps) {
   const target: EvidenceTarget =
     mode === "evidence" && tipo && padre ? { proposito, registro: { tipo, padre } } : { proposito };
-  const { pending, status, error, start, retry } = useEvidenceUpload(target, { onUploaded });
+  /** The photo being uploaded; a retry keeps it. */
+  const picked = useRef<string | null>(null);
+  const { pending, status, error, start, retry } = useEvidenceUpload(target, {
+    onUploaded: (result) => {
+      onUploaded?.(result);
+      onUploadedFile?.({ ...result, localUri: picked.current ?? "" });
+    },
+  });
   const { pick, cameraGate, requestCamera } = usePhotoCapture();
   /** The user tried the camera and did not get it: explain how to enable it. */
   const [cameraRefused, setCameraRefused] = useState(false);
@@ -63,7 +78,9 @@ export function PhotoField({
     if (!source) return;
     const photo = await pick(source);
     setCameraRefused(source === "camera" && photo === null);
-    if (photo) await start(photo);
+    if (!photo) return;
+    picked.current = photo.uri;
+    await start(photo);
   };
 
   return (
