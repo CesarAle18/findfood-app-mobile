@@ -3,13 +3,18 @@ import { act, renderHook, waitFor } from "@testing-library/react-native";
 import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import type { PropsWithChildren } from "react";
+import { Platform } from "react-native";
 
 import { api } from "@/api";
 import { queryKeys } from "@/services/query-keys";
 import { resetApiMock, type ApiMock } from "@/test-utils/api";
 import { createTestQueryClient } from "@/test-utils/query";
 
-import { notificationFromData, useNotificationResponses } from "./use-notification-responses";
+import {
+  donationKeysForPush,
+  notificationFromData,
+  useNotificationResponses,
+} from "./use-notification-responses";
 
 jest.mock("@/api", () => ({
   api: jest.requireActual<typeof import("@/test-utils/api")>("@/test-utils/api").createApiMock(),
@@ -185,6 +190,24 @@ describe("useNotificationResponses", () => {
     expect(push).toHaveBeenCalledTimes(1);
   });
 
+  it("skips the cold-start read on web, where the module does not offer it", async () => {
+    const os = jest.replaceProperty(Platform, "OS", "web");
+    mocked.getLastNotificationResponse.mockClear().mockImplementation(() => {
+      throw new Error("ExpoNotifications.getLastNotificationResponse is not available on web");
+    });
+    mockAccess.phase = "app";
+    try {
+      await renderResponses();
+
+      expect(mocked.getLastNotificationResponse).not.toHaveBeenCalled();
+      // Taps while the page runs still open their screen.
+      await tap(response(OFFER_DATA));
+      expect(push).toHaveBeenCalledTimes(1);
+    } finally {
+      os.restore();
+    }
+  });
+
   it("ignores action buttons", async () => {
     mockAccess.phase = "app";
     await renderResponses();
@@ -203,4 +226,36 @@ describe("useNotificationResponses", () => {
 
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.notificaciones.all });
   });
+
+  it("refreshes the donation a foreground push is about", async () => {
+    await renderResponses();
+    const invalidate = jest.spyOn(client!, "invalidateQueries");
+    const received = mocked.addNotificationReceivedListener.mock.calls.at(-1)![0];
+    const notification = {
+      request: { content: { data: { tipo: "ASIGNACION_ACEPTADA", donacion_id: "don-3" } } },
+    } as unknown as Notifications.Notification;
+
+    await act(() => received(notification));
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.donaciones.detail("don-3") });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.donaciones.historial("don-3") });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.donaciones.lists() });
+  });
+});
+
+describe("donationKeysForPush", () => {
+  it("names the donation detail, history and lists", () => {
+    expect(donationKeysForPush({ donacion_id: "don-3" })).toEqual([
+      queryKeys.donaciones.detail("don-3"),
+      queryKeys.donaciones.historial("don-3"),
+      queryKeys.donaciones.lists(),
+    ]);
+  });
+
+  it.each([undefined, null, {}, { donacion_id: "" }, { donacion_id: 7 }])(
+    "is empty without a donation (%p)",
+    (data) => {
+      expect(donationKeysForPush(data as Record<string, unknown> | null | undefined)).toEqual([]);
+    },
+  );
 });

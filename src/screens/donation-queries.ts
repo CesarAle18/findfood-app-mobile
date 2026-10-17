@@ -20,8 +20,10 @@ import {
   donacionesQuery,
   donacionQuery,
   getDonaciones,
+  historialDonacionQuery,
   type DonacionDetalleDto,
   type DonacionResumenDto,
+  type HistorialEstadoDto,
 } from "@/services/donaciones";
 import { queryKeys } from "@/services/query-keys";
 
@@ -44,12 +46,24 @@ const DELIVERED_STATES: ReadonlySet<EstadoDonacion> = new Set<EstadoDonacion>([
 export const isTracking = (estado: EstadoDonacion) => TRACKING_STATES.has(estado);
 export const isDelivered = (estado: EstadoDonacion) => DELIVERED_STATES.has(estado);
 
+/**
+ * The tabs of Mis donaciones: En seguimiento = PUBLICADA…EN_TRANSITO, Entregadas =
+ * ENTREGADA/RECIBIDA, Todas = every state (drafts, cancelled, expired… included).
+ */
 export type DonationFilter = "todas" | "seguimiento" | "entregadas";
 
 export function matchesFilter(estado: EstadoDonacion, filter: DonationFilter): boolean {
   if (filter === "seguimiento") return isTracking(estado);
   if (filter === "entregadas") return isDelivered(estado);
   return true;
+}
+
+/**
+ * The loaded rows a tab shows. `GET /donaciones` filters by one `estado` only, so the tabs
+ * filter the loaded pages here; Todas keeps the same array (stable list data).
+ */
+export function filterDonations(rows: DonationView[], filter: DonationFilter): DonationView[] {
+  return filter === "todas" ? rows : rows.filter((row) => matchesFilter(row.estado, filter));
 }
 
 export interface DonationPages {
@@ -122,12 +136,17 @@ export function useDonationId(): string | undefined {
   return typeof id === "string" && id !== "" ? id : undefined;
 }
 
-/** `GET /donaciones/:id`; idle without an id (the screen shows its empty state). */
-export function useDonationDetail(id: string | undefined) {
+/**
+ * `GET /donaciones/:id`; idle without an id (the screen shows its empty state). With `live`,
+ * it polls while PUBLICADA (`pollWhilePublished`), only in the foreground.
+ */
+export function useDonationDetail(id: string | undefined, { live = false } = {}) {
   return useQuery({
     ...donacionQuery(id ?? ""),
     enabled: Boolean(id),
     select: selectDetail,
+    refetchInterval: live ? pollWhilePublished : false,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -142,4 +161,104 @@ export function formatInstant(iso: string | null): string | null {
     if (!(error instanceof MappingError)) throw error;
     return null;
   }
+}
+
+/** `HH:mm` in Bogotá, or null without a (readable) timestamp. */
+export function formatTimeOfDay(iso: string | null): string | null {
+  if (!iso) return null;
+  try {
+    return fromIsoToBogota(iso).time;
+  } catch (error) {
+    if (!(error instanceof MappingError)) throw error;
+    return null;
+  }
+}
+
+/** How often a published donation is fetched again while it waits for a volunteer. */
+export const PUBLISHED_POLL_MS = 15_000;
+
+/**
+ * `refetchInterval` of the published donation: poll only while PUBLICADA (the API assigns a
+ * volunteer on its own). Reads the raw detail, as TanStack hands it before `select`.
+ */
+export function pollWhilePublished(query: {
+  state: { data?: Pick<DonacionDetalleDto, "estado"> };
+}): number | false {
+  return query.state.data?.estado === "PUBLICADA" ? PUBLISHED_POLL_MS : false;
+}
+
+/** States the API lets the donor cancel from. */
+const CANCELLABLE_STATES: ReadonlySet<EstadoDonacion> = new Set<EstadoDonacion>([
+  "BORRADOR",
+  "PUBLICADA",
+  "ASIGNADA",
+  "EXPIRADA",
+]);
+
+export const canCancel = (estado: EstadoDonacion) => CANCELLABLE_STATES.has(estado);
+
+/** The happy path of a published donation, in order. */
+const FLOW: readonly EstadoDonacion[] = [
+  "PUBLICADA",
+  "ASIGNADA",
+  "EN_RECOLECCION",
+  "EN_TRANSITO",
+  "ENTREGADA",
+  "RECIBIDA",
+];
+
+export interface PublishedStep {
+  label: string;
+  /** When it happened (`DD/MM/AAAA · HH:mm`), or null when unknown or not reached. */
+  at: string | null;
+  reached: boolean;
+  /** The next step the donation waits for. */
+  current: boolean;
+}
+
+/** The latest history entry that moved the donation itself into `estado`. */
+function enteredAt(historial: readonly HistorialEstadoDto[], estado: EstadoDonacion) {
+  let latest: string | null = null;
+  for (const row of historial) {
+    if (row.ambito !== "DONACION" || row.estado_nuevo !== estado) continue;
+    if (latest === null || Date.parse(row.created_at) > Date.parse(latest)) latest = row.created_at;
+  }
+  return latest;
+}
+
+/**
+ * The steps of "Donación publicada", from the detail's own timestamps and, where it has
+ * none (EN_RECOLECCION) or lost them (republished), from the state history.
+ */
+export function publishedSteps(
+  dto: DonacionDetalleDto,
+  historial: readonly HistorialEstadoDto[],
+): PublishedStep[] {
+  const rank = FLOW.indexOf(dto.estado);
+  const steps: [string, EstadoDonacion, string | null][] = [
+    ["Donación publicada", "PUBLICADA", dto.publicada_at ?? enteredAt(historial, "PUBLICADA")],
+    ["Voluntario asignado", "ASIGNADA", dto.asignada_at ?? enteredAt(historial, "ASIGNADA")],
+    ["En camino a recogida", "EN_RECOLECCION", enteredAt(historial, "EN_RECOLECCION")],
+    ["Entregada en el banco", "ENTREGADA", dto.entregada_at ?? enteredAt(historial, "ENTREGADA")],
+  ];
+  const mapped = steps.map(([label, estado, iso]) => ({
+    label,
+    at: formatInstant(iso),
+    // Off the flow (cancelled, expired…) only what has a timestamp was reached.
+    reached: iso !== null || (rank >= 0 && rank >= FLOW.indexOf(estado)),
+    current: false,
+  }));
+  const next = rank >= 0 ? mapped.findIndex((step) => !step.reached) : -1;
+  if (next >= 0) mapped[next].current = true;
+  return mapped;
+}
+
+/** `GET /donaciones/:id/historial`; idle without an id. */
+export function useDonationHistory(id: string | undefined, refetchInterval: number | false) {
+  return useQuery({
+    ...historialDonacionQuery(id ?? ""),
+    enabled: Boolean(id),
+    refetchInterval,
+    refetchIntervalInBackground: false,
+  });
 }

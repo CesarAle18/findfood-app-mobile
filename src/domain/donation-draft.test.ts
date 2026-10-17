@@ -6,6 +6,8 @@ import {
   draftPickupBody,
   foodTypeOptions,
   initialDonationDraft,
+  setDireccion,
+  setUbicacion,
   suggestDireccion,
   unitOptions,
   type DraftProduct,
@@ -128,5 +130,37 @@ describe("suggestDireccion", () => {
   it("never overwrites an address the donor typed", () => {
     const typed = { ...initialDonationDraft, direccion: "Cra 45 #12-30" };
     expect(suggestDireccion(typed, "Calle 76 15-20")).toBe(typed);
+  });
+});
+
+describe("pickup point and its source", () => {
+  const point = { lat: 4.61, lng: -74.07 };
+  const typed = { ...initialDonationDraft, direccion: "Cra 45 #12-30 " };
+
+  it("remembers the address a point was located from", () => {
+    expect(setUbicacion(typed, point, "address")).toMatchObject({
+      ubicacionRecogida: point,
+      direccionUbicada: "Cra 45 #12-30",
+    });
+    expect(setUbicacion(typed, point, "device").direccionUbicada).toBeNull();
+    expect(setUbicacion(typed, point, "map").direccionUbicada).toBeNull();
+  });
+
+  it("drops a located point once the address changes, so a typed address is no location", () => {
+    const located = setUbicacion(typed, point, "address");
+
+    expect(setDireccion(located, "Cra 45 #12-31")).toMatchObject({
+      direccion: "Cra 45 #12-31",
+      ubicacionRecogida: null,
+      direccionUbicada: null,
+    });
+    // Trailing spaces do not change the address.
+    expect(setDireccion(located, "Cra 45 #12-30  ").ubicacionRecogida).toEqual(point);
+  });
+
+  it("keeps a point from the device or the map when the address is edited", () => {
+    const fromMap = setUbicacion(typed, point, "map");
+
+    expect(setDireccion(fromMap, "Otra dirección 123").ubicacionRecogida).toEqual(point);
   });
 });

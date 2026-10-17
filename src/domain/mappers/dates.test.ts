@@ -9,6 +9,9 @@ import {
   toBogotaIso,
   toFechaVencimiento,
   toPickupWindow,
+  todayInBogota,
+  isBeforeTodayInBogota,
+  pickupWindowBounds,
 } from "./dates";
 import { errorCode } from "@/test-utils/mapping";
 
@@ -357,5 +360,37 @@ describe("device time zone independence", () => {
       time: "22:30",
     });
     expect(fromFechaVencimiento("2026-09-07T00:00:00.000Z")).toBe("07/09/2026");
+  });
+});
+
+describe("todayInBogota / isBeforeTodayInBogota", () => {
+  it("reads today's date in Bogotá, not in UTC", () => {
+    // 23:30 in Bogotá is already the next day in UTC.
+    expect(todayInBogota(bogota(2026, 10, 16, 23, 30))).toBe("16/10/2026");
+    expect(todayInBogota(bogota(2026, 12, 31, 0, 5))).toBe("31/12/2026");
+  });
+
+  it("compares a calendar date against today in Bogotá", () => {
+    const now = bogota(2026, 10, 16, 23, 30);
+    expect(isBeforeTodayInBogota("15/10/2026", now)).toBe(true);
+    expect(isBeforeTodayInBogota("16/10/2026", now)).toBe(false);
+    expect(isBeforeTodayInBogota("17/10/2026", now)).toBe(false);
+    expect(isBeforeTodayInBogota("30/09/2027", now)).toBe(false);
+  });
+});
+
+describe("pickupWindowBounds", () => {
+  it("returns the epoch bounds of the window", () => {
+    expect(pickupWindowBounds({ date: "16/10/2026", start: "16:00", end: "18:00" })).toEqual({
+      start: bogota(2026, 10, 16, 16),
+      end: bogota(2026, 10, 16, 18),
+    });
+  });
+
+  it("moves the end to the next day when the window crosses midnight", () => {
+    expect(pickupWindowBounds({ date: "31/12/2026", start: "22:00", end: "01:30" })).toEqual({
+      start: bogota(2026, 12, 31, 22),
+      end: bogota(2027, 1, 1, 1, 30),
+    });
   });
 });

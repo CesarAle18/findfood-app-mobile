@@ -10,6 +10,7 @@ import {
   ALL_CATALOGOS,
   catalogosQuery,
   getCatalogos,
+  selectAspectosCalificacion,
   selectMotivos,
   selectTiposAlimento,
   selectTiposVehiculo,
@@ -74,6 +75,10 @@ describe("catalogosQuery", () => {
     ]);
   });
 
+  it("includes the rating aspects", () => {
+    expect(ALL_CATALOGOS).toContain("aspectos_calificacion");
+  });
+
   it("fills catalogs the response leaves out with empty lists", async () => {
     mockedApi.get.mockResolvedValue({ unidades_medida: catalogosFixture.unidades_medida });
     const catalogos = await catalogosQuery().queryFn!({ signal } as never);
@@ -103,6 +108,16 @@ describe("selectors", () => {
 
     expect(motivos.map((motivo) => motivo.codigo)).toEqual(["MUY_LEJOS", "OTRO_RECHAZO"]);
     expect(motivos.every((motivo) => motivo.ambito === "RECHAZO_ASIGNACION")).toBe(true);
+  });
+
+  it("filter rating aspects by the rated role, with one stable selector per role", () => {
+    const aspectos = selectAspectosCalificacion("VOLUNTARIO")(catalogosFixture);
+
+    expect(aspectos.map((aspecto) => aspecto.codigo)).toEqual(["PUNTUALIDAD", "AMABILIDAD"]);
+    expect(
+      selectAspectosCalificacion("DONANTE")(catalogosFixture).map((aspecto) => aspecto.codigo),
+    ).toEqual(["CLARIDAD"]);
+    expect(selectAspectosCalificacion("VOLUNTARIO")).toBe(selectAspectosCalificacion("VOLUNTARIO"));
   });
 
   it("return one stable selector per scope", () => {

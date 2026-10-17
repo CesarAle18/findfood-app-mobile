@@ -22,9 +22,11 @@ function answerFor(queryKey) {
   if (root === "notificaciones" && kind === "list")
     return fixtures.bandejaFixture([fixtures.notificacionFixture()]);
   if (root === "asignaciones" && kind === "ofertas") return [fixtures.ofertaFixture()];
+  if (root === "catalogos") return fixtures.catalogosFixture;
   if (root !== "donaciones") return undefined;
   if (kind === "detail")
     return fixtures.detalleFixture({ id: arg, estado: "RECIBIDA" });
+  if (kind === "historial") return [];
   if (kind === "list")
     return fixtures.pageFixture([
       fixtures.resumenFixture(),
@@ -199,8 +201,9 @@ Module._load = function (name, parent, isMain) {
         cerrarSesion: async () => {},
         setRecovering() {},
       }),
-      deviceIdStorage: {},
     };
+  // SecureStore has no Node build; the push registration only writes from handlers.
+  if (name === "@/state/device-storage") return { deviceIdStorage: {} };
   if (name === "@/state/mobile-context")
     return {
       useMobile: () => ({
@@ -337,6 +340,7 @@ try {
     "route",
     "notifications",
     "donor",
+    "donor-delivery",
     "account",
     "password",
     "profile-setup",
@@ -351,8 +355,8 @@ try {
       const html = renderToStaticMarkup(React.createElement(component));
       assert(html.includes("Find Food"), `${name} did not render its header`);
       if (name === "VolunteerRegistrationScreen") {
-        assert(html.includes("Tipo de identificación"));
-        assert(html.includes("Foto licencia"));
+        // The default account is an approved volunteer: the status, not the form.
+        assert(html.includes("Ya eres voluntario") && html.includes("Ir al modo voluntario"));
       }
       count++;
     }
@@ -374,11 +378,10 @@ try {
   );
   assert(donationsHtml.includes("DON-1058") && donationsHtml.includes("DON-1051"));
   assert(!donationsHtml.includes(fixtures.DONATION_ID));
-  assert(
-    renderToStaticMarkup(React.createElement(DonorHomeScreen)).includes(
-      "DON-1058",
-    ),
-  );
+  // Inicio: impact metrics, the latest donation and the inbox as recent activity.
+  const homeHtml = renderToStaticMarkup(React.createElement(DonorHomeScreen));
+  assert(homeHtml.includes("DON-1058") && homeHtml.includes("en seguimiento"));
+  assert(homeHtml.includes("Donación recibida") && !homeHtml.includes("Ayer 18:40"));
   // The inbox renders its rows from the API, not the old preview data.
   const { NotificationsScreen } = require("../src/screens/notifications.tsx");
   const inboxHtml = renderToStaticMarkup(React.createElement(NotificationsScreen));
@@ -424,8 +427,17 @@ try {
   assert.equal(calendarDays(2027, 1).filter(Boolean).length, 28);
   assert.equal(calendarDays(2026, 8)[0], null);
   const { WaitingScreen } = require("../src/screens/donations.tsx");
+  // Without an id it asks to open the donation again; with one it shows the live donation.
+  assert(
+    renderToStaticMarkup(React.createElement(WaitingScreen)).includes(
+      "No encontramos la donación",
+    ),
+  );
+  routeParams = { id: fixtures.DONATION_ID };
   const waitingHtml = renderToStaticMarkup(React.createElement(WaitingScreen));
-  assert(waitingHtml.includes('href="/donante/voluntario-asignado"'));
+  routeParams = {};
+  assert(waitingHtml.includes("DON-1058") && waitingHtml.includes("Ver voluntario asignado"));
+  assert(!waitingHtml.includes("15–30 minutos") && !waitingHtml.includes("(demo)"));
   assert(waitingHtml.includes('href="/donante"'));
   assert.equal(initialDonationDraft.products.length, 1);
   assert.equal(new Set(expanded.products.map((p) => p.id)).size, 3);
@@ -447,7 +459,7 @@ try {
   // The typed address and the map live side by side; nothing is picked yet.
   assert(newHtml.includes("Dirección de recogida"));
   assert(newHtml.includes("Mapa para elegir el punto de recogida"));
-  assert(newHtml.includes("Mueve el mapa hasta tu punto de recogida"));
+  assert(newHtml.includes("Ubica la dirección escrita, usa tu ubicación o mueve el mapa"));
   assert(newHtml.includes("Añadir otro producto"));
   const reviewHtml = renderToStaticMarkup(
     React.createElement(ReviewDonationScreen),
@@ -471,6 +483,14 @@ try {
   assert(donorDetailHtml.includes('href="/donante/calificar-voluntario"'));
   assert(donorDetailHtml.includes('href="/donante/donaciones"'));
   assert(donorDetailHtml.includes("Mapa del punto de recogida"));
+  // The history timeline, and the call once the API shares the volunteer's phone.
+  assert(donorDetailHtml.includes("Historial") && donorDetailHtml.includes("Contactar voluntario"));
+  assert(donorDetailHtml.includes('href="/donante/entrega-donacion"'));
+  // The donor's delivery confirmation (MOV-39): real data and the rating CTA.
+  const { DonorDeliveryScreen } = require("../src/screens/donor-delivery.tsx");
+  const deliveryHtml = renderToStaticMarkup(React.createElement(DonorDeliveryScreen));
+  assert(deliveryHtml.includes("Tu donación fue entregada") && deliveryHtml.includes("Carlos Ruiz"));
+  assert(deliveryHtml.includes('href="/donante/calificar-voluntario"'));
   // Volunteers open the same detail from their route, without the donor actions.
   const volunteerDetailHtml = renderToStaticMarkup(
     React.createElement(DonationDetailScreen, { asVolunteer: true }),
@@ -563,11 +583,18 @@ try {
   const {
     VolunteerRegistrationScreen,
   } = require("../src/screens/volunteer.tsx");
-  assert(
-    renderToStaticMarkup(
-      React.createElement(VolunteerRegistrationScreen),
-    ).includes('href="/donante"'),
-  );
+  // A donor without a request sees the form; a pending request only its status.
+  me = fixtures.meFixture({ voluntario: null });
+  const requestFormHtml = renderToStaticMarkup(React.createElement(VolunteerRegistrationScreen));
+  assert(requestFormHtml.includes("Tipo de vehículo") && requestFormHtml.includes("Placa"));
+  assert(requestFormHtml.includes("Documento (frente)") && requestFormHtml.includes("Enviar solicitud"));
+  me = fixtures.meFixture({
+    voluntario: { ...fixtures.meFixture().voluntario, estado_verificacion: "PENDIENTE" },
+  });
+  const pendingHtml = renderToStaticMarkup(React.createElement(VolunteerRegistrationScreen));
+  assert(pendingHtml.includes("Tu solicitud está en revisión"));
+  assert(!pendingHtml.includes("Enviar solicitud") && pendingHtml.includes('href="/donante"'));
+  me = fixtures.meFixture();
   const {
     LoadingState,
     EmptyState,
@@ -648,7 +675,14 @@ try {
     true,
   );
   routeParams = { id: fixtures.DONATION_ID };
-  const rating = harness(RatingScreen, { rater: "VOLUNTARIO" });
+  // The donor rates with the volunteer aspects of the catalog.
+  const rating = harness(RatingScreen, { rater: "DONANTE" });
+  assert.deepEqual(
+    nodes(rating())
+      .filter((n) => n.props?.role === "checkbox")
+      .map((n) => n.props.label),
+    ["Puntualidad", "Amabilidad"],
+  );
   nodes(rating())
     .find((n) => n.props?.accessibilityLabel === "5 estrellas")
     .props.onPress();
@@ -699,7 +733,7 @@ try {
   );
   assert.deepEqual(invalid, [], "React rendering warnings");
   console.log(
-    `PASS: ${count} screen components rendered; identification/license fields, selected donation, segment links, account views and Slot/DOM regressions checked.`,
+    `PASS: ${count} screen components rendered; volunteer request form/status, selected donation, segment links, account views and Slot/DOM regressions checked.`,
   );
   if (warnings.length) console.log("Other renderer notices:", warnings.length);
 } finally {

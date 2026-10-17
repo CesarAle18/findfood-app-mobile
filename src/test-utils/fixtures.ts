@@ -115,6 +115,7 @@ export function asignacionFixture(
     aceptada_at: "2026-09-23T19:12:00.000Z",
     ruta_id: null,
     flota_banco: false,
+    calificada_por_mi: false,
     voluntario: {
       nombres: "Carlos",
       apellidos: "Ruiz",
@@ -226,6 +227,11 @@ export const catalogosFixture: CatalogosDto = {
   ],
   tipos_incidencia: [],
   tipos_destino_distribucion: [],
+  aspectos_calificacion: [
+    { id: 51, rol_calificado: "VOLUNTARIO", codigo: "PUNTUALIDAD", nombre: "Puntualidad" },
+    { id: 52, rol_calificado: "DONANTE", codigo: "CLARIDAD", nombre: "Claridad" },
+    { id: 53, rol_calificado: "VOLUNTARIO", codigo: "AMABILIDAD", nombre: "Amabilidad" },
+  ],
 };
 
 /** One inbox row: unread, about a donation the donor can open. */

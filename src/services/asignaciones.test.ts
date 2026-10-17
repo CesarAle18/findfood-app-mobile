@@ -27,7 +27,7 @@ const signal = new AbortController().signal;
 const { asignaciones, donaciones, rutas } = queryKeys;
 
 const motivo = { motivo_id: 2, observacion: "Estoy lejos" };
-const calificacion = { puntaje: 5, comentario: "Muy amable" };
+const calificacion = { puntaje: 4, comentario: "Muy amable", aspectos: ["PUNTUALIDAD"] };
 
 beforeEach(() => {
   resetApiMock(mockedApi);
@@ -91,12 +91,13 @@ describe("mutations invalidate exactly the queries they change", () => {
       rutas.lists(),
       rutas.details(),
     ]),
-    // Ratings only change the other party's averages, which no query of this user shows.
+    // The donation detail flips `asignacion.calificada_por_mi` (the response carries no
+    // donation id, so every detail).
     mutationCase(
       "POST /asignaciones/:id/calificacion",
       useCalificarAsignacionMutation,
       { id: "a-1", body: calificacion },
-      [],
+      [donaciones.details()],
     ),
   ])("$name", async ({ invalidated, expected }) => {
     expect(await invalidated()).toEqual(expected);

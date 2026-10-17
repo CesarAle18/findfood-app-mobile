@@ -8,7 +8,7 @@ import { queryOptions, useMutation, useQuery, type QueryClient } from "@tanstack
 
 import { api } from "@/api";
 import type { Coordenada, EstadoVerificacion, FranjaDto, MeDto } from "@/api/types";
-import { deviceIdStorage } from "@/state/session";
+import { deviceIdStorage } from "@/state/device-storage";
 
 import { invalidateKeys, invalidateOnSuccess, queryKeys, type Invalidation } from "./query-keys";
 

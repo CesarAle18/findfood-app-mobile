@@ -68,7 +68,7 @@ const PROBLEM_TYPES = [
   "asignacion-no-aceptada",
   "asignacion-no-completada",
   "sin-voluntario",
-  "ya-calificada",
+  "aspecto-invalido",
   // Routing.
   "demasiadas-paradas",
   "sin-banco",

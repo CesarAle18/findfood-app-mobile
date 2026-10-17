@@ -128,8 +128,6 @@ const memory: LocationTaskDeps["memory"] = { last: null };
 
 const taskDeps: LocationTaskDeps = {
   ensureToken: restoreAccessToken,
-  // Called lazily: `@/services/perfil` and the session module import each other through
-  // this one, so the binding may not exist yet while the modules load.
   send: (position) => registrarUbicacion(position),
   stop: () => stopLocationTracking(),
   memory,

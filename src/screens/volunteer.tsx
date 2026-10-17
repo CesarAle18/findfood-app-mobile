@@ -1,8 +1,10 @@
-import { AvailabilityField } from "@/components/findfood/availability-field";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
+import { ApiError, isApiError } from "@/api/errors";
 import { messageFor } from "@/api/problem-messages";
+import type { MeVoluntarioDto, VerificacionVoluntarioDto } from "@/api/types";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
+import { LocationPicker } from "@/components/findfood/map";
 import { PhotoField } from "@/components/findfood/photo-field";
 import {
   MotivoField,
@@ -10,15 +12,21 @@ import {
   validateMotivo,
   type MotivoSelection,
 } from "@/components/findfood/motivo-field";
-import type { VolunteerApplication } from "@/domain/models";
-import { validateFranjas } from "@/domain/mappers/franjas";
+import {
+  initialVolunteerRequest,
+  volunteerRequestSchema,
+  type VolunteerRequestForm,
+} from "@/domain/volunteer-request";
+import { useZodForm } from "@/hooks/use-zod-form";
 import { useMotivos, useTiposVehiculo, type TipoVehiculoDto } from "@/services/catalogos";
+import { useSolicitarVoluntarioMutation } from "@/services/perfil";
 import { offerFromOferta, selectOffer, type OfferView } from "@/domain/mappers/offers";
 import {
   useAceptarOfertaMutation,
   useOfertas,
   useRechazarOfertaMutation,
 } from "@/services/asignaciones";
+import { useAccess, useMe } from "@/state/session";
 import { View } from "react-native";
 import {
   Badge,
@@ -42,75 +50,178 @@ import { useDonationId } from "./donation-queries";
 
 /**
  * The catalog vehicle types, keyed by their id as text (the select's value); the request
- * sends it back as the numeric `tipo_vehiculo_id` (`Number(form.vehicleType)`).
+ * sends it back as the numeric `tipo_vehiculo_id`.
  */
 export function vehicleTypeOptions(tipos: readonly TipoVehiculoDto[]) {
   return tipos.map((tipo) => ({ label: tipo.nombre, value: String(tipo.id) }));
 }
 
+/**
+ * Registro voluntario (MOV-38): the request form, or the state of the last request from
+ * `GET /me` (`voluntario.estado_verificacion`). A pending request cannot be sent again; a
+ * rejected one shows why and allows a new request.
+ */
 export function VolunteerRegistrationScreen() {
-  const [form, setForm] = useState<VolunteerApplication>({
-    fullName: "",
-    email: "",
-    phone: "",
-    documentType: "",
-    documentNumber: "",
-    vehicleType: "",
-    capacityKg: "",
-    refrigerated: true,
-    availability: [{ dia_semana: 1, hora_inicio: "08:00", hora_fin: "18:00" }],
-    documentPhoto: "",
-    vehiclePhoto: "",
-    licencePhoto: "",
-  });
-  const tiposVehiculo = useTiposVehiculo();
-  const change = (key: keyof VolunteerApplication) => (value: string) =>
-    setForm((current) => ({ ...current, [key]: value }));
+  const me = useMe();
   return (
     <Screen
       title="Registro como voluntario"
       subtitle="Completa la información para postularte."
       back
     >
-      <Section title="Datos personales">
-        <Stack>
-          <Field
-            label="Nombre completo *"
-            value={form.fullName}
-            onChangeText={change("fullName")}
-            placeholder="Juan Pérez Sánchez"
-          />
-          <Field
-            label="Correo electrónico *"
-            value={form.email}
-            onChangeText={change("email")}
-            placeholder="juan@correo.com"
-          />
-          <Field
-            label="Teléfono *"
-            value={form.phone}
-            onChangeText={change("phone")}
-            placeholder="+57 300 123 4567"
-          />
-          <SelectField
-            label="Tipo de identificación *"
-            value={form.documentType}
-            onChange={change("documentType")}
-            options={[
-              { label: "Cédula de ciudadanía", value: "CC" },
-              { label: "Cédula de extranjería", value: "CE" },
-              { label: "Pasaporte", value: "PA" },
-              { label: "Permiso por Protección Temporal", value: "PPT" },
-            ]}
-          />
-          <Field
-            label="Documento *"
-            value={form.documentNumber}
-            onChangeText={change("documentNumber")}
-            placeholder="1234567890"
-          />
-        </Stack>
-      </Section>
+      <QueryContent
+        query={me}
+        loadingLabel="Cargando tu cuenta"
+        errorTitle="No pudimos cargar tu cuenta"
+      >
+        {(account) => <VolunteerRequest voluntario={account.voluntario} />}
+      </QueryContent>
+    </Screen>
+  );
+}
+
+function VolunteerRequest({ voluntario }: { voluntario: MeVoluntarioDto | null }) {
+  // Sent from this screen: pending at once, while `/me` refreshes.
+  const [sent, setSent] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const estado = voluntario?.estado_verificacion;
+  if (sent || estado === "PENDIENTE") return <RequestPending />;
+  if (estado === "APROBADA") return <RequestApproved />;
+  if (estado === "RECHAZADA" && !retrying) {
+    return (
+      <RequestRejected
+        verificacion={voluntario?.verificacion ?? null}
+        onRetry={() => setRetrying(true)}
+      />
+    );
+  }
+  return <VolunteerRequestFormView onSent={() => setSent(true)} />;
+}
+
+function RequestPending() {
+  return (
+    <>
+      <Card soft>
+        <Badge warning>En revisión</Badge>
+        <Copy weight="bold" style={{ fontSize: 18 }}>
+          Tu solicitud está en revisión
+        </Copy>
+        <Copy tone="secondary">
+          Revisaremos tus datos y documentos. Te avisaremos cuando tengamos una respuesta.
+        </Copy>
+      </Card>
+      <NavButton href="/donante" dismissTo showArrow={false}>
+        Volver al inicio
+      </NavButton>
+    </>
+  );
+}
+
+function RequestApproved() {
+  const { canVolunteer, setActiveRole } = useAccess();
+  return (
+    <>
+      <Card soft>
+        <Badge>Aprobada</Badge>
+        <Copy weight="bold" style={{ fontSize: 18 }}>
+          Ya eres voluntario
+        </Copy>
+        <Copy tone="secondary">
+          {canVolunteer
+            ? "Tu solicitud fue aprobada. Cambia al modo voluntario para recibir ofertas."
+            : "Tu solicitud fue aprobada. Pronto podrás usar el modo voluntario desde tu perfil."}
+        </Copy>
+      </Card>
+      {canVolunteer ? (
+        <Button
+          onPress={() => {
+            setActiveRole("VOLUNTARIO");
+            // Only the volunteer view stays in the history, as when switching from Perfil.
+            router.dismissAll();
+            router.replace("/voluntario");
+          }}
+        >
+          Ir al modo voluntario
+        </Button>
+      ) : null}
+    </>
+  );
+}
+
+function RequestRejected({
+  verificacion,
+  onRetry,
+}: {
+  verificacion: VerificacionVoluntarioDto | null;
+  onRetry: () => void;
+}) {
+  return (
+    <>
+      <Card soft>
+        <Badge warning>Rechazada</Badge>
+        <Copy weight="bold" style={{ fontSize: 18 }}>
+          Tu solicitud no fue aprobada
+        </Copy>
+        {verificacion?.motivo ? (
+          <Copy tone="secondary">{`Motivo: ${verificacion.motivo}`}</Copy>
+        ) : null}
+        {verificacion?.observacion ? (
+          <Copy tone="secondary">{verificacion.observacion}</Copy>
+        ) : null}
+        <Copy tone="secondary">Puedes corregir tus datos y enviar una nueva solicitud.</Copy>
+      </Card>
+      <Button onPress={onRetry}>Enviar una nueva solicitud</Button>
+    </>
+  );
+}
+
+/** `archivo-invalido` and `archivo-no-subido` name the photo in `campo`: show it there. */
+function onPhotoField(error: unknown): unknown {
+  if (!isApiError(error) || !error.type.startsWith("archivo-")) return error;
+  const { campo } = error.extensions;
+  if (typeof campo !== "string") return error;
+  return new ApiError({
+    type: error.type,
+    status: error.status,
+    title: error.title,
+    detail: error.detail,
+    instance: error.instance,
+    extensions: error.extensions,
+    fields: { [campo]: [messageFor(error)] },
+  });
+}
+
+const REFRIGERATION = ["Sí, dispone", "No dispone"];
+const GROUP = ["A título personal", "Con una organización"];
+
+function VolunteerRequestFormView({ onSent }: { onSent: () => void }) {
+  // Read once: the age is checked against the day the form was opened.
+  const [schema] = useState(() => volunteerRequestSchema(Date.now()));
+  const form = useZodForm(schema, initialVolunteerRequest);
+  const { values, errors } = form;
+  const tiposVehiculo = useTiposVehiculo();
+  const { mutateAsync: solicitar } = useSolicitarVoluntarioMutation();
+  const setPhoto =
+    (name: keyof Pick<
+      VolunteerRequestForm,
+      "documento_frente" | "documento_reverso" | "selfie" | "url_foto_vehiculo"
+    >) =>
+    ({ ruta }: { ruta: string }) =>
+      form.setValue(name, ruta);
+
+  // API field errors (400 `validacion`, 422 `archivo-*`) land on their fields; conflicts
+  // (`placa-registrada`, `solicitud-en-curso`…) show below the form, through useZodForm.
+  const submit = form.handleSubmit(async (body) => {
+    try {
+      await solicitar(body);
+    } catch (error) {
+      throw onPhotoField(error);
+    }
+    onSent();
+  });
+
+  return (
+    <>
       <Section title="Información del vehículo">
         <Stack>
           <QueryContent
@@ -121,66 +232,141 @@ export function VolunteerRegistrationScreen() {
             {(tipos) => (
               <SelectField
                 label="Tipo de vehículo *"
-                value={form.vehicleType}
-                onChange={change("vehicleType")}
+                value={values.tipo_vehiculo_id}
+                onChange={(value) => form.setValue("tipo_vehiculo_id", value)}
                 options={vehicleTypeOptions(tipos)}
               />
             )}
           </QueryContent>
+          <FormMessage message={errors.tipo_vehiculo_id} />
           <Field
-            label="Capacidad de carga *"
-            value={form.capacityKg}
-            onChangeText={change("capacityKg")}
-            placeholder="500 kg"
-          />
-          <Copy weight="medium" style={{ fontSize: 12 }}>
-            Cadena de frío
-          </Copy>
-          <Choices values={["Sí, dispone", "No dispone"]} selected={form.refrigerated ? 0 : 1} onChange={(index) => setForm(current => ({ ...current, refrigerated: index === 0 }))} />
-          <AvailabilityField
-            value={form.availability}
-            onChange={(availability) => setForm((current) => ({ ...current, availability }))}
-            error={validateFranjas(form.availability)}
+            label="Placa *"
+            {...form.field("placa_vehiculo")}
+            placeholder="ABC123"
+            autoCapitalize="characters"
+            maxLength={12}
           />
           <Row style={{ alignItems: "flex-start" }}>
             <View style={{ flex: 1 }}>
-              <Section title="Foto documento">
-                <PhotoField
-                  label="Documento"
-                  mode="file"
-                  proposito="DOCUMENTO_IDENTIDAD"
-                  compact
-                  onUploaded={({ ruta }) => change("documentPhoto")(ruta)}
-                />
-              </Section>
+              <Field
+                label="Capacidad de carga (kg) *"
+                {...form.field("capacidad_carga_kg")}
+                placeholder="500"
+                keyboardType="decimal-pad"
+              />
             </View>
             <View style={{ flex: 1 }}>
-              <Section title="Foto vehículo">
-                <PhotoField
-                  label="Vehículo"
-                  mode="file"
-                  proposito="VEHICULO"
-                  compact
-                  onUploaded={({ ruta }) => change("vehiclePhoto")(ruta)}
-                />
-              </Section>
+              <Field
+                label="Volumen (m³)"
+                {...form.field("capacidad_volumen_m3")}
+                placeholder="Opcional"
+                keyboardType="decimal-pad"
+              />
             </View>
           </Row>
-          <Section title="Foto licencia">
+          <Copy weight="medium" style={{ fontSize: 12 }}>
+            Cadena de frío
+          </Copy>
+          <Choices
+            values={REFRIGERATION}
+            selected={values.tiene_refrigeracion ? 0 : 1}
+            onChange={(index) => form.setValue("tiene_refrigeracion", index === 0)}
+          />
+          <Section title="Foto vehículo *">
             <PhotoField
-              label="Licencia"
+              label="Vehículo"
               mode="file"
-              proposito="DOCUMENTO_IDENTIDAD"
+              proposito="VEHICULO"
               compact
-              onUploaded={({ ruta }) => change("licencePhoto")(ruta)}
+              onUploaded={setPhoto("url_foto_vehiculo")}
             />
+            <FormMessage message={errors.url_foto_vehiculo} />
           </Section>
         </Stack>
       </Section>
-      <NavButton href="/donante" dismissTo showArrow={false}>
-        Enviar
-      </NavButton>
-    </Screen>
+      <Section title="Datos personales">
+        <Stack>
+          <Field
+            label="Fecha de nacimiento *"
+            {...form.field("fecha_nacimiento")}
+            placeholder="DD/MM/AAAA"
+            keyboardType="numbers-and-punctuation"
+            maxLength={10}
+            accessibilityHint="Debes tener al menos 18 años."
+          />
+          <Copy weight="medium" style={{ fontSize: 12 }}>
+            ¿Cómo te registras?
+          </Copy>
+          <Choices
+            values={GROUP}
+            selected={values.es_grupo ? 1 : 0}
+            onChange={(index) => form.setValue("es_grupo", index === 1)}
+          />
+          {values.es_grupo ? (
+            <Field
+              label="Organización *"
+              {...form.field("organizacion")}
+              placeholder="Nombre de la organización"
+              autoCapitalize="words"
+              maxLength={150}
+            />
+          ) : null}
+        </Stack>
+      </Section>
+      <Section title="Zona de cobertura">
+        <Stack>
+          <Copy tone="secondary">Mueve el mapa hasta el punto desde el que sueles salir.</Copy>
+          <LocationPicker
+            value={values.ubicacion_base}
+            onChange={(point) => form.setValue("ubicacion_base", point)}
+          />
+          <FormMessage message={errors.ubicacion_base} />
+          <Field
+            label="Radio de cobertura (km)"
+            {...form.field("radio_cobertura_km")}
+            placeholder="10"
+            keyboardType="decimal-pad"
+          />
+        </Stack>
+      </Section>
+      <Section title="Documento de identidad">
+        <Stack>
+          <Row style={{ alignItems: "flex-start" }}>
+            <View style={{ flex: 1 }}>
+              <PhotoField
+                label="Documento (frente) *"
+                mode="file"
+                proposito="DOCUMENTO_IDENTIDAD"
+                compact
+                onUploaded={setPhoto("documento_frente")}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <PhotoField
+                label="Documento (reverso)"
+                mode="file"
+                proposito="DOCUMENTO_IDENTIDAD"
+                compact
+                onUploaded={setPhoto("documento_reverso")}
+              />
+            </View>
+          </Row>
+          <FormMessage message={errors.documento_frente ?? errors.documento_reverso} />
+          <PhotoField
+            label="Selfie"
+            mode="file"
+            proposito="DOCUMENTO_IDENTIDAD"
+            compact
+            onUploaded={setPhoto("selfie")}
+          />
+          <FormMessage message={errors.selfie} />
+        </Stack>
+      </Section>
+      <FormMessage message={form.formError} />
+      <Button onPress={() => void submit()} loading={form.submitting}>
+        Enviar solicitud
+      </Button>
+    </>
   );
 }
 /**

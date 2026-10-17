@@ -1,5 +1,18 @@
+import { useState } from "react";
+import { Linking } from "react-native";
+
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
-import { Card, Copy, Detail, NavButton, Screen, Section, Row } from "@/components/findfood/ui";
+import {
+  Button,
+  Card,
+  Copy,
+  Detail,
+  FormMessage,
+  NavButton,
+  Screen,
+  Section,
+  Row,
+} from "@/components/findfood/ui";
 import { Icon } from "@/components/findfood/icon";
 import { PointMap } from "@/components/findfood/map";
 import { assignedVolunteerFromDetalle } from "@/domain/mappers/donations";
@@ -11,6 +24,35 @@ const backHome = (
     Volver al inicio
   </NavButton>
 );
+
+/**
+ * "Contactar voluntario": dials the volunteer. Callers render it only once the API shares
+ * the phone (after acceptance). No `canOpenURL` check: Android 11+ would need a manifest
+ * query for `tel:`, so a failed open is caught and the number shown instead.
+ */
+export function ContactVolunteerButton({ phone }: { phone: string }) {
+  const [failed, setFailed] = useState(false);
+  const call = async () => {
+    setFailed(false);
+    try {
+      await Linking.openURL(`tel:${phone}`);
+    } catch {
+      setFailed(true);
+    }
+  };
+  return (
+    <>
+      <FormMessage
+        message={
+          failed ? `No pudimos abrir la app de llamadas. Marca al ${phone}.` : undefined
+        }
+      />
+      <Button variant="outline" onPress={() => void call()}>
+        Contactar voluntario
+      </Button>
+    </>
+  );
+}
 
 function AssignedVolunteer({ detail: { dto, view } }: { detail: DonationDetail }) {
   const volunteer = assignedVolunteerFromDetalle(dto);
@@ -25,13 +67,32 @@ function AssignedVolunteer({ detail: { dto, view } }: { detail: DonationDetail }
   }
   return (
     <>
-      <Card soft><Row><Icon name="check" /><Copy weight="semibold">Tu recogida ya tiene voluntario</Copy></Row><Copy>{volunteer.name} se encargará de recoger tus productos.</Copy></Card>
-      <Section title="Tu voluntario"><Card><Copy weight="bold">{volunteer.name}</Copy><Copy>{volunteer.vehicle}</Copy><Copy tone="primary">{view.status}</Copy>{volunteer.phone ? <Detail label="Teléfono" value={volunteer.phone} /> : null}</Card></Section>
+      <Card soft>
+        <Row>
+          <Icon name="check" />
+          <Copy weight="semibold">Tu recogida ya tiene voluntario</Copy>
+        </Row>
+        <Copy>{volunteer.name} se encargará de recoger tus productos.</Copy>
+      </Card>
+      <Section title="Tu voluntario">
+        <Card>
+          <Copy weight="bold">{volunteer.name}</Copy>
+          <Copy>{volunteer.vehicle}</Copy>
+          <Copy tone="primary">{view.status}</Copy>
+          {volunteer.phone ? <Detail label="Teléfono" value={volunteer.phone} /> : null}
+        </Card>
+        {volunteer.phone ? <ContactVolunteerButton phone={volunteer.phone} /> : null}
+      </Section>
       <Section title="Punto de recogida">
         <PointMap point={dto.ubicacion_recogida} title="Tu punto de recogida" />
+        {/* Live location waits for API-06. */}
         <Copy tone="secondary">La ubicación en vivo del voluntario aún no está disponible.</Copy>
       </Section>
-      <Section title="Recogida"><Copy>{view.category}</Copy><Copy>Horario: {view.pickupWindow}</Copy><Copy tone="secondary">{view.address}</Copy></Section>
+      <Section title="Recogida">
+        <Copy>{view.category}</Copy>
+        <Copy>Horario: {view.pickupWindow}</Copy>
+        <Copy tone="secondary">{view.address}</Copy>
+      </Section>
     </>
   );
 }
@@ -40,14 +101,19 @@ function AssignedVolunteer({ detail: { dto, view } }: { detail: DonationDetail }
 export function AssignedVolunteerScreen() {
   const id = useDonationId();
   const detail = useDonationDetail(id);
-  return <Screen title="Voluntario asignado" subtitle="Un voluntario aceptó tu donación." back>
-    {id ? (
-      <QueryContent query={detail} loadingLabel="Cargando la asignación">
-        {(loaded) => <AssignedVolunteer detail={loaded} />}
-      </QueryContent>
-    ) : (
-      <EmptyState title="No encontramos la donación" description="Ábrela desde tus donaciones para ver su voluntario." />
-    )}
-    {backHome}
-  </Screen>;
+  return (
+    <Screen title="Voluntario asignado" subtitle="Un voluntario aceptó tu donación." back>
+      {id ? (
+        <QueryContent query={detail} loadingLabel="Cargando la asignación">
+          {(loaded) => <AssignedVolunteer detail={loaded} />}
+        </QueryContent>
+      ) : (
+        <EmptyState
+          title="No encontramos la donación"
+          description="Ábrela desde tus donaciones para ver su voluntario."
+        />
+      )}
+      {backHome}
+    </Screen>
+  );
 }

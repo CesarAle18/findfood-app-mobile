@@ -27,6 +27,7 @@ const target = (href: Href, role: MobileRole): NotificationTarget => ({ href, ro
 const donorAlerts = target("/donante/alertas", "DONANTE");
 const volunteerAlerts = target("/voluntario/alertas", "VOLUNTARIO");
 const detail = target({ pathname: "/donante/detalle-donacion", params: { id: DONATION } }, "DONANTE");
+const delivery = target({ pathname: "/donante/entrega-donacion", params: { id: DONATION } }, "DONANTE");
 
 describe("routeForNotification", () => {
   it.each<[string, NotificationAccess, NotificationTarget | null]>([
@@ -46,8 +47,8 @@ describe("routeForNotification", () => {
       both,
       target({ pathname: "/donante/seguimiento", params: { id: DONATION } }, "DONANTE"),
     ],
-    ["DONACION_ENTREGADA", both, detail],
-    ["DONACION_RECIBIDA", both, detail],
+    ["DONACION_ENTREGADA", both, delivery],
+    ["DONACION_RECIBIDA", both, delivery],
     ["DONACION_RECHAZADA", both, detail],
     ["DONACION_EXPIRADA", both, detail],
     ["VERIFICACION_APROBADA", both, target("/voluntario/perfil", "VOLUNTARIO")],

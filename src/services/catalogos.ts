@@ -23,7 +23,8 @@ export type Catalogo =
   | "tipos_vehiculo"
   | "motivos"
   | "tipos_incidencia"
-  | "tipos_destino_distribucion";
+  | "tipos_destino_distribucion"
+  | "aspectos_calificacion";
 
 /** Scope of a reason (`motivos`), sent as `ambito` to filter them. */
 export type AmbitoMotivo =
@@ -32,6 +33,9 @@ export type AmbitoMotivo =
   | "CANCELACION_DONACION"
   | "RECHAZO_RECEPCION"
   | "RECHAZO_VERIFICACION";
+
+/** The role a rating is about (`aspectos_calificacion.rol_calificado`). */
+export type RolCalificado = "VOLUNTARIO" | "DONANTE";
 
 export type Severidad = "BAJA" | "MEDIA" | "ALTA" | "CRITICA";
 
@@ -96,6 +100,14 @@ export interface TipoDestinoDistribucionDto {
   nombre: string;
 }
 
+/** An aspect a rating can highlight (API-08), e.g. PUNTUALIDAD for a volunteer. */
+export interface AspectoCalificacionDto {
+  id: number;
+  rol_calificado: RolCalificado;
+  codigo: string;
+  nombre: string;
+}
+
 /** Every catalog; a response only carries the ones requested. */
 export interface CatalogosDto {
   categorias_alimento: CategoriaAlimentoDto[];
@@ -105,6 +117,7 @@ export interface CatalogosDto {
   motivos: MotivoDto[];
   tipos_incidencia: TipoIncidenciaDto[];
   tipos_destino_distribucion: TipoDestinoDistribucionDto[];
+  aspectos_calificacion: AspectoCalificacionDto[];
 }
 
 // --- Requests ----------------------------------------------------------------------------
@@ -131,6 +144,8 @@ export const ALL_CATALOGOS: readonly Catalogo[] = [
   "motivos",
   "tipos_incidencia",
   "tipos_destino_distribucion",
+  // Every role: the selector filters by `rol_calificado`.
+  "aspectos_calificacion",
 ];
 
 const EMPTY_CATALOGOS: CatalogosDto = {
@@ -141,6 +156,7 @@ const EMPTY_CATALOGOS: CatalogosDto = {
   motivos: [],
   tipos_incidencia: [],
   tipos_destino_distribucion: [],
+  aspectos_calificacion: [],
 };
 
 /** The whole catalog, once per session; a catalog missing from the response reads as empty. */
@@ -176,6 +192,21 @@ export function selectMotivos(ambito: AmbitoMotivo): MotivoSelector {
   return selector;
 }
 
+type AspectoSelector = (catalogos: CatalogosDto) => AspectoCalificacionDto[];
+
+const aspectoSelectors = new Map<RolCalificado, AspectoSelector>();
+
+/** The rating aspects about one role; the same function every time for the same role. */
+export function selectAspectosCalificacion(rol: RolCalificado): AspectoSelector {
+  let selector = aspectoSelectors.get(rol);
+  if (!selector) {
+    selector = (catalogos) =>
+      catalogos.aspectos_calificacion.filter((aspecto) => aspecto.rol_calificado === rol);
+    aspectoSelectors.set(rol, selector);
+  }
+  return selector;
+}
+
 export function useTiposAlimento() {
   return useQuery({ ...catalogosQuery(), select: selectTiposAlimento });
 }
@@ -190,4 +221,9 @@ export function useTiposVehiculo() {
 
 export function useMotivos(ambito: AmbitoMotivo) {
   return useQuery({ ...catalogosQuery(), select: selectMotivos(ambito) });
+}
+
+/** The rating aspects about `rol` (the rated party), from the shared catalog request. */
+export function useAspectosCalificacion(rol: RolCalificado) {
+  return useQuery({ ...catalogosQuery(), select: selectAspectosCalificacion(rol) });
 }

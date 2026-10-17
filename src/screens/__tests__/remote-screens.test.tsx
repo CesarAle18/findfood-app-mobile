@@ -13,14 +13,13 @@ import { api } from "@/api";
 import { ApiError } from "@/api/errors";
 import type { MeDto } from "@/api/types";
 import { UNKNOWN_PICKUP_WINDOW } from "@/domain/mappers/donations";
-import { AccountScreen, ProfileScreen, RatingScreen, type Rater } from "@/screens/account";
+import { AccountScreen, ProfileScreen } from "@/screens/account";
 import { AssignedVolunteerScreen } from "@/screens/assigned-volunteer";
-import { DonationDetailScreen, DonationsScreen, DonorHomeScreen, TrackingScreen } from "@/screens/donor";
+import { DonationDetailScreen, DonationsScreen, TrackingScreen } from "@/screens/donor";
 import { MobileProvider } from "@/state/mobile-context";
 import type { ApiMock } from "@/test-utils/api";
 import {
   DONATION_ID,
-  asignacionFixture,
   detalleFixture,
   impactoFixture,
   meFixture,
@@ -289,31 +288,6 @@ describe("DonationsScreen", () => {
   });
 });
 
-describe("DonorHomeScreen", () => {
-  it("shows the account totals and the latest donation", async () => {
-    answerGets({ "/donaciones": pageFixture([resumenFixture()], 12) });
-
-    await renderScreen(DonorHomeScreen);
-
-    expect(screen.getByText("12")).toBeOnTheScreen();
-    expect(screen.getByText("280 kg")).toBeOnTheScreen();
-    expect(await screen.findByText("DON-1058")).toBeOnTheScreen();
-    expect(screen.getByRole("link", { name: "Hacer seguimiento" })).toBeOnTheScreen();
-    expect(mockApi.get).toHaveBeenCalledWith("/donaciones", {
-      query: { limite: 1 },
-      signal: expect.any(AbortSignal),
-    });
-  });
-
-  it("invites to donate without donations", async () => {
-    answerGets({ "/donaciones": pageFixture([]) });
-
-    await renderScreen(DonorHomeScreen);
-
-    expect(await screen.findByText("Aún no tienes donaciones")).toBeOnTheScreen();
-  });
-});
-
 describe("DonationDetailScreen", () => {
   it("shows the donation and its assigned volunteer", async () => {
     answerGets({ [detailPath]: detalleFixture({ estado: "RECIBIDA" }) });
@@ -540,54 +514,5 @@ describe("AccountScreen", () => {
       expect(signOutButton()).not.toBeBusy();
       expect(screen.queryByText("Cerrando sesión…")).toBeNull();
     });
-  });
-});
-
-describe("RatingScreen", () => {
-  const rate = (rater: Rater) =>
-    function Rating() {
-      return <RatingScreen rater={rater} />;
-    };
-
-  it.each<[Rater, string, string]>([
-    ["DONANTE", "Calificar voluntario", "Carlos Ruiz"],
-    ["VOLUNTARIO", "Calificar donante", "María García"],
-  ])("as %s names the other party of the donation", async (rater, title, name) => {
-    answerGets({ [detailPath]: detalleFixture({ estado: "RECIBIDA" }) });
-
-    await renderScreen(rate(rater), withId);
-
-    expect(await screen.findByText(name)).toBeOnTheScreen();
-    expect(screen.getByText(title)).toBeOnTheScreen();
-    expect(screen.getByText(/DON-1058/)).toBeOnTheScreen();
-  });
-
-  it("says that sending the rating is not available yet", async () => {
-    answerGets({ [detailPath]: detalleFixture({ estado: "RECIBIDA" }) });
-    await renderScreen(rate("DONANTE"), withId);
-    await screen.findByText("Carlos Ruiz");
-
-    await fireEvent.press(screen.getByRole("button", { name: "Enviar calificación" }));
-
-    expect(
-      screen.getByText("El envío de calificaciones estará disponible próximamente."),
-    ).toBeOnTheScreen();
-    expect(screen.queryByText(/registrada/)).toBeNull();
-    expect(mockApi.post).not.toHaveBeenCalled();
-  });
-
-  it("cannot rate a donation without a volunteer", async () => {
-    answerGets({ [detailPath]: detalleFixture({ asignacion: asignacionFixture({ voluntario: null }) }) });
-
-    await renderScreen(rate("DONANTE"), withId);
-
-    expect(await screen.findByText("Aún no puedes calificar")).toBeOnTheScreen();
-  });
-
-  it("shows an empty state without an id", async () => {
-    await renderScreen(rate("VOLUNTARIO"));
-
-    await waitFor(() => expect(screen.getByText("No encontramos la donación")).toBeOnTheScreen());
-    expect(mockApi.get).not.toHaveBeenCalled();
   });
 });
