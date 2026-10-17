@@ -480,6 +480,8 @@ try {
   assert(donorDetailHtml.includes('href="/donante/calificar-voluntario"'));
   assert(donorDetailHtml.includes('href="/donante/donaciones"'));
   assert(donorDetailHtml.includes("Mapa del punto de recogida"));
+  // The history timeline, and the call once the API shares the volunteer's phone.
+  assert(donorDetailHtml.includes("Historial") && donorDetailHtml.includes("Contactar voluntario"));
   // Volunteers open the same detail from their route, without the donor actions.
   const volunteerDetailHtml = renderToStaticMarkup(
     React.createElement(DonationDetailScreen, { asVolunteer: true }),

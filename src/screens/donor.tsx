@@ -13,6 +13,7 @@ import {
   ErrorState,
   QueryContent,
 } from "@/components/findfood/feedback";
+import { DonationTimeline } from "@/components/findfood/donation-timeline";
 import { Icon } from "@/components/findfood/icon";
 import { PointMap } from "@/components/findfood/map";
 import { Pressing } from "@/components/findfood/motion";
@@ -61,6 +62,7 @@ import { useImpacto } from "@/services/perfil";
 import { useMobile } from "@/state/mobile-context";
 import { useMe } from "@/state/session";
 
+import { ContactVolunteerButton } from "./assigned-volunteer";
 import {
   filterDonations,
   formatInstant,
@@ -435,7 +437,10 @@ function Tracking({ detail: { dto, view: d } }: { detail: DonationDetail }) {
           ))}
         </Stack>
       </Section>
-      <Button variant="outline">Contactar voluntario</Button>
+      <Section title="Historial">
+        <DonationTimeline donationId={d.id} />
+      </Section>
+      {volunteer?.phone ? <ContactVolunteerButton phone={volunteer.phone} /> : null}
       <NavButton href={{ pathname: "/donante/detalle-donacion", params: { id: d.id } }}>
         Ver detalle completo
       </NavButton>
@@ -510,6 +515,9 @@ function DonationDetailContent({
             <Copy tone="secondary">{volunteer.vehicle}</Copy>
             <Detail label="Estado actual" value={d.status} />
           </Card>
+          {!asVolunteer && volunteer.phone ? (
+            <ContactVolunteerButton phone={volunteer.phone} />
+          ) : null}
         </Section>
       ) : null}
       <Section title="Punto de recogida">
@@ -517,6 +525,9 @@ function DonationDetailContent({
         <Copy tone="secondary">
           La ubicación en vivo del voluntario aún no está disponible.
         </Copy>
+      </Section>
+      <Section title="Historial">
+        <DonationTimeline donationId={d.id} />
       </Section>
       {!asVolunteer && volunteer && isDelivered(d.estado) ? (
         <NavButton
