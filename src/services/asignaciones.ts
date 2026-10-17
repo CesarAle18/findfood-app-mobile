@@ -61,11 +61,17 @@ export type RespuestaConMotivoBody = {
   observacion?: string;
 };
 
-/** `POST /asignaciones/:id/calificacion`: once per party, after COMPLETADA. */
+/**
+ * `POST /asignaciones/:id/calificacion`: once per party, after COMPLETADA. A repeat answers
+ * 200 with the original rating (no conflict).
+ */
 export type CalificacionBody = {
   /** Integer 0-5. */
   puntaje: number;
+  /** Up to 1000 characters. */
   comentario?: string;
+  /** Codes of `aspectos_calificacion` for the rated role; up to 5, unique. */
+  aspectos?: string[];
 };
 
 export interface RespuestaAsignacionDto {
@@ -82,6 +88,7 @@ export interface CalificacionDto {
   id: string;
   puntaje: number;
   comentario: string | null;
+  aspectos: { codigo: string; nombre: string }[];
   created_at: string;
 }
 
@@ -146,8 +153,11 @@ const invalidates = {
    * changes the stop count and weight shown in route lists.
    */
   abandonar: () => [asignaciones.ofertas(), donaciones.all, rutas.lists(), rutas.details()],
-  /** Ratings only change the other party's averages, which no query of this user shows. */
-  calificar: () => [],
+  /**
+   * The donation detail flips `asignacion.calificada_por_mi`. The response carries no
+   * donation id, so every detail.
+   */
+  calificar: () => [donaciones.details()],
 } satisfies Record<string, Invalidation<never, never>>;
 
 export function useAceptarOfertaMutation() {

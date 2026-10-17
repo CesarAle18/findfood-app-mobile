@@ -22,6 +22,7 @@ function answerFor(queryKey) {
   if (root === "notificaciones" && kind === "list")
     return fixtures.bandejaFixture([fixtures.notificacionFixture()]);
   if (root === "asignaciones" && kind === "ofertas") return [fixtures.ofertaFixture()];
+  if (root === "catalogos") return fixtures.catalogosFixture;
   if (root !== "donaciones") return undefined;
   if (kind === "detail")
     return fixtures.detalleFixture({ id: arg, estado: "RECIBIDA" });
@@ -659,7 +660,14 @@ try {
     true,
   );
   routeParams = { id: fixtures.DONATION_ID };
-  const rating = harness(RatingScreen, { rater: "VOLUNTARIO" });
+  // The donor rates with the volunteer aspects of the catalog.
+  const rating = harness(RatingScreen, { rater: "DONANTE" });
+  assert.deepEqual(
+    nodes(rating())
+      .filter((n) => n.props?.role === "checkbox")
+      .map((n) => n.props.label),
+    ["Puntualidad", "Amabilidad"],
+  );
   nodes(rating())
     .find((n) => n.props?.accessibilityLabel === "5 estrellas")
     .props.onPress();

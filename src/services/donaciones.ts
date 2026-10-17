@@ -115,6 +115,11 @@ export interface AsignacionDonacionDto {
   aceptada_at: string | null;
   ruta_id: string | null;
   flota_banco: boolean;
+  /**
+   * Whether the current user already rated this assignment (`POST …/calificacion`). Added by
+   * API-08: an API without it reads as not rated (a repeat rating is harmless, it answers 200).
+   */
+  calificada_por_mi?: boolean;
   /** Shown to the owner once accepted; phone and plate only after acceptance. */
   voluntario: {
     nombres: string;

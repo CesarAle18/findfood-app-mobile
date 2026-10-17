@@ -40,6 +40,12 @@ import {
   formatRating,
   profileFromMe,
 } from "@/domain/mappers/profile";
+import { useCalificarAsignacionMutation } from "@/services/asignaciones";
+import {
+  useAspectosCalificacion,
+  type AspectoCalificacionDto,
+  type RolCalificado,
+} from "@/services/catalogos";
 import { useImpacto } from "@/services/perfil";
 import { AvailabilityToggle } from "@/location/availability-toggle";
 import { useAccess, useMe, useSession } from "@/state/session";
@@ -49,6 +55,7 @@ import { colors, fonts } from "@/design/tokens";
 import { SEND_CODE, SIGN_UP_ORIGIN } from "./auth";
 
 import {
+  isDelivered,
   useDonationDetail,
   useDonationId,
   type DonationDetail,
@@ -637,13 +644,37 @@ function ratedName(dto: DonationDetail["dto"], rater: Rater): string | null {
   return dto.contacto?.nombre ?? null;
 }
 
+/** The role each rater rates, for the aspects catalog. */
+const RATED_ROLE = { DONANTE: "VOLUNTARIO", VOLUNTARIO: "DONANTE" } as const satisfies Record<
+  Rater,
+  RolCalificado
+>;
+
+/** The API takes up to 5 aspects per rating. */
+const MAX_ASPECTS = 5;
+const NO_ASPECTS: AspectoCalificacionDto[] = [];
+
+/** Why the donor cannot send the rating, or null when the API would take it. */
+function ratingBlocker(dto: DonationDetail["dto"]): string | null {
+  if (dto.asignacion?.calificada_por_mi) return "Ya calificaste a este voluntario.";
+  if (!isDelivered(dto.estado)) return "Podrás calificar cuando la donación se entregue en el banco.";
+  return null;
+}
+
+/**
+ * Opened with `?id=` (donation UUID). The donor's rating goes to
+ * `POST /asignaciones/:id/calificacion`; the volunteer's (MOV-46) is not sent yet.
+ */
 export function RatingScreen({ rater = "DONANTE" }: { rater?: Rater }) {
   const [aspects, setAspects] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [rating, setRating] = useState(4);
   const [comment, setComment] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const id = useDonationId();
   const detail = useDonationDetail(id);
+  const { data: aspectOptions = NO_ASPECTS } = useAspectosCalificacion(RATED_ROLE[rater]);
+  const { mutateAsync: calificar, isPending, isSuccess } = useCalificarAsignacionMutation();
   const copy = RATING_COPY[rater];
   if (!id || !detail.data) {
     return (
@@ -661,7 +692,8 @@ export function RatingScreen({ rater = "DONANTE" }: { rater?: Rater }) {
       </Screen>
     );
   }
-  const name = ratedName(detail.data.dto, rater);
+  const { dto, view: donation } = detail.data;
+  const name = ratedName(dto, rater);
   if (!name) {
     return (
       <Screen title={copy.title} back>
@@ -669,7 +701,44 @@ export function RatingScreen({ rater = "DONANTE" }: { rater?: Rater }) {
       </Screen>
     );
   }
-  const donation = detail.data.view;
+  const sends = rater === "DONANTE";
+  const blocker = sends ? ratingBlocker(dto) : null;
+  const done = sends ? isSuccess : submitted;
+  const toggleAspect = (codigo: string) =>
+    setAspects((current) =>
+      current.includes(codigo)
+        ? current.filter((value) => value !== codigo)
+        : current.length >= MAX_ASPECTS
+          ? current
+          : [...current, codigo],
+    );
+  const send = async () => {
+    if (!sends) {
+      setSubmitted(true);
+      return;
+    }
+    const asignacionId = dto.asignacion?.id;
+    if (blocker !== null || !asignacionId) return;
+    setError(null);
+    const comentario = comment.trim();
+    try {
+      // A repeat answers 200 with the first rating, so it reads as success too.
+      await calificar({
+        id: asignacionId,
+        body: {
+          puntaje: rating,
+          ...(comentario ? { comentario } : {}),
+          ...(aspects.length > 0 ? { aspectos: aspects } : {}),
+        },
+      });
+    } catch (failure) {
+      setError(messageFor(failure));
+    }
+  };
+  const back: Href =
+    rater === "VOLUNTARIO"
+      ? { pathname: "/voluntario/registrar-recogida", params: { id: donation.id } }
+      : { pathname: "/donante/detalle-donacion", params: { id: donation.id } };
   return (
     <Screen title={copy.title} subtitle={copy.subtitle} back>
       <Card>
@@ -685,7 +754,10 @@ export function RatingScreen({ rater = "DONANTE" }: { rater?: Rater }) {
               accessibilityRole="radio"
               accessibilityLabel={`${n} estrellas`}
               accessibilityState={{ checked: n === rating }}
-              onPress={() => { setRating(n); if (n === 5) setAspects([]); }}
+              onPress={() => {
+                setRating(n);
+                if (n === 5) setAspects([]);
+              }}
               scale={0.88}
               surface={{ minWidth: 44, minHeight: 48, alignItems: "center", justifyContent: "center" }}
             >
@@ -701,34 +773,58 @@ export function RatingScreen({ rater = "DONANTE" }: { rater?: Rater }) {
           {rating} de 5 estrellas
         </Copy>
       </Section>
-      <Section title="Aspectos a evaluar">
-        {rating === 5 && <Animated.View entering={fadeIn} exiting={fadeOut}><Copy tone="secondary">Con 5 estrellas solo puedes añadir un comentario.</Copy></Animated.View>}
-        <Row style={{ flexWrap: "wrap" }}>
-          {[
-            "Puntualidad",
-            "Amabilidad",
-            "Cuidado",
-            "Comunicación",
-            "Presentación",
-          ].map((t) => (
-            <Chip key={t} label={t} role="checkbox" selected={aspects.includes(t)} disabled={rating === 5} onPress={() => setAspects(current => current.includes(t) ? current.filter(v => v !== t) : [...current, t])} style={{ minHeight: 44, paddingVertical: 12 }} />
-          ))}
-        </Row>
-      </Section>
+      {aspectOptions.length > 0 ? (
+        <Section title="Aspectos a evaluar">
+          {rating === 5 ? (
+            <Animated.View entering={fadeIn} exiting={fadeOut}>
+              <Copy tone="secondary">Con 5 estrellas solo puedes añadir un comentario.</Copy>
+            </Animated.View>
+          ) : null}
+          <Row style={{ flexWrap: "wrap" }}>
+            {aspectOptions.map(({ codigo, nombre }) => {
+              const selected = aspects.includes(codigo);
+              return (
+                <Chip
+                  key={codigo}
+                  label={nombre}
+                  role="checkbox"
+                  selected={selected}
+                  disabled={rating === 5 || (!selected && aspects.length >= MAX_ASPECTS)}
+                  onPress={() => toggleAspect(codigo)}
+                  style={{ minHeight: 44, paddingVertical: 12 }}
+                />
+              );
+            })}
+          </Row>
+        </Section>
+      ) : null}
       <Field
         label="Comentario adicional"
         value={comment}
         onChangeText={setComment}
         placeholder="Ej. Fue muy puntual y cuidadoso con la entrega."
         multiline
+        maxLength={1000}
       />
-      {submitted ? <Animated.View entering={enterItem} layout={itemLayout} style={{ gap: 24 }}>
-        {/* Nothing is stored yet: the rating is only sent once the TODO(F3) below lands. */}
-        <Copy tone="primary">El envío de calificaciones estará disponible próximamente.</Copy>
-        <NavButton href={rater === "VOLUNTARIO" ? { pathname: "/voluntario/registrar-recogida", params: { id: donation.id } } : { pathname: "/donante/detalle-donacion", params: { id: donation.id } }} dismissTo showArrow={false}>{rater === "VOLUNTARIO" ? "Volver a recogida" : "Volver al detalle de donación"}</NavButton>
-      </Animated.View> : (
-        // TODO(F3): send it with useCalificarAsignacionMutation (POST /asignaciones/:id/calificacion).
-        <Pressing accessibilityRole="button" onPress={() => setSubmitted(true)} surface={{ minHeight: 52, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}><Copy style={{ color: colors.surface }} weight="bold">Enviar calificación</Copy></Pressing>
+      {done ? (
+        <Animated.View entering={enterItem} layout={itemLayout} style={{ gap: 24 }}>
+          <Copy tone="primary">
+            {sends
+              ? "¡Gracias! Registramos tu calificación."
+              : "El envío de calificaciones estará disponible próximamente."}
+          </Copy>
+          <NavButton href={back} dismissTo showArrow={false}>
+            {rater === "VOLUNTARIO" ? "Volver a recogida" : "Volver al detalle de donación"}
+          </NavButton>
+        </Animated.View>
+      ) : (
+        <>
+          <FormMessage message={error ?? undefined} />
+          <FormMessage message={blocker ?? undefined} tone="info" />
+          <Button loading={isPending} disabled={blocker !== null} onPress={() => void send()}>
+            Enviar calificación
+          </Button>
+        </>
       )}
       <Copy tone="secondary">
         Tu opinión ayuda a mejorar futuras asignaciones.

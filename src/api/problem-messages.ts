@@ -71,7 +71,8 @@ const ASSIGNMENT_MESSAGES = {
   "asignacion-no-aceptada": "La asignación todavía no ha sido aceptada.",
   "asignacion-no-completada": "La asignación todavía no se ha completado.",
   "sin-voluntario": "Esta donación todavía no tiene un voluntario asignado.",
-  "ya-calificada": "Ya registraste una calificación para esta entrega.",
+  // A repeat rating answers 200 with the original one, so `ya-calificada` no longer exists.
+  "aspecto-invalido": "Alguno de los aspectos elegidos ya no está disponible. Revísalos e inténtalo de nuevo.",
 };
 
 const ROUTING_MESSAGES = {
