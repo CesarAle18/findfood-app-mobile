@@ -11,7 +11,6 @@
  */
 import type { Session } from "@supabase/supabase-js";
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as SecureStore from "expo-secure-store";
 import {
   createContext,
   use,
@@ -24,7 +23,6 @@ import {
   type Context,
   type PropsWithChildren,
 } from "react";
-import { Platform } from "react-native";
 
 import { api } from "@/api";
 import { startupQueryOptions } from "@/api/query-client";
@@ -42,14 +40,14 @@ import { env } from "@/config/env";
 import { stopLocationTracking } from "@/location/tracking";
 import { queryKeys } from "@/services/query-keys";
 
+import { deleteItem, deviceIdStorage, readItem, writeItem } from "./device-storage";
+
 const ACTIVE_ROLE_KEY = "findfood.activeRole";
 /**
  * Set while a password reset link's session exists without the new password: it survives a
  * restart, so a cold start with that session opens the reset screen, never the app.
  */
 const RECOVERING_KEY = "findfood.recovering";
-/** Written by the push registration (see deviceIdStorage); unregistered on sign-out. */
-const DEVICE_ID_KEY = "findfood.deviceId";
 const DEVICE_UNREGISTER_TIMEOUT_MS = 3_000;
 const LOCATION_STOP_TIMEOUT_MS = 2_000;
 
@@ -95,50 +93,6 @@ const selectEmail = () => sessionStore.getSnapshot().email;
 function useSessionStatus(): SessionStatus {
   return useSyncExternalStore(sessionStore.subscribe, selectStatus, selectStatus);
 }
-
-// Small device-local values. SecureStore has no web implementation: the web preview keeps
-// nothing. Failures are ignored; these are preferences, never the session itself.
-async function readItem(key: string): Promise<string | null> {
-  if (Platform.OS === "web") return null;
-  try {
-    return await SecureStore.getItemAsync(key);
-  } catch {
-    return null;
-  }
-}
-
-async function writeItem(key: string, value: string): Promise<void> {
-  if (Platform.OS === "web") return;
-  try {
-    await SecureStore.setItemAsync(key, value);
-  } catch {
-    // See above.
-  }
-}
-
-async function deleteItem(key: string): Promise<void> {
-  if (Platform.OS === "web") return;
-  try {
-    await SecureStore.deleteItemAsync(key);
-  } catch {
-    // See above.
-  }
-}
-
-/**
- * Id of this install's push registration (`POST /me/dispositivos`), kept so sign-out can
- * unregister it. Written by `@/services/perfil`. `read` and `clear` never reject; `save`
- * does, because a lost id would leave the device registered after sign-out and the caller
- * has to roll the registration back.
- */
-export const deviceIdStorage = {
-  read: (): Promise<string | null> => readItem(DEVICE_ID_KEY),
-  save: async (id: string): Promise<void> => {
-    if (Platform.OS === "web") return;
-    await SecureStore.setItemAsync(DEVICE_ID_KEY, id);
-  },
-  clear: (): Promise<void> => deleteItem(DEVICE_ID_KEY),
-};
 
 function toSnapshot(session: Session | null): SessionSnapshot {
   if (!session) return SIGNED_OUT;

@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react-native";
 import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import type { PropsWithChildren } from "react";
+import { Platform } from "react-native";
 
 import { api } from "@/api";
 import { queryKeys } from "@/services/query-keys";
@@ -187,6 +188,24 @@ describe("useNotificationResponses", () => {
     await tap(coldStart);
 
     expect(push).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips the cold-start read on web, where the module does not offer it", async () => {
+    const os = jest.replaceProperty(Platform, "OS", "web");
+    mocked.getLastNotificationResponse.mockClear().mockImplementation(() => {
+      throw new Error("ExpoNotifications.getLastNotificationResponse is not available on web");
+    });
+    mockAccess.phase = "app";
+    try {
+      await renderResponses();
+
+      expect(mocked.getLastNotificationResponse).not.toHaveBeenCalled();
+      // Taps while the page runs still open their screen.
+      await tap(response(OFFER_DATA));
+      expect(push).toHaveBeenCalledTimes(1);
+    } finally {
+      os.restore();
+    }
   });
 
   it("ignores action buttons", async () => {

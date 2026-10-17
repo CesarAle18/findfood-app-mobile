@@ -74,6 +74,45 @@ describe("app.config.ts", () => {
   });
 });
 
+describe("app.config.ts Google Maps", () => {
+  const KEYS = ["GOOGLE_MAPS_ANDROID_API_KEY", "GOOGLE_MAPS_IOS_API_KEY"] as const;
+  const original = Object.fromEntries(KEYS.map((name) => [name, process.env[name]]));
+
+  function resolveWith(keys: Partial<Record<(typeof KEYS)[number], string>>) {
+    for (const name of KEYS) {
+      if (keys[name] === undefined) delete process.env[name];
+      else process.env[name] = keys[name];
+    }
+    const context = { config: structuredClone(appJson.expo) } as unknown as ConfigContext;
+    return appConfig(context);
+  }
+
+  afterEach(() => {
+    for (const name of KEYS) {
+      if (original[name] === undefined) delete process.env[name];
+      else process.env[name] = original[name];
+    }
+  });
+
+  it("adds the maps plugin and tells the app which platforms have a key, not the key", () => {
+    const config = resolveWith({ GOOGLE_MAPS_ANDROID_API_KEY: " android-key " });
+
+    expect(config.plugins).toContainEqual([
+      "react-native-maps",
+      { androidGoogleMapsApiKey: "android-key", iosGoogleMapsApiKey: undefined },
+    ]);
+    expect(config.extra?.googleMaps).toEqual({ android: true, ios: false });
+    expect(JSON.stringify(config.extra)).not.toContain("android-key");
+  });
+
+  it("leaves the plugin and the flag out without keys, so the app shows a placeholder", () => {
+    const config = resolveWith({ GOOGLE_MAPS_ANDROID_API_KEY: " " });
+
+    expect(JSON.stringify(config.plugins)).not.toContain("react-native-maps");
+    expect(config.extra?.googleMaps).toBeUndefined();
+  });
+});
+
 describe("eas.json", () => {
   it("builds an installable development APK with the dev client", () => {
     expect(profiles.development).toMatchObject({

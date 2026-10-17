@@ -14,7 +14,8 @@
  * Google Maps keys come from GOOGLE_MAPS_ANDROID_API_KEY / GOOGLE_MAPS_IOS_API_KEY. They are
  * not EXPO_PUBLIC_: the plugin writes them into the native project (AndroidManifest and
  * Info.plist), never into the JavaScript bundle. Restrict each key to its platform and app
- * identifier in Google Cloud.
+ * identifier in Google Cloud. Only `extra.googleMaps` ({ android, ios } booleans) tells the
+ * app which platforms have one.
  *
  * EAS_PROJECT_ID fills `extra.eas.projectId` (used by expo-notifications for push tokens)
  * when `eas init` has not written it to app.json.
@@ -49,15 +50,19 @@ function googleSignInPlugins(): Plugins {
   return [[GOOGLE_SIGN_IN_PLUGIN, { iosUrlScheme: googleIosUrlScheme(iosClientId) }]];
 }
 
-function mapsPlugins(): Plugins {
-  const androidGoogleMapsApiKey = buildVariable("GOOGLE_MAPS_ANDROID_API_KEY");
-  const iosGoogleMapsApiKey = buildVariable("GOOGLE_MAPS_IOS_API_KEY");
-  if (!androidGoogleMapsApiKey && !iosGoogleMapsApiKey) return [];
-  return [[MAPS_PLUGIN, { androidGoogleMapsApiKey, iosGoogleMapsApiKey }]];
+type MapsKeys = { android?: string; ios?: string };
+
+function mapsPlugins({ android, ios }: MapsKeys): Plugins {
+  if (!android && !ios) return [];
+  return [[MAPS_PLUGIN, { androidGoogleMapsApiKey: android, iosGoogleMapsApiKey: ios }]];
 }
 
 export default function appConfig({ config }: ConfigContext): Partial<ExpoConfig> {
-  const extraPlugins = [...googleSignInPlugins(), ...mapsPlugins()];
+  const mapsKeys: MapsKeys = {
+    android: buildVariable("GOOGLE_MAPS_ANDROID_API_KEY"),
+    ios: buildVariable("GOOGLE_MAPS_IOS_API_KEY"),
+  };
+  const extraPlugins = [...googleSignInPlugins(), ...mapsPlugins(mapsKeys)];
   const easProjectId = buildVariable("EAS_PROJECT_ID");
   if (extraPlugins.length === 0 && !easProjectId) return config;
 
@@ -65,11 +70,13 @@ export default function appConfig({ config }: ConfigContext): Partial<ExpoConfig
     ...config,
     plugins: [...(config.plugins ?? []), ...extraPlugins],
   };
-  if (easProjectId) {
-    resolved.extra = {
-      ...config.extra,
-      eas: { ...config.extra?.eas, projectId: easProjectId },
-    };
+  const extra = { ...config.extra };
+  if (easProjectId) extra.eas = { ...config.extra?.eas, projectId: easProjectId };
+  // Whether each platform got a key, never the key itself: without one the Maps SDK aborts
+  // the app natively, so the app shows a placeholder instead (`@/config/maps`).
+  if (mapsKeys.android || mapsKeys.ios) {
+    extra.googleMaps = { android: !!mapsKeys.android, ios: !!mapsKeys.ios };
   }
+  if (Object.keys(extra).length > 0) resolved.extra = extra;
   return resolved;
 }

@@ -9,6 +9,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as Notifications from "expo-notifications";
 import { useEffect, useRef, useState } from "react";
+import { Platform } from "react-native";
 
 import { marcarNotificacionLeida } from "@/services/notificaciones";
 import { queryKeys } from "@/services/query-keys";
@@ -92,9 +93,12 @@ export function useNotificationResponses(navigatorReady: boolean): void {
     mutationFn: (id: string) => marcarNotificacionLeida(id),
     onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.notificaciones.all }),
   });
-  // The cold-start tap, read once; later taps arrive through the listener.
+  // The cold-start tap, read once; later taps arrive through the listener. Web has no
+  // cold-start tap, and the module throws there instead of answering null.
   const [pending, setPending] = useState(() =>
-    claim(pendingFromResponse(Notifications.getLastNotificationResponse())),
+    Platform.OS === "web"
+      ? null
+      : claim(pendingFromResponse(Notifications.getLastNotificationResponse())),
   );
   const openedKey = useRef<string | null>(null);
 

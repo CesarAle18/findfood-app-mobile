@@ -1,13 +1,13 @@
 import { useMemo, useRef } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import type MapView from "react-native-maps";
-import { Marker, Polyline } from "react-native-maps";
 
 import { colors, fonts } from "@/design/tokens";
 import { lineStringToLatLngs, regionForPoints, toLatLng } from "@/domain/mappers/geo";
 import type { GeometriaRutaDto, ParadaRutaDto } from "@/services/rutas";
 
 import { FindFoodMap } from "./find-food-map";
+import { Marker, Polyline } from "./maps";
 
 export type RouteStop = Pick<ParadaRutaDto, "id" | "orden" | "direccion" | "lat" | "lng">;
 

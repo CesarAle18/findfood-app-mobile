@@ -1,10 +1,10 @@
 import { useMemo } from "react";
-import { Marker } from "react-native-maps";
 
 import type { Coordenada } from "@/api/types";
 import { regionForPoints, toLatLng } from "@/domain/mappers/geo";
 
 import { FindFoodMap } from "./find-food-map";
+import { Marker } from "./maps";
 
 /** A static preview of one point (the pickup), for detail screens. */
 export function PointMap({

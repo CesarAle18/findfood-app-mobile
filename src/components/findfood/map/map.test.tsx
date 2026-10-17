@@ -1,11 +1,15 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import * as Location from "expo-location";
 
+import { hasGoogleMapsKey } from "@/config/maps";
 import type { GeometriaRutaDto } from "@/services/rutas";
 
 import { LocationPicker } from "./location-picker";
 import { PointMap } from "./point-map";
 import { RouteMapView, type RouteStop } from "./route-map-view";
+
+// A build with the Maps key of its platform, unless a test says otherwise.
+jest.mock("@/config/maps", () => ({ hasGoogleMapsKey: jest.fn(() => true) }));
 
 const permission = (granted: boolean, canAskAgain: boolean) => ({
   status: granted ? "granted" : "denied",
@@ -30,6 +34,7 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.mocked(Location.useForegroundPermissions).mockImplementation(defaultHook);
+  jest.mocked(hasGoogleMapsKey).mockReturnValue(true);
 });
 
 const region = { latitude: 4.7, longitude: -74.1, latitudeDelta: 0.01, longitudeDelta: 0.01 };
@@ -150,5 +155,19 @@ describe("PointMap", () => {
     expect(map.props.scrollEnabled).toBe(false);
     expect(map.props.liteMode).toBe(true);
     expect(map.props.region).toMatchObject({ latitude: 4.65, longitude: -74.06 });
+  });
+});
+
+describe("without a Maps key in the build", () => {
+  it("shows a placeholder instead of the map, which would abort the app", async () => {
+    jest.mocked(hasGoogleMapsKey).mockReturnValue(false);
+    await render(<PointMap point={{ lat: 4.65, lng: -74.06 }} title="Punto de recogida" />);
+
+    const placeholder = screen.getByTestId("point-map");
+    expect(placeholder.props.accessibilityLabel).toBe("Mapa: Punto de recogida");
+    expect(placeholder.props.region).toBeUndefined();
+    expect(
+      screen.getByText("El mapa no está disponible en esta versión de la app."),
+    ).toBeTruthy();
   });
 });

@@ -1,8 +1,11 @@
 import type { Ref } from "react";
-import { StyleSheet, View } from "react-native";
-import MapView, { PROVIDER_GOOGLE, type MapViewProps } from "react-native-maps";
+import { Platform, StyleSheet, View } from "react-native";
 
+import { hasGoogleMapsKey } from "@/config/maps";
 import { colors } from "@/design/tokens";
+
+import { MapPlaceholder } from "./map-placeholder";
+import { MapView, PROVIDER_GOOGLE, type MapViewProps } from "./maps";
 
 export type FindFoodMapProps = Omit<MapViewProps, "provider" | "style"> & {
   ref?: Ref<MapView>;
@@ -17,7 +20,9 @@ export type FindFoodMapProps = Omit<MapViewProps, "provider" | "style"> & {
 
 /**
  * Google Maps on both platforms, with the app's card shape. One per screen, never inside a
- * list item. Needs the Google Maps keys of the `react-native-maps` config plugin on device.
+ * list item. Needs the Google Maps keys of the `react-native-maps` config plugin on device:
+ * a build without the key of its platform shows a placeholder, since the SDK would abort the
+ * app. The map's ref then stays null.
  */
 export function FindFoodMap({
   ref,
@@ -34,6 +39,18 @@ export function FindFoodMap({
         rotateEnabled: false,
         pitchEnabled: false,
       };
+  if (Platform.OS !== "web" && !hasGoogleMapsKey()) {
+    return (
+      <View style={[styles.frame, { height }]}>
+        <MapPlaceholder
+          message="El mapa no está disponible en esta versión de la app."
+          testID={props.testID}
+          accessibilityLabel={props.accessibilityLabel}
+          style={StyleSheet.absoluteFill}
+        />
+      </View>
+    );
+  }
   return (
     <View
       style={[styles.frame, { height }]}
