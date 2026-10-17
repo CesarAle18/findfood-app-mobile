@@ -46,12 +46,24 @@ const DELIVERED_STATES: ReadonlySet<EstadoDonacion> = new Set<EstadoDonacion>([
 export const isTracking = (estado: EstadoDonacion) => TRACKING_STATES.has(estado);
 export const isDelivered = (estado: EstadoDonacion) => DELIVERED_STATES.has(estado);
 
+/**
+ * The tabs of Mis donaciones: En seguimiento = PUBLICADA…EN_TRANSITO, Entregadas =
+ * ENTREGADA/RECIBIDA, Todas = every state (drafts, cancelled, expired… included).
+ */
 export type DonationFilter = "todas" | "seguimiento" | "entregadas";
 
 export function matchesFilter(estado: EstadoDonacion, filter: DonationFilter): boolean {
   if (filter === "seguimiento") return isTracking(estado);
   if (filter === "entregadas") return isDelivered(estado);
   return true;
+}
+
+/**
+ * The loaded rows a tab shows. `GET /donaciones` filters by one `estado` only, so the tabs
+ * filter the loaded pages here; Todas keeps the same array (stable list data).
+ */
+export function filterDonations(rows: DonationView[], filter: DonationFilter): DonationView[] {
+  return filter === "todas" ? rows : rows.filter((row) => matchesFilter(row.estado, filter));
 }
 
 export interface DonationPages {

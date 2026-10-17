@@ -5,6 +5,7 @@ import { DONATION_ID, detalleFixture, pageFixture, resumenFixture } from "@/test
 import {
   PUBLISHED_POLL_MS,
   canCancel,
+  filterDonations,
   formatInstant,
   formatTimeOfDay,
   matchesFilter,
@@ -45,6 +46,34 @@ describe("matchesFilter", () => {
     expect(matchesFilter(estado, "todas")).toBe(true);
     expect(matchesFilter(estado, "seguimiento")).toBe(tracking);
     expect(matchesFilter(estado, "entregadas")).toBe(delivered);
+  });
+});
+
+describe("filterDonations", () => {
+  const rows = selectPages({
+    pages: [
+      pageFixture([
+        resumenFixture({ id: "a", codigo: "DON-1", estado: "PUBLICADA" }),
+        resumenFixture({ id: "b", codigo: "DON-2", estado: "RECIBIDA" }),
+        resumenFixture({ id: "c", codigo: "DON-3", estado: "CANCELADA" }),
+      ]),
+      pageFixture([
+        resumenFixture({ id: "d", codigo: "DON-4", estado: "EN_TRANSITO" }),
+        resumenFixture({ id: "e", codigo: "DON-5", estado: "ENTREGADA" }),
+      ]),
+    ],
+    pageParams: [0, 20],
+  }).rows;
+  const ids = (filter: Parameters<typeof filterDonations>[1]) =>
+    filterDonations(rows, filter).map((row) => row.id);
+
+  it("keeps every loaded row under Todas, as the same array", () => {
+    expect(filterDonations(rows, "todas")).toBe(rows);
+  });
+
+  it("filters the loaded pages by state on the client", () => {
+    expect(ids("seguimiento")).toEqual(["a", "d"]);
+    expect(ids("entregadas")).toEqual(["b", "e"]);
   });
 });
 

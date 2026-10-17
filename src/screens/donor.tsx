@@ -1,7 +1,7 @@
 import { FlashList, type ListRenderItemInfo } from "@shopify/flash-list";
 import { Image } from "expo-image";
 import { router, type Href } from "expo-router";
-import { memo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 import { isApiError } from "@/api/errors";
@@ -54,10 +54,10 @@ import { useMobile } from "@/state/mobile-context";
 import { useMe } from "@/state/session";
 
 import {
+  filterDonations,
   formatInstant,
   isDelivered,
   isTracking,
-  matchesFilter,
   useDonationDetail,
   useDonationId,
   useDonationPages,
@@ -226,6 +226,12 @@ export function DonationsScreen() {
   const [filter, setFilter] = useState(0);
   const filterValue = FILTERS[filter].value;
   const total = pages.data?.total;
+  // Memoized so FlashList keeps the same data while nothing changed.
+  const rows = pages.data?.rows;
+  const visible = useMemo(
+    () => (rows ? filterDonations(rows, filterValue) : []),
+    [rows, filterValue],
+  );
   const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = pages;
   const loadMore = () => {
     if (hasNextPage && !isFetchingNextPage && !isFetchNextPageError) void fetchNextPage();
@@ -268,7 +274,7 @@ export function DonationsScreen() {
             <>
               <Choices values={FILTER_LABELS} selected={filter} onChange={setFilter} />
               <FlashList
-                data={rows.filter((d) => matchesFilter(d.estado, filterValue))}
+                data={visible}
                 renderItem={renderDonation}
                 keyExtractor={keyExtractor}
                 ItemSeparatorComponent={ItemSeparator}
