@@ -6,11 +6,16 @@ import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Slot, useLocalSearchParams } from "expo-router";
 import { fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
+import * as Location from "expo-location";
 import { Text } from "react-native";
 
 import { api } from "@/api";
 import { ApiError } from "@/api/errors";
-import { initialDonationDraft, type DonationDraft } from "@/domain/donation-draft";
+import {
+  initialDonationDraft,
+  PICKUP_POINT_REQUIRED,
+  type DonationDraft,
+} from "@/domain/donation-draft";
 import { NewDonationScreen } from "@/screens/donations";
 import { ReviewDonationScreen } from "@/screens/donor";
 import { MobileProvider } from "@/state/mobile-context";
@@ -112,7 +117,7 @@ describe("NewDonationScreen", () => {
       screen.getByText("Ingresa una cantidad mayor que 0, con máximo 2 decimales."),
     ).toBeOnTheScreen();
     expect(screen.getByText("Ingresa una dirección de al menos 5 caracteres.")).toBeOnTheScreen();
-    expect(screen.getByText("Elige el punto de recogida en el mapa.")).toBeOnTheScreen();
+    expect(screen.getByText(PICKUP_POINT_REQUIRED)).toBeOnTheScreen();
     expect(screen.getByText("Revisa los campos marcados antes de continuar.")).toBeOnTheScreen();
     expect(screen.queryByText("Revisión")).toBeNull();
   });
@@ -135,6 +140,21 @@ describe("NewDonationScreen", () => {
     await fireEvent.press(screen.getByText("Continuar"));
 
     expect(await screen.findByText("Revisión")).toBeOnTheScreen();
+  });
+
+  it("locates the typed address as the pickup point, and drops it when the address changes", async () => {
+    jest.spyOn(Location, "geocodeAsync").mockResolvedValue([{ latitude: 4.61, longitude: -74.07 }]);
+    await renderScreen(NewDonationScreen, { ...readyDraft, ubicacionRecogida: null });
+
+    await fireEvent.press(await screen.findByText("Ubicar dirección"));
+    expect(await screen.findByText(/Punto elegido/)).toBeOnTheScreen();
+
+    await fireEvent.changeText(screen.getByDisplayValue("Cra 45 #12-30"), "Cra 45 #12-31");
+    expect(screen.queryByText(/Punto elegido/)).toBeNull();
+
+    await fireEvent.press(screen.getByText("Continuar"));
+    expect(screen.getByText(PICKUP_POINT_REQUIRED)).toBeOnTheScreen();
+    expect(screen.queryByText("Revisión")).toBeNull();
   });
 });
 

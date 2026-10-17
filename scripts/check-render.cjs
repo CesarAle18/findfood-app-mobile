@@ -201,8 +201,9 @@ Module._load = function (name, parent, isMain) {
         cerrarSesion: async () => {},
         setRecovering() {},
       }),
-      deviceIdStorage: {},
     };
+  // SecureStore has no Node build; the push registration only writes from handlers.
+  if (name === "@/state/device-storage") return { deviceIdStorage: {} };
   if (name === "@/state/mobile-context")
     return {
       useMobile: () => ({
@@ -458,7 +459,7 @@ try {
   // The typed address and the map live side by side; nothing is picked yet.
   assert(newHtml.includes("Dirección de recogida"));
   assert(newHtml.includes("Mapa para elegir el punto de recogida"));
-  assert(newHtml.includes("Mueve el mapa hasta tu punto de recogida"));
+  assert(newHtml.includes("Ubica la dirección escrita, usa tu ubicación o mueve el mapa"));
   assert(newHtml.includes("Añadir otro producto"));
   const reviewHtml = renderToStaticMarkup(
     React.createElement(ReviewDonationScreen),

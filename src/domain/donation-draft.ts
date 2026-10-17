@@ -50,8 +50,13 @@ export interface DonationDraft {
   direccion: string;
   /** Optional landmark for the volunteer ("Portería norte"). */
   referencia: string;
-  /** The point picked on the map; null until the donor moves it or uses their location. */
+  /**
+   * The pickup point: located from the typed address, the device position or the map. Null
+   * until one of them answers; a typed address is no location by itself.
+   */
   ubicacionRecogida: Coordenada | null;
+  /** The address text the point was located from, or null when it came from the device or map. */
+  direccionUbicada: string | null;
 }
 
 function blankProduct(id: number): DraftProduct {
@@ -80,6 +85,7 @@ export const initialDonationDraft: DonationDraft = {
   direccion: "",
   referencia: "",
   ubicacionRecogida: null,
+  direccionUbicada: null,
 };
 /** A fresh draft that picks up today (Bogotá). */
 export function newDonationDraft(now: number = Date.now()): DonationDraft {
@@ -169,6 +175,34 @@ export function draftPickupBody(draft: DonationDraft): PickupBody | null {
   };
 }
 
+/** Where a pickup point came from (see `LocationPicker`). */
+export type PickupPointSource = "address" | "device" | "map";
+
+/** Sets the pickup point, remembering the address it was located from (if any). */
+export function setUbicacion(
+  draft: DonationDraft,
+  point: Coordenada,
+  source: PickupPointSource,
+): DonationDraft {
+  return {
+    ...draft,
+    ubicacionRecogida: point,
+    direccionUbicada: source === "address" ? draft.direccion.trim() : null,
+  };
+}
+
+/**
+ * Applies a typed address. A point located from a different address text no longer matches
+ * it and is dropped; a point from the device or the map stays.
+ */
+export function setDireccion(draft: DonationDraft, direccion: string): DonationDraft {
+  const located = draft.direccionUbicada;
+  if (located !== null && direccion.trim() !== located) {
+    return { ...draft, direccion, ubicacionRecogida: null, direccionUbicada: null };
+  }
+  return { ...draft, direccion };
+}
+
 /** Applies an address suggested by the map only while the donor has not typed one. */
 export function suggestDireccion(draft: DonationDraft, suggestion: string): DonationDraft {
   if (draft.direccion.trim() !== "") return draft;
@@ -176,6 +210,10 @@ export function suggestDireccion(draft: DonationDraft, suggestion: string): Dona
 }
 
 // --- Submission ---------------------------------------------------------------------------
+
+/** Shown until the donor locates the address, uses their location or moves the map. */
+export const PICKUP_POINT_REQUIRED =
+  "Ubica la dirección, usa tu ubicación o mueve el mapa para elegir el punto de recogida.";
 
 /** `items` bounds of `POST /donaciones`. */
 const MAX_PRODUCTS = 30;
@@ -303,7 +341,7 @@ function draftSchema(now: number) {
       ubicacionRecogida: z
         .object({ lat: z.number(), lng: z.number() })
         .nullable()
-        .refine((point) => point !== null, "Elige el punto de recogida en el mapa."),
+        .refine((point) => point !== null, PICKUP_POINT_REQUIRED),
     })
     .superRefine((draft, ctx) => {
       if (!isDate(draft.pickupDate)) return;

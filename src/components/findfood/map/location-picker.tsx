@@ -1,10 +1,11 @@
 import * as Location from "expo-location";
 import { useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import type MapView from "react-native-maps";
 import type { Details, Region } from "react-native-maps";
 
 import type { Coordenada } from "@/api/types";
+import type { PickupPointSource } from "@/domain/donation-draft";
 import {
   formatGeocodedAddress,
   fromLatLng,
@@ -12,6 +13,7 @@ import {
   toLatLng,
   type LatLng,
 } from "@/domain/mappers/geo";
+import { geocodeAddress } from "@/location/geocode";
 import { usePermissionGate, type PermissionGate } from "@/platform/permissions";
 
 import { Icon } from "../icon";
@@ -28,16 +30,23 @@ const PIN_SIZE = 40;
  *
  * `onAddressSuggestion` reverse-geocodes the chosen point; pass it only while the address
  * field is empty, and apply it without overwriting typed text (`suggestDireccion`).
+ *
+ * With `address`, "Ubicar dirección" locates that text with the phone geocoder (no Maps key
+ * needed; not on web, which has none). A failed lookup only explains itself: it never emits
+ * a guessed point. `onChange` says where each point came from.
  */
 export function LocationPicker({
   value,
   onChange,
   onAddressSuggestion,
+  address,
   height = 260,
 }: {
   value: Coordenada | null;
-  onChange: (point: Coordenada) => void;
+  onChange: (point: Coordenada, source: PickupPointSource) => void;
   onAddressSuggestion?: (address: string) => void;
+  /** The typed address "Ubicar dirección" locates; the button is hidden without it. */
+  address?: string;
   height?: number;
 }) {
   const mapRef = useRef<MapView>(null);
@@ -45,6 +54,7 @@ export function LocationPicker({
   const [initialRegion] = useState(() => regionForPoints(value ? [toLatLng(value)] : []));
   const regionRef = useRef<Region>(initialRegion);
   const [locating, setLocating] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { gate, request } = usePermissionGate(Location.useForegroundPermissions);
 
@@ -65,7 +75,7 @@ export function LocationPicker({
     // Google Maps reports the initial layout and our own animations as non-gestures; the
     // donor only chose a point when they moved the map (or used their location below).
     if (details?.isGesture === false) return;
-    onChange(fromLatLng(region));
+    onChange(fromLatLng(region), "map");
     void suggestAddress(region, gate);
   };
 
@@ -82,7 +92,7 @@ export function LocationPicker({
       const region = { ...regionRef.current, ...point };
       regionRef.current = region;
       mapRef.current?.animateToRegion(region, 400);
-      onChange(fromLatLng(point));
+      onChange(fromLatLng(point), "device");
       await suggestAddress(point, current);
     } catch {
       setError("No pudimos obtener tu ubicación. Mueve el mapa hasta tu punto de recogida.");
@@ -90,6 +100,36 @@ export function LocationPicker({
       setLocating(false);
     }
   };
+
+  const locateAddress = async () => {
+    setError(null);
+    if (!address?.trim()) {
+      setError("Escribe la dirección de recogida para ubicarla.");
+      return;
+    }
+    // Android geocodes only with the location permission.
+    if (Platform.OS === "android" && gate !== "granted" && (await request()) !== "granted") {
+      setError("Permite el acceso a tu ubicación para ubicar la dirección, o mueve el mapa.");
+      return;
+    }
+    setGeocoding(true);
+    try {
+      const point = await geocodeAddress(address);
+      if (!point) {
+        setError(
+          "No pudimos ubicar esa dirección. Revísala, usa tu ubicación o mueve el mapa hasta tu punto de recogida.",
+        );
+        return;
+      }
+      const region = { ...regionRef.current, ...toLatLng(point) };
+      regionRef.current = region;
+      mapRef.current?.animateToRegion(region, 400);
+      onChange(point, "address");
+    } finally {
+      setGeocoding(false);
+    }
+  };
+  const canGeocode = address !== undefined && Platform.OS !== "web";
 
   return (
     <Stack gap={12}>
@@ -110,6 +150,11 @@ export function LocationPicker({
           </View>
         </View>
       </View>
+      {canGeocode ? (
+        <Button variant="outline" icon="search" loading={geocoding} onPress={locateAddress}>
+          Ubicar dirección
+        </Button>
+      ) : null}
       <Button variant="outline" icon="pin" loading={locating} onPress={locateMe}>
         Usar mi ubicación
       </Button>

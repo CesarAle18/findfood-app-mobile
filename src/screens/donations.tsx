@@ -45,6 +45,8 @@ import {
   foodTypeOptions,
   productErrorKey,
   removeProduct,
+  setDireccion,
+  setUbicacion,
   suggestDireccion,
   unitOptions,
   validateDraft,
@@ -284,9 +286,7 @@ export function NewDonationScreen() {
           value={draft.direccion}
           placeholder="Ej. Calle 76 #15-20, Bogotá"
           maxLength={255}
-          onChangeText={(direccion) =>
-            setDraft((current) => ({ ...current, direccion }))
-          }
+          onChangeText={(direccion) => setDraft((current) => setDireccion(current, direccion))}
           error={errors?.direccion}
         />
         <Field
@@ -300,9 +300,8 @@ export function NewDonationScreen() {
         />
         <LocationPicker
           value={draft.ubicacionRecogida}
-          onChange={(ubicacionRecogida) =>
-            setDraft((current) => ({ ...current, ubicacionRecogida }))
-          }
+          address={draft.direccion}
+          onChange={(point, source) => setDraft((current) => setUbicacion(current, point, source))}
           // Only while the address is empty: a typed address is never replaced.
           onAddressSuggestion={
             draft.direccion.trim() === ""
@@ -317,7 +316,7 @@ export function NewDonationScreen() {
               <Copy>
                 {draft.ubicacionRecogida
                   ? `Punto elegido: ${formatCoordenada(draft.ubicacionRecogida)}`
-                  : "Mueve el mapa hasta tu punto de recogida o usa tu ubicación."}
+                  : "Ubica la dirección escrita, usa tu ubicación o mueve el mapa hasta tu punto de recogida."}
               </Copy>
               <Copy tone="secondary">
                 Este punto de recogida se compartirá entre todos los productos.

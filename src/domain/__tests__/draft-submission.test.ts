@@ -2,6 +2,7 @@ import {
   initialDonationDraft,
   newDonationDraft,
   parseQuantity,
+  PICKUP_POINT_REQUIRED,
   productErrorKey,
   toCrearDonacionBody,
   validateDraft,
@@ -211,7 +212,7 @@ describe("validateDraft", () => {
     expect(errors).toMatchObject({
       pickupDate: "Selecciona la fecha de recogida.",
       direccion: "Ingresa una dirección de al menos 5 caracteres.",
-      ubicacionRecogida: "Elige el punto de recogida en el mapa.",
+      ubicacionRecogida: PICKUP_POINT_REQUIRED,
     });
   });
 });
