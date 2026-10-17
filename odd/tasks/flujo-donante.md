@@ -38,8 +38,8 @@ Mobile: `npm run typecheck` · `npm run lint` · `npm test` · `npm run test:ren
 |---|---|---|---|---|---|
 | T0 | Feature document | inline | [x] | (this commit) | passive |
 | A1 | API-08 rating aspects (findfood-api) | delegated writer (2+ non-trivial files) | [ ] | | |
-| M1 | MOV-30 Nueva donación: draft → create body, validation, photos, date | delegated writer | [ ] | | |
-| M2 | MOV-31 Revisar: POST/PATCH + publicar, errors, thumbnails | delegated writer | [ ] | | |
+| M1 | MOV-30 Nueva donación: draft → create body, validation, photos, date | delegated writer | [x] | `2ceb525` | RDD unavailable (gentle-ai not executable); writer: typecheck 0 errors, lint 0 problems, jest 1353/1353 (73 suites), test:render 3/3 PASS |
+| M2 | MOV-31 Revisar: POST/PATCH + publicar, errors, thumbnails | delegated writer | [x] | `ea97412` | RDD unavailable (gentle-ai not executable); writer: typecheck 0 errors, lint 0 problems, jest 1359/1359 (73 suites), test:render 3/3 PASS |
 | M3 | MOV-32 Donación publicada: detail + history, polling + push, cancel | delegated writer | [ ] | | |
 | M4 | MOV-33 Mis donaciones: tab predicates | delegated writer | [ ] | | |
 | M5 | MOV-34 Inicio donante: impacto, latest, activity | delegated writer | [ ] | | |
@@ -53,6 +53,10 @@ Mobile: `npm run typecheck` · `npm run lint` · `npm test` · `npm run test:ren
 
 ## Progress / evidence
 - Branch `feat/flujo-donante` at `develop` @ `9f4cb6b`.
+- M1 (`2ceb525`): RED 21 failing (new `src/domain/__tests__/draft-submission.test.ts` + `dates.test.ts` helpers) → GREEN. Draft gains `apiId`, `pickupDate`, `DraftProduct.rutaFoto/fotoUri`; `newDonationDraft(now)` defaults the date to today in Bogotá (`initialDonationDraft` keeps `pickupDate: ""`). `toCrearDonacionBody` returns null while incomplete and throws `MappingError` for a unit missing from the catalog or without `factor_a_kg`; `validateDraft(draft, now)` (zod 4) mirrors the API rules by field. NewDonationScreen: pickup date field, inline errors after the first "Continuar", product photo `ruta` + local uri stored via the new `PhotoField onUploadedFile` prop (`onUploaded` unchanged). `MobileProvider` accepts `initialDraft` for tests.
+- M1 decision: `pickupDate` is `DD/MM/AAAA` (not `YYYY-MM-DD`) because `DateTimeField` writes and `toPickupWindow`/`parseDate` read that format; equal start/end times are refused client-side (the mapper would read them as a 24 h window).
+- M2 (`ea97412`): RED 6 failing in `src/screens/__tests__/donor-draft-screens.test.tsx` → GREEN (9 tests: validation, POST+publicar, PATCH when `apiId`, 422 `ventana-muy-corta` then retry PATCHes, 409 `donacion-no-editable`, re-validation, thumbnails). Confirmar re-validates, stores `apiId` right after POST, publishes, resets the draft and `router.replace`s to `espera-voluntario?id=`. Editar uses `dismissTo` back to the form, keeping `apiId`.
+- M2 decision: on 409 `donacion-no-editable` for an existing `apiId` the app clears `apiId` and asks the donor to check Mis donaciones before confirming again (which creates a new donation); it never re-creates silently, because the earlier publish may have succeeded with a lost answer. Problem messages for the publish/PATCH/file codes already existed in `problem-messages.ts`.
 
 ## Next step
-A1 (API-08), then M1…M9 in order.
+A1 (API-08) if still pending, then M3 (MOV-32).
