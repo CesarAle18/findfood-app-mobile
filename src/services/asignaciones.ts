@@ -128,8 +128,26 @@ export function ofertasQuery() {
   });
 }
 
-export function useOfertas() {
-  return useQuery(ofertasQuery());
+/** How often the offers are fetched again while the offer screen shows one to answer. */
+export const OFFER_POLL_MS = 15_000;
+
+/**
+ * `refetchInterval` of the offer screen: poll only while an offer waits for an answer (the
+ * API expires and reassigns offers on its own, without always pushing to this device).
+ */
+export function pollWhileOffered(query: {
+  state: { data?: readonly Pick<OfertaDto, "estado">[] };
+}): number | false {
+  return query.state.data?.some((oferta) => oferta.estado === "OFRECIDA") ? OFFER_POLL_MS : false;
+}
+
+/** With `live`, it polls while an offer is OFRECIDA (`pollWhileOffered`), only in the foreground. */
+export function useOfertas({ live = false }: { live?: boolean } = {}) {
+  return useQuery({
+    ...ofertasQuery(),
+    refetchInterval: live ? pollWhileOffered : false,
+    refetchIntervalInBackground: false,
+  });
 }
 
 // --- Mutations ---------------------------------------------------------------------------

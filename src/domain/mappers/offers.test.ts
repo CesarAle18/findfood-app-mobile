@@ -1,4 +1,4 @@
-import { ofertaFixture } from "@/test-utils/fixtures";
+import { DONATION_ID, ofertaAceptadaFixture, ofertaFixture } from "@/test-utils/fixtures";
 
 import { UNKNOWN_PICKUP_WINDOW } from "./donations";
 import { offerFromOferta, selectOffer } from "./offers";
@@ -14,8 +14,21 @@ describe("offerFromOferta", () => {
       address: "Calle 5 # 38-25, Cali · Muelle de carga",
       distance: "2,8 km",
       expiresAt: "15:10",
+      expiresAtIso: "2026-10-13T20:10:00Z",
+      weightKg: 45,
+      donacionId: DONATION_ID,
+      contactName: null,
+      contactPhone: null,
       accepted: false,
       products: ["Lácteos · 20 L", "Pan · 25 KG"],
+    });
+  });
+
+  it("carries the donor contact once accepted", () => {
+    expect(offerFromOferta(ofertaAceptadaFixture())).toMatchObject({
+      accepted: true,
+      contactName: "Laura Gómez",
+      contactPhone: "+57 300 111 2233",
     });
   });
 

@@ -10,6 +10,8 @@ import {
   aceptarOferta,
   calificarAsignacion,
   getOfertas,
+  OFFER_POLL_MS,
+  pollWhileOffered,
   rechazarOferta,
   useAbandonarAsignacionMutation,
   useAceptarOfertaMutation,
@@ -66,6 +68,23 @@ describe("queries", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(client.getQueryData(asignaciones.ofertas())).toEqual([]);
+  });
+});
+
+describe("pollWhileOffered", () => {
+  const query = (data?: { estado: "OFRECIDA" | "ACEPTADA" }[]) => ({ state: { data } });
+
+  it("polls while an offer still waits for an answer", () => {
+    expect(pollWhileOffered(query([{ estado: "ACEPTADA" }, { estado: "OFRECIDA" }]))).toBe(
+      OFFER_POLL_MS,
+    );
+    expect(OFFER_POLL_MS).toBe(15_000);
+  });
+
+  it("stops once every offer was answered, and before the first answer", () => {
+    expect(pollWhileOffered(query([{ estado: "ACEPTADA" }]))).toBe(false);
+    expect(pollWhileOffered(query([]))).toBe(false);
+    expect(pollWhileOffered(query())).toBe(false);
   });
 });
 

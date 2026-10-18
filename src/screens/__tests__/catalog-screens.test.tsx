@@ -31,6 +31,12 @@ jest.mock("@/components/findfood/motion", () => ({
   LayoutAnimationConfig: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+// The offer reads the volunteer's capacity; no profile here, so it shows the weight alone.
+jest.mock("@/state/session", () => ({
+  useMe: () => ({ data: undefined }),
+  useAccess: () => ({ phase: "app", activeRole: "VOLUNTARIO", canDonor: false, canVolunteer: true }),
+}));
+
 const mockApi = api as unknown as ApiMock;
 
 let client: QueryClient;
@@ -126,6 +132,15 @@ describe("NewDonationScreen", () => {
 });
 
 describe("OfferScreen", () => {
+  beforeEach(() => {
+    // Ten minutes before the fixture offer lapses: the countdown keeps "Aceptar" enabled.
+    jest.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-13T20:00:00Z"));
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it("shows the assignment of the link, with its pickup and deadline", async () => {
     await renderScreen(OfferScreen, "/pantalla?asignacionId=asig-1");
 
@@ -133,7 +148,8 @@ describe("OfferScreen", () => {
     expect(screen.getByText("Supermercado La 14")).toBeOnTheScreen();
     expect(screen.getByText("45 kg · Refrigeración requerida")).toBeOnTheScreen();
     expect(screen.getByText("Calle 5 # 38-25, Cali · Muelle de carga")).toBeOnTheScreen();
-    expect(screen.getByText("Vence 15:10")).toBeOnTheScreen();
+    expect(screen.getByText("Vence en 10:00")).toBeOnTheScreen();
+    expect(screen.getByText("15:10")).toBeOnTheScreen();
     expect(screen.getByText("Lácteos · 20 L")).toBeOnTheScreen();
   });
 

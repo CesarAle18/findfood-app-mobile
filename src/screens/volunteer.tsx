@@ -1,8 +1,11 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { ApiError, isApiError } from "@/api/errors";
 import { messageFor } from "@/api/problem-messages";
 import type { MeVoluntarioDto, VerificacionVoluntarioDto } from "@/api/types";
+import { CallButton } from "@/components/findfood/call-button";
+import { Countdown } from "@/components/findfood/countdown";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import { LocationPicker } from "@/components/findfood/map";
 import { PhotoField } from "@/components/findfood/photo-field";
@@ -21,13 +24,16 @@ import { useZodForm } from "@/hooks/use-zod-form";
 import { useMotivos, useTiposVehiculo, type TipoVehiculoDto } from "@/services/catalogos";
 import { useSolicitarVoluntarioMutation } from "@/services/perfil";
 import { offerFromOferta, selectOffer, type OfferView } from "@/domain/mappers/offers";
+import { formatKg } from "@/domain/mappers/profile";
+import { acceptedWithoutRoute } from "@/domain/mappers/routes";
+import { queryKeys } from "@/services/query-keys";
 import {
   useAceptarOfertaMutation,
   useOfertas,
   useRechazarOfertaMutation,
 } from "@/services/asignaciones";
 import { useAccess, useMe } from "@/state/session";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import {
   Badge,
   Button,
@@ -372,24 +378,54 @@ function VolunteerRequestFormView({ onSent }: { onSent: () => void }) {
 /**
  * A live offer, opened from its push or inbox row with `?asignacionId=`. Without one, the
  * first offer still waiting for an answer. An offer no longer listed (expired, taken or
- * already rejected) says so instead of showing stale data.
+ * already rejected) says so instead of showing stale data. While the screen is open the
+ * offers are polled, and the countdown disables accepting at `expira_at`; the server stays
+ * the authority (`oferta-vencida`).
  */
 export function OfferScreen() {
   const { asignacionId } = useLocalSearchParams<{ asignacionId?: string }>();
   const requestedId = typeof asignacionId === "string" && asignacionId !== "" ? asignacionId : undefined;
-  const ofertas = useOfertas();
+  // A stack leaf (nothing opens on top of it), so mounted means visible; TanStack pauses
+  // the polling while the app is in the background.
+  const ofertas = useOfertas({ live: true });
   const oferta = ofertas.data ? selectOffer(ofertas.data, requestedId) : null;
   const offer = oferta ? offerFromOferta(oferta) : null;
+  const queryClient = useQueryClient();
+  const { data: me } = useMe();
+  const capacityKg = me?.voluntario?.capacidad_carga_kg ?? null;
+  // The id of the offer whose countdown reached zero (another offer starts unexpired).
+  const [expiredId, setExpiredId] = useState<string | null>(null);
+  const expired = offer !== null && expiredId === offer.id;
+
+  const onExpire = () => {
+    if (offer === null) return;
+    setExpiredId(offer.id);
+    // The API drops expired offers: the list answers whether it is really gone.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.asignaciones.ofertas() });
+  };
+
   return (
     <Screen
       title="Nueva oferta"
       subtitle="Voluntario"
-      badge={offer && !offer.accepted ? <Badge warning>{`Vence ${offer.expiresAt}`}</Badge> : null}
+      badge={
+        offer && !offer.accepted ? (
+          <Countdown key={offer.id} expiresAt={offer.expiresAtIso} onExpire={onExpire} />
+        ) : null
+      }
     >
       <QueryContent query={ofertas} loadingLabel="Cargando la oferta">
-        {() =>
+        {(rows) =>
           offer ? (
-            <OfferDetails offer={offer} />
+            <OfferDetails
+              offer={offer}
+              expired={expired}
+              capacityKg={capacityKg}
+              acceptedKg={acceptedWithoutRoute(rows).reduce(
+                (total, row) => total + row.peso_estimado_kg,
+                0,
+              )}
+            />
           ) : (
             <EmptyState
               icon="truck"
@@ -412,10 +448,33 @@ export function OfferScreen() {
   );
 }
 
-function OfferDetails({ offer }: { offer: OfferView }) {
+/** "45 kg de tu capacidad de 500 kg", or the weight alone while the capacity is unknown. */
+function loadDisplay(weightKg: number, capacityKg: number | null): string {
+  return capacityKg === null
+    ? formatKg(weightKg)
+    : `${formatKg(weightKg)} de tu capacidad de ${formatKg(capacityKg)}`;
+}
+
+function OfferDetails({
+  offer,
+  expired,
+  capacityKg,
+  acceptedKg,
+}: {
+  offer: OfferView;
+  /** The countdown reached `expira_at`: accepting would answer `oferta-vencida`. */
+  expired: boolean;
+  capacityKg: number | null;
+  /** Estimated weight of the accepted pickups still waiting for a route. */
+  acceptedKg: number;
+}) {
   const [rejecting, setRejecting] = useState(false);
   const { mutateAsync: aceptar, isPending: accepting } = useAceptarOfertaMutation();
   const [error, setError] = useState<string>();
+  // One route carries the accepted pickups: more than the vehicle holds ends in
+  // `excede-capacidad` when the route is created.
+  const overCapacity =
+    !offer.accepted && capacityKg !== null && offer.weightKg + acceptedKg > capacityKg;
 
   const accept = async () => {
     setError(undefined);
@@ -431,7 +490,7 @@ function OfferDetails({ offer }: { offer: OfferView }) {
   return (
     <>
       <Card>
-        <Copy weight="bold" style={{ fontSize: 20, lineHeight: 28 }}>
+        <Copy weight="bold" style={styles.offerCode}>
           {offer.code}
         </Copy>
         <Copy weight="medium">{offer.title}</Copy>
@@ -443,13 +502,23 @@ function OfferDetails({ offer }: { offer: OfferView }) {
           <Detail label="Recogida" value={offer.address} icon="pin" />
           {offer.distance !== null ? (
             <>
-              <View style={{ height: 1, backgroundColor: colors.border }} />
+              <View style={styles.divider} />
               <Detail label="Distancia" value={offer.distance} icon="truck" />
             </>
           ) : null}
-          <View style={{ height: 1, backgroundColor: colors.border }} />
+          <View style={styles.divider} />
+          <Detail label="Peso" value={loadDisplay(offer.weightKg, capacityKg)} icon="box" />
+          <View style={styles.divider} />
           <Detail label="Responde antes de" value={offer.expiresAt} icon="clock" />
         </Card>
+        <FormMessage
+          tone="info"
+          message={
+            overCapacity
+              ? "Con tus recogidas aceptadas superarías tu capacidad para una sola ruta"
+              : undefined
+          }
+        />
       </Section>
       {offer.products.length > 0 ? (
         <Section title="Productos">
@@ -463,28 +532,43 @@ function OfferDetails({ offer }: { offer: OfferView }) {
         </Section>
       ) : null}
       {offer.accepted ? (
-        <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
-          Ver mis rutas
-        </NavButton>
+        <>
+          <Section title="Contacto del donante">
+            <Card>
+              {offer.contactName !== null ? (
+                <Detail label="Donante" value={offer.contactName} icon="user" />
+              ) : null}
+              <CallButton phone={offer.contactPhone} label="Contactar al donante" />
+            </Card>
+          </Section>
+          {/* MOV-45 (V6): the abandon action (AbandonAssignment) goes here. */}
+          <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
+            Ver mis rutas
+          </NavButton>
+        </>
       ) : rejecting ? (
         <RejectOffer asignacionId={offer.id} onBack={() => setRejecting(false)} />
       ) : (
         <>
-          <FormMessage message={error} />
+          <FormMessage message={expired ? "Esta oferta venció" : error} />
           <Row>
-            <View style={{ flex: 1 }}>
-              <Button variant="outline" disabled={accepting} onPress={() => setRejecting(true)}>
+            <View style={styles.flex}>
+              <Button
+                variant="outline"
+                disabled={accepting || expired}
+                onPress={() => setRejecting(true)}
+              >
                 Rechazar
               </Button>
             </View>
-            <View style={{ flex: 1 }}>
-              <Button loading={accepting} onPress={() => void accept()}>
+            <View style={styles.flex}>
+              <Button loading={accepting} disabled={expired} onPress={() => void accept()}>
                 Aceptar
               </Button>
             </View>
           </Row>
-          <Copy tone="secondary" style={{ fontSize: 11, textAlign: "center" }}>
-            Al aceptar, la ruta se agregará automáticamente.
+          <Copy tone="secondary" style={styles.footnote}>
+            Al aceptar, podrás armar tu ruta con tus recogidas aceptadas.
           </Copy>
         </>
       )}
@@ -552,3 +636,10 @@ export function CollectionScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  offerCode: { fontSize: 20, lineHeight: 28 },
+  divider: { height: 1, backgroundColor: colors.border },
+  footnote: { fontSize: 11, textAlign: "center" },
+});

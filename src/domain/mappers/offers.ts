@@ -21,6 +21,14 @@ export interface OfferView {
   distance: string | null;
   /** Bogotá `HH:mm` when the offer lapses. */
   expiresAt: string;
+  /** The raw `expira_at`, for the live countdown. */
+  expiresAtIso: string;
+  /** Estimated weight of the donation, compared with the volunteer's capacity. */
+  weightKg: number;
+  donacionId: string;
+  /** The donor's contact: the API shares it only once the offer is accepted. */
+  contactName: string | null;
+  contactPhone: string | null;
   accepted: boolean;
   /** "Pan · 25 KG" per product. */
   products: string[];
@@ -47,6 +55,11 @@ export function offerFromOferta(dto: OfertaDto): OfferView {
     distance:
       dto.distancia_km === null ? null : `${dto.distancia_km.toFixed(1).replace(".", ",")} km`,
     expiresAt: fromIsoToBogota(dto.expira_at).time,
+    expiresAtIso: dto.expira_at,
+    weightKg: dto.peso_estimado_kg,
+    donacionId: dto.donacion_id,
+    contactName: dto.contacto_nombre?.trim() || null,
+    contactPhone: dto.contacto_telefono,
     accepted: dto.estado === "ACEPTADA",
     products: (dto.productos ?? []).map(
       (producto) => `${producto.tipo} · ${producto.cantidad} ${producto.unidad}`,
