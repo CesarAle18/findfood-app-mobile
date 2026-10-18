@@ -66,6 +66,35 @@ describe("useCountdown", () => {
     expect(onExpire).toHaveBeenCalledTimes(1);
   });
 
+  it("expires at once when the deadline moves into the past after mount", async () => {
+    const onExpire = jest.fn();
+    const { result, rerender } = await renderHook(
+      ({ expiresAt }: { expiresAt: string }) => useCountdown(expiresAt, onExpire),
+      { initialProps: { expiresAt: inSeconds(60) } },
+    );
+
+    // The clock moves without a tick, then the deadline changes to one already past.
+    jest.setSystemTime(NOW + 10_500);
+    await rerender({ expiresAt: inSeconds(5) });
+
+    expect(result.current).toEqual({ remainingMs: 0, expired: true });
+    expect(onExpire).toHaveBeenCalledTimes(1);
+    await act(() => jest.advanceTimersByTimeAsync(5_000));
+    expect(onExpire).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts from the current time when the deadline moves forward after mount", async () => {
+    const { result, rerender } = await renderHook(
+      ({ expiresAt }: { expiresAt: string }) => useCountdown(expiresAt),
+      { initialProps: { expiresAt: inSeconds(60) } },
+    );
+
+    jest.setSystemTime(NOW + 10_500);
+    await rerender({ expiresAt: inSeconds(120) });
+
+    expect(result.current).toEqual({ remainingMs: 109_500, expired: false });
+  });
+
   it("does nothing without a deadline", async () => {
     const onExpire = jest.fn();
     const { result } = await renderHook(() => useCountdown(null, onExpire));

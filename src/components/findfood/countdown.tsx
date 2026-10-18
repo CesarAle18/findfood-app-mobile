@@ -45,6 +45,13 @@ export function useCountdown(
 ): { remainingMs: number; expired: boolean } {
   const deadline = toDeadline(expiresAt);
   const [now, setNow] = useState(() => Date.now());
+  // A new deadline restarts from the real time (adjusted during render, not in an effect):
+  // the last tick may be up to a second old, and none comes when the new deadline passed.
+  const [countingTo, setCountingTo] = useState(deadline);
+  if (countingTo !== deadline) {
+    setCountingTo(deadline);
+    setNow(() => Date.now());
+  }
   useEffect(() => {
     if (deadline === null || Date.now() >= deadline) return;
     const timer = setInterval(() => {

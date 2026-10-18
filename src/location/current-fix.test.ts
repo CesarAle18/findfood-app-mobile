@@ -81,6 +81,19 @@ describe("getCurrentFix", () => {
 
     await expect(fix).resolves.toBeNull();
   });
+
+  it("does not count the time the user takes to answer the permission prompt", async () => {
+    jest.useFakeTimers();
+    mockedLocation.getForegroundPermissionsAsync.mockResolvedValue(permission("undetermined"));
+    mockedLocation.requestForegroundPermissionsAsync.mockReturnValue(
+      new Promise((resolve) => setTimeout(() => resolve(permission("granted")), 8_000)) as never,
+    );
+
+    const fix = getCurrentFix({ timeoutMs: 5_000 });
+    await jest.advanceTimersByTimeAsync(8_000);
+
+    await expect(fix).resolves.toEqual({ ubicacion: { lat: 3.42, lng: -76.54 }, precision_m: 12 });
+  });
 });
 
 describe("needsManualConfirmation", () => {

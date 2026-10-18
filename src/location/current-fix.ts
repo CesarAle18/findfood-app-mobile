@@ -26,8 +26,7 @@ async function hasForegroundPermission(): Promise<boolean> {
   return (await Location.requestForegroundPermissionsAsync()).granted;
 }
 
-async function readFix(): Promise<CurrentFix | null> {
-  if (!(await hasForegroundPermission())) return null;
+async function readPosition(): Promise<CurrentFix> {
   const { coords } = await Location.getCurrentPositionAsync({
     accuracy: Location.Accuracy.High,
   });
@@ -37,16 +36,20 @@ async function readFix(): Promise<CurrentFix | null> {
   };
 }
 
-/** The device's position now, or null when it is unavailable within `timeoutMs`. */
+/**
+ * The device's position now, or null when it is unavailable within `timeoutMs`. The timeout
+ * starts after the permission is settled, so answering the prompt slowly never costs the fix.
+ */
 export async function getCurrentFix({
   timeoutMs = DEFAULT_TIMEOUT_MS,
 }: { timeoutMs?: number } = {}): Promise<CurrentFix | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), timeoutMs);
-  });
   try {
-    return await Promise.race([readFix(), timeout]);
+    if (!(await hasForegroundPermission())) return null;
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), timeoutMs);
+    });
+    return await Promise.race([readPosition(), timeout]);
   } catch {
     return null;
   } finally {
