@@ -38,8 +38,8 @@ Volunteer screens exist but mostly render preview data. Home summary/activity, a
 | ID | Task | Route | Status | Commit | Review |
 |---|---|---|---|---|---|
 | V1 | Shared foundation (current fix, countdown, call button, route mappers, `useCurrentRoute`, push invalidation, problem messages, fixtures) | delegated writer (2+ non-trivial files) | [x] | `b2e2da2` | medium · granted · approved (1 lens, 2 WARNING follow-ups → V3) |
-| V2 | MOV-40 Home | delegated writer | [x] | | |
-| V3 | MOV-41 Offer | delegated writer | [ ] partial | | |
+| V2 | MOV-40 Home | delegated writer | [x] | `71715b7` (+ fix `b918d08`) | |
+| V3 | MOV-41 Offer | delegated writer | [x] | `2aa8fb4` + render fix | |
 | V4 | MOV-42 Rutas: build/create/start/cancel route, stop list | delegated writer | [ ] | | |
 | V5 | MOV-42 In-progress stop: arrival, contact, failed stop | delegated writer | [ ] | | |
 | V6 | MOV-45 Abandon in three places | delegated writer | [ ] | | |
@@ -61,6 +61,8 @@ Volunteer screens exist but mostly render preview data. Home summary/activity, a
 - V1 follow-ups (own `fix(voluntario)` commit): RED 3 tests (countdown deadline changed after mount to a past / later deadline; permission prompt answered after the timeout) → GREEN. `useCountdown` resets `now` during render when the deadline changes (state updater, React Compiler purity rules forbid `Date.now()` in render and setState in effects); `getCurrentFix` times only the position read.
 - V2: `volunteer-home-screen.test.tsx` RED 6/6 → GREEN 6/6. Summary (EN_CURSO + PLANIFICADA totals, pending stops of the current route, dash while loading), next route from `useCurrentRoute`, "Armar ruta" CTA from accepted-without-route, live offer banner, five newest notifications opened with `useOpenNotification` (marks read + `routeForNotification`). `src/data/preview.ts` removed (no other importer). The inbox icon mapping lives in `notifications.tsx` (outside V2 surface): mirrored as `activityIcon` in home.
 - V3: mapper (+`expiresAtIso`, `weightKg`, `donacionId`, `contactName`, `contactPhone`) and `pollWhileOffered` RED 4 → GREEN; `volunteer-offer-screen.test.tsx` RED 6/6 → GREEN 6/6 (countdown, expiry disables Aceptar + "Esta oferta venció" + invalidation, 15 s polling, capacity text/warning, accepted contact, copy). `useOfertas({ live })` polls while the offer screen is mounted and an offer is OFRECIDA, paused in the background. Not gated by `useIsFocused`: `scripts/check-render.cjs` stubs `expo-router` without it (outside the V3 surface); the offer screen is a stack leaf, so mounted means visible. `capacidad_carga_kg` already existed in `MeVoluntarioDto`. Abandon placeholder comment left for V6. catalog-screens offer tests now mock the session and pin `Date.now` before `expira_at`. Checks: typecheck, lint, `npm test` (91 suites, 1542 tests) pass; `test:render` FAILS on `scripts/check-render.cjs:392`, which still asserts the removed static badge `"Vence 15:10"` (outside the V3 surface; needs updating to the countdown, e.g. assert `DON-1048` and `15:10`).
+
+- V3 render check: parent fixed `scripts/check-render.cjs` (static "Vence 15:10" badge replaced by the live countdown; now asserts the "Responde antes de" time). `test:render` passes. Offer polling is gated on OFRECIDA + mounted + foreground (no `useIsFocused`; the render stub lacks it).
 
 ## Follow-ups
 - API-09, API-05, DONANTE rating aspects seed, failed stop leaves donation EN_RECOLECCION, bank web `estado_producto`, offline confirmation queue.

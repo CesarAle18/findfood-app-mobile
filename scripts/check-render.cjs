@@ -389,7 +389,7 @@ try {
   // The offer shows a real assignment: by its link, else the first one pending.
   const { OfferScreen } = require("../src/screens/volunteer.tsx");
   const offerHtml = renderToStaticMarkup(React.createElement(OfferScreen));
-  assert(offerHtml.includes("DON-1048") && offerHtml.includes("Vence 15:10"));
+  assert(offerHtml.includes("DON-1048") && offerHtml.includes("15:10"));
   routeParams = { asignacionId: "otra" };
   assert(
     renderToStaticMarkup(React.createElement(OfferScreen)).includes(
