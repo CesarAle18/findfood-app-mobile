@@ -43,10 +43,10 @@ Volunteer screens exist but mostly render preview data. Home summary/activity, a
 | V4 | MOV-42 Rutas: build/create/start/cancel route, stop list | delegated writer | [x] | `a86dca7` | medium · granted · approved `review-fca5d35c40b5d97b` (follow-ups fixed in `a50853d`) |
 | V5 | MOV-42 In-progress stop: arrival, contact, failed stop | delegated writer | [x] | `e82d13b` | medium · granted · approved `review-fca5d35c40b5d97b` (follow-ups fixed in `a50853d`) |
 | V6 | MOV-45 Abandon in three places | delegated writer | [x] | `43a28ee` | medium · granted · approved `review-fca5d35c40b5d97b` (follow-ups fixed in `a50853d`) |
-| V7 | API-10 in findfood-api | delegated writer (API repo) | [x] | API `2b43516` | medium · under_budget (161 lines) · pending; review at close |
-| V8 | MOV-43 Register pickup | delegated writer (2+ non-trivial files) | [x] | `9b8a274` | |
-| V9 | MOV-44 Delivery and route close | delegated writer | [x] | `8fbcab5` | |
-| V10 | MOV-46 Rate donor, docs, final checks (+ review follow-ups) | delegated writer | [x] | `a50853d` + `8187524` | |
+| V7 | API-10 in findfood-api | delegated writer (API repo) | [x] | API `2b43516` + `76809e2` | medium · granted · approved `review-afa1df84ec1ed762`; null-guard fix approved `review-88a38d62f29f45f0` |
+| V8 | MOV-43 Register pickup | delegated writer (2+ non-trivial files) | [x] | `9b8a274` | medium · granted · approved `review-dc72dd99c86e7cd9` (follow-up fixed in `aa05c1c`, reviewed `review-bc208b074e6feb43`) |
+| V9 | MOV-44 Delivery and route close | delegated writer | [x] | `8fbcab5` | medium · granted · approved `review-dc72dd99c86e7cd9` (follow-up fixed in `aa05c1c`, reviewed `review-bc208b074e6feb43`) |
+| V10 | MOV-46 Rate donor, docs, final checks (+ review follow-ups) | delegated writer | [x] | `a50853d` + `8187524` | medium · granted · approved `review-dc72dd99c86e7cd9` (follow-up fixed in `aa05c1c`, reviewed `review-bc208b074e6feb43`) |
 
 ## External prerequisites (user)
 - findfood-api: `supabase db push` + `npm run db:pull` for the API-10 migration; run the API locally.
@@ -74,9 +74,11 @@ Volunteer screens exist but mostly render preview data. Home summary/activity, a
 - Review follow-ups (`a50853d`): offer expiry keyed by `id@expira_at` (RED 2 → GREEN: a later deadline for the same offer re-enables Aceptar; the new deadline expires again); Home offers error → "No pudimos cargar tus ofertas" with retry (RED 1 → GREEN); `ArrivalButton` wraps `getCurrentFix` in try/finally (RED: rejecting fix → GREEN posts llegada `{}` and stops loading); next-stop actions keyed by `parada.id`, failed-stop form and abandon form close on success (RED: form carried over → GREEN closed and empty on the next stop); route tests wait for the delivery content and the ofertas query before asserting absences; offer test restores spies in `afterEach`.
 - V10: `rating-screen.test.tsx` RED 3 → GREEN 14/14 (volunteer sends `{ puntaje, comentario }` to `/asignaciones/:id/calificacion` and returns to `/voluntario/rutas`; blocked with "Podrás calificar cuando la entrega se confirme en el banco." until the assignment is COMPLETADA; `calificada_por_mi` shows the done state). The aspects-hidden test passed before the change (the section already rendered only with catalog rows); kept as a regression test. Docs: `docs/integracion-backend.md` (volunteer flow endpoints, API-10, remaining API follow-ups) and `docs/pantallas.md` (`/ruta-activa` = Rutas tab; stop screens take `paradaId`/`rutaId`). Checks: typecheck, lint, `npm test`, `test:render` pass.
 
+- Close: final app slice review approved (WARNING: over-limit total said "mayor que 0" → fixed in `aa05c1c`, test RED→GREEN). API review approved (WARNING: explicit `estado_producto: null` on ENTREGA rejected → guard `!= null` in `76809e2`; covered by the e2e case, RED not observable without a local DB). Final app checks: typecheck pass, lint pass, `npm test` 1598/1598, `test:render` 3/3 PASS. API: typecheck, lint, `npm test` 69/69 pass; `test:e2e` not run (no local DB).
+
 ## Follow-ups
 - API-09, API-05, DONANTE rating aspects seed, failed stop leaves donation EN_RECOLECCION, bank web `estado_producto`, offline confirmation queue.
 - Attach the confirmation fix to the stop evidence (`PhotoField` needs a `ubicacion` input).
 
 ## Next step
-Final API review (API-10 `2b43516`, pending at close) and manual device QA in a development build (camera, GPS, push; walkthrough in the plan).
+Feature complete and reviewed. User-owned: `supabase db push` + `npm run db:pull` (API-10), run API `test:e2e` with the local DB, manual device QA in a development build (camera, GPS, push; walkthrough in the plan).
