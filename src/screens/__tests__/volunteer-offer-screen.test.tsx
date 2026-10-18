@@ -5,8 +5,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Slot } from "expo-router";
-import { act, renderRouter, screen } from "expo-router/testing-library";
-import { Text } from "react-native";
+import { act, fireEvent, renderRouter, screen } from "expo-router/testing-library";
+import { Alert, Text } from "react-native";
 
 import { api } from "@/api";
 import type { MeDto } from "@/api/types";
@@ -15,7 +15,12 @@ import { queryKeys } from "@/services/query-keys";
 import { OfferScreen } from "@/screens/volunteer";
 import { MobileProvider } from "@/state/mobile-context";
 import type { ApiMock } from "@/test-utils/api";
-import { meFixture, ofertaAceptadaFixture, ofertaFixture } from "@/test-utils/fixtures";
+import {
+  catalogosFixture,
+  meFixture,
+  ofertaAceptadaFixture,
+  ofertaFixture,
+} from "@/test-utils/fixtures";
 import { createTestQueryClient } from "@/test-utils/query";
 
 jest.mock("@/api", () => ({
@@ -166,5 +171,32 @@ describe("OfferScreen (MOV-41)", () => {
     expect(screen.getByRole("link", { name: "Ver mis rutas" })).toBeOnTheScreen();
     expect(screen.queryByText("Aceptar")).toBeNull();
     expect(screen.queryByText(/^Vence en/)).toBeNull();
+  });
+
+  it("lets the volunteer give up an accepted offer and goes home", async () => {
+    jest.useRealTimers();
+    jest.spyOn(Alert, "alert").mockImplementation((_title, _message, buttons) => {
+      buttons?.at(-1)?.onPress?.();
+    });
+    ofertas = [ofertaAceptadaFixture()];
+    mockApi.get.mockImplementation(async (path: string) => {
+      if (path === "/asignaciones/ofertas") return ofertas;
+      if (path === "/catalogos") return catalogosFixture;
+      throw new Error(`unexpected GET ${path}`);
+    });
+    mockApi.post.mockResolvedValue({ id: "asg-8", estado: "ABANDONADA", donacion_republicada: true });
+
+    await renderOffer("/pantalla?asignacionId=asg-8");
+
+    await fireEvent.press(await screen.findByRole("button", { name: "No puedo hacer esta recogida" }));
+    await fireEvent.press(await screen.findByRole("button", { name: /^Motivo/ }));
+    await fireEvent.press(screen.getByRole("radio", { name: "Ya no tengo vehículo" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Confirmar abandono" }));
+
+    expect(mockApi.post).toHaveBeenCalledWith("/asignaciones/asg-8/abandonar", {
+      body: { motivo_id: 45 },
+    });
+    expect(await screen.findByText("Inicio")).toBeOnTheScreen();
+    jest.restoreAllMocks();
   });
 });

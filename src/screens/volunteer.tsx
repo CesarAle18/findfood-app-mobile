@@ -53,6 +53,7 @@ import {
 import { colors } from "@/design/tokens";
 
 import { useDonationId } from "./donation-queries";
+import { AbandonAssignment } from "./route-actions";
 
 /**
  * The catalog vehicle types, keyed by their id as text (the select's value); the request
@@ -541,7 +542,10 @@ function OfferDetails({
               <CallButton phone={offer.contactPhone} label="Contactar al donante" />
             </Card>
           </Section>
-          {/* MOV-45 (V6): the abandon action (AbandonAssignment) goes here. */}
+          <AbandonAssignment
+            asignacionId={offer.id}
+            onDone={() => router.dismissTo("/voluntario")}
+          />
           <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
             Ver mis rutas
           </NavButton>

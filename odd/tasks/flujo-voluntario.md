@@ -40,9 +40,9 @@ Volunteer screens exist but mostly render preview data. Home summary/activity, a
 | V1 | Shared foundation (current fix, countdown, call button, route mappers, `useCurrentRoute`, push invalidation, problem messages, fixtures) | delegated writer (2+ non-trivial files) | [x] | `b2e2da2` | medium · granted · approved (1 lens, 2 WARNING follow-ups → V3) |
 | V2 | MOV-40 Home | delegated writer | [x] | `71715b7` (+ fix `b918d08`) | |
 | V3 | MOV-41 Offer | delegated writer | [x] | `2aa8fb4` + render fix | |
-| V4 | MOV-42 Rutas: build/create/start/cancel route, stop list | delegated writer | [ ] | | |
-| V5 | MOV-42 In-progress stop: arrival, contact, failed stop | delegated writer | [ ] | | |
-| V6 | MOV-45 Abandon in three places | delegated writer | [ ] | | |
+| V4 | MOV-42 Rutas: build/create/start/cancel route, stop list | delegated writer | [x] | | |
+| V5 | MOV-42 In-progress stop: arrival, contact, failed stop | delegated writer | [x] | | |
+| V6 | MOV-45 Abandon in three places | delegated writer | [x] | | |
 | V7 | API-10 in findfood-api | delegated writer (API repo) | [x] | API `2b43516` | medium · under_budget (161 lines) · pending; review at close |
 | V8 | MOV-43 Register pickup | delegated writer | [ ] | | |
 | V9 | MOV-44 Delivery and route close | delegated writer | [ ] | | |
@@ -63,9 +63,12 @@ Volunteer screens exist but mostly render preview data. Home summary/activity, a
 - V3: mapper (+`expiresAtIso`, `weightKg`, `donacionId`, `contactName`, `contactPhone`) and `pollWhileOffered` RED 4 → GREEN; `volunteer-offer-screen.test.tsx` RED 6/6 → GREEN 6/6 (countdown, expiry disables Aceptar + "Esta oferta venció" + invalidation, 15 s polling, capacity text/warning, accepted contact, copy). `useOfertas({ live })` polls while the offer screen is mounted and an offer is OFRECIDA, paused in the background. Not gated by `useIsFocused`: `scripts/check-render.cjs` stubs `expo-router` without it (outside the V3 surface); the offer screen is a stack leaf, so mounted means visible. `capacidad_carga_kg` already existed in `MeVoluntarioDto`. Abandon placeholder comment left for V6. catalog-screens offer tests now mock the session and pin `Date.now` before `expira_at`. Checks: typecheck, lint, `npm test` (91 suites, 1542 tests) pass; `test:render` FAILS on `scripts/check-render.cjs:392`, which still asserts the removed static badge `"Vence 15:10"` (outside the V3 surface; needs updating to the countdown, e.g. assert `DON-1048` and `15:10`).
 
 - V3 render check: parent fixed `scripts/check-render.cjs` (static "Vence 15:10" badge replaced by the live countdown; now asserts the "Responde antes de" time). `test:render` passes. Offer polling is gated on OFRECIDA + mounted + foreground (no `useIsFocused`; the render stub lacks it).
+- V4 (`a86dca7`): `route-screen.test.tsx` RED 8/8 (no `ActiveRouteScreen` behavior) → GREEN 8/8: accepted pickups preselected, create sends exactly `{ donacion_ids }`, unchecked rows left out, >5 and mixed warehouses blocked client-side, empty state links to the offers, planned route start and confirmed cancel, "Aceptadas sin ruta" below a route. New `pickupWindowLabel` mapper (tolerant of unreadable windows; written with its test, no separate RED). `useCurrentRoute` now exposes `error`. Preview data and the TODO removed.
+- V5 (`e82d13b`): RED 7 → GREEN 15/15: "Llegué al punto" posts llegada with `ubicacion` only when `getCurrentFix` returns a fix; EN_SITIO links to `registrar-recogida` / `entrega-voluntario` with `{ paradaId, rutaId }`; ENTREGA arrival "Llegué al banco"; "Ver detalle" opens `detalle-donacion?id=`; failed stop blocks descriptions under 5 characters and sends `{ tipo_incidencia_id, descripcion }` after a native confirm. The next pickup's donation detail is prefetched. `scripts/check-render.cjs` stubs `@/location/current-fix` (expo-location has no Node build).
+- V6: RED 3 (route) + 1 (offer) → GREEN: `AbandonAssignment` sends `{ motivo_id }` behind a native confirm and reports "Liberaste la recogida. La donación volvió a publicarse." / "Liberaste la recogida." via the Rutas notice; placed in the accepted offer (then `dismissTo("/voluntario")`), each accepted-without-route row and the next pickup card (hidden without a matching assignment). Fixture motivo 45 (ABANDONO_ASIGNACION without comment) added. Checks: typecheck, lint, `npm test` (92 suites, 1564 tests), `test:render` pass.
 
 ## Follow-ups
 - API-09, API-05, DONANTE rating aspects seed, failed stop leaves donation EN_RECOLECCION, bank web `estado_producto`, offline confirmation queue.
 
 ## Next step
-V4 (MOV-42 Rutas: build/create/start/cancel route, stop list).
+V8 (MOV-43 Register pickup).

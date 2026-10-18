@@ -21,16 +21,25 @@ import {
 import { useOfertas, type OfertaDto } from "@/services/asignaciones";
 import { useCrearRutaMutation } from "@/services/rutas";
 
+import { AbandonAssignment } from "./route-actions";
+
 /**
  * Without a current route (`standalone`) it is the whole tab: loading, error and empty states
  * included. Below a route it shows only when there are pickups to add.
  */
-export function AcceptedPickups({ standalone }: { standalone: boolean }) {
+export function AcceptedPickups({
+  standalone,
+  onNotice,
+}: {
+  standalone: boolean;
+  /** Shows the outcome of giving a pickup up (its row leaves the list). */
+  onNotice: (message: string) => void;
+}) {
   const ofertas = useOfertas();
   if (!standalone) {
     const pickups = ofertas.data ? acceptedWithoutRoute(ofertas.data) : [];
     return pickups.length > 0 ? (
-      <PickupSelection title="Aceptadas sin ruta" pickups={pickups} />
+      <PickupSelection title="Aceptadas sin ruta" pickups={pickups} onNotice={onNotice} />
     ) : null;
   }
   return (
@@ -42,7 +51,7 @@ export function AcceptedPickups({ standalone }: { standalone: boolean }) {
       {(rows) => {
         const pickups = acceptedWithoutRoute(rows);
         return pickups.length > 0 ? (
-          <PickupSelection title="Armar ruta" pickups={pickups} />
+          <PickupSelection title="Armar ruta" pickups={pickups} onNotice={onNotice} />
         ) : (
           <EmptyState
             icon="route"
@@ -60,7 +69,15 @@ export function AcceptedPickups({ standalone }: { standalone: boolean }) {
   );
 }
 
-function PickupSelection({ title, pickups }: { title: string; pickups: OfertaDto[] }) {
+function PickupSelection({
+  title,
+  pickups,
+  onNotice,
+}: {
+  title: string;
+  pickups: OfertaDto[];
+  onNotice: (message: string) => void;
+}) {
   // Unchecked ids: everything is selected by default, including pickups accepted later.
   const [unchecked, setUnchecked] = useState<ReadonlySet<string>>(() => new Set());
   const [error, setError] = useState<string>();
@@ -95,6 +112,7 @@ function PickupSelection({ title, pickups }: { title: string; pickups: OfertaDto
           pickup={pickup}
           checked={!unchecked.has(pickup.id)}
           onToggle={toggle}
+          onNotice={onNotice}
         />
       ))}
       <FormMessage message={error} />
@@ -109,10 +127,12 @@ function PickupRow({
   pickup,
   checked,
   onToggle,
+  onNotice,
 }: {
   pickup: OfertaDto;
   checked: boolean;
   onToggle: (id: string) => void;
+  onNotice: (message: string) => void;
 }) {
   const window = pickupWindowLabel(pickup.ventana_recogida_inicio, pickup.ventana_recogida_fin);
   return (
@@ -140,6 +160,7 @@ function PickupRow({
           </Copy>
         </View>
       </Pressing>
+      <AbandonAssignment asignacionId={pickup.id} onDone={onNotice} />
     </Card>
   );
 }

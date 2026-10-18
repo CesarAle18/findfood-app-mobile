@@ -1,6 +1,7 @@
 /**
  * Actions on the volunteer's route and its stops, shared by Rutas and the accepted pickups:
- * the next stop of a route in progress (arrival, contact, detail, failed stop).
+ * the next stop of a route in progress (arrival, contact, detail, failed stop) and giving an
+ * accepted pickup up.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -9,6 +10,13 @@ import { Alert, Platform, StyleSheet, View } from "react-native";
 import { messageFor } from "@/api/problem-messages";
 import { CallButton } from "@/components/findfood/call-button";
 import { QueryContent } from "@/components/findfood/feedback";
+import { Pressing } from "@/components/findfood/motion";
+import {
+  MotivoField,
+  motivoBody,
+  validateMotivo,
+  type MotivoSelection,
+} from "@/components/findfood/motivo-field";
 import {
   Badge,
   Button,
@@ -23,9 +31,16 @@ import {
   SelectField,
   TextLink,
 } from "@/components/findfood/ui";
-import { nextStop, pickupWindowLabel, stopProgress } from "@/domain/mappers/routes";
+import { colors } from "@/design/tokens";
+import {
+  asignacionByDonacion,
+  nextStop,
+  pickupWindowLabel,
+  stopProgress,
+} from "@/domain/mappers/routes";
 import { getCurrentFix } from "@/location/current-fix";
-import { useTiposIncidencia, type TipoIncidenciaDto } from "@/services/catalogos";
+import { useAbandonarAsignacionMutation, useOfertas } from "@/services/asignaciones";
+import { useMotivos, useTiposIncidencia, type TipoIncidenciaDto } from "@/services/catalogos";
 import { donacionQuery } from "@/services/donaciones";
 import {
   useParadaFallidaMutation,
@@ -55,7 +70,7 @@ export function confirmAction(
 /**
  * The first open stop of a route in progress and what the volunteer can do there: arrive,
  * then register the pickup or the delivery; on pickups also call the donor, open the
- * donation or report a failed stop.
+ * donation, report a failed stop or give the pickup up.
  */
 export function NextStop({
   ruta,
@@ -124,6 +139,12 @@ function PickupActions({
   parada: ParadaRutaDto;
   onNotice: (message: string) => void;
 }) {
+  // Stops only name their donation; abandoning needs the assignment from the offers.
+  const { data: ofertas } = useOfertas();
+  const asignacionId =
+    ofertas && parada.donacion_id !== null
+      ? asignacionByDonacion(ofertas).get(parada.donacion_id)
+      : undefined;
   return (
     <>
       <CallButton phone={parada.contacto_telefono} label="Contactar al donante" />
@@ -135,6 +156,9 @@ function PickupActions({
         </TextLink>
       ) : null}
       <ReportFailedStop paradaId={parada.id} onNotice={onNotice} />
+      {asignacionId !== undefined ? (
+        <AbandonAssignment asignacionId={asignacionId} onDone={onNotice} />
+      ) : null}
     </>
   );
 }
@@ -307,7 +331,108 @@ function FailedStopForm({
   );
 }
 
+/** What the volunteer reads after giving a pickup up. */
+export function abandonMessage(donacionRepublicada: boolean): string {
+  return donacionRepublicada
+    ? "Liberaste la recogida. La donación volvió a publicarse."
+    : "Liberaste la recogida.";
+}
+
+/**
+ * "No puedo hacer esta recogida" (MOV-45): gives an accepted pickup up with an
+ * ABANDONO_ASIGNACION reason (`POST /asignaciones/:id/abandonar`), after a native
+ * confirmation. The API refuses once the donation was picked up (`donacion-ya-recogida`).
+ */
+export function AbandonAssignment({
+  asignacionId,
+  onDone,
+}: {
+  asignacionId: string;
+  /** Receives the outcome message (`abandonMessage`); the pickup leaves the screen. */
+  onDone: (message: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return open ? (
+    <AbandonForm asignacionId={asignacionId} onBack={() => setOpen(false)} onDone={onDone} />
+  ) : (
+    <Pressing
+      accessibilityRole="button"
+      scale={1}
+      onPress={() => setOpen(true)}
+      surface={styles.dangerLink}
+    >
+      <Copy weight="medium" style={styles.dangerText}>
+        No puedo hacer esta recogida
+      </Copy>
+    </Pressing>
+  );
+}
+
+function AbandonForm({
+  asignacionId,
+  onBack,
+  onDone,
+}: {
+  asignacionId: string;
+  onBack: () => void;
+  onDone: (message: string) => void;
+}) {
+  const { data: motivos } = useMotivos("ABANDONO_ASIGNACION");
+  const { mutateAsync: abandonar, isPending } = useAbandonarAsignacionMutation();
+  const [selection, setSelection] = useState<MotivoSelection>({ comentario: "" });
+  const [error, setError] = useState<string | null>(null);
+
+  const send = async (motivoId: number) => {
+    let republicada: boolean;
+    try {
+      const result = await abandonar({
+        id: asignacionId,
+        body: motivoBody({ ...selection, motivoId }),
+      });
+      republicada = result.donacion_republicada;
+    } catch (failure) {
+      setError(messageFor(failure));
+      return;
+    }
+    onDone(abandonMessage(republicada));
+  };
+
+  const submit = () => {
+    const invalid = validateMotivo(selection, motivos ?? []);
+    setError(invalid);
+    const { motivoId } = selection;
+    if (invalid !== null || motivoId === undefined) return;
+    confirmAction(
+      {
+        title: "Liberar recogida",
+        question: "La recogida dejará de estar a tu cargo y la donación podrá ofrecerse a otra persona.",
+        confirmLabel: "Liberar",
+      },
+      () => void send(motivoId),
+    );
+  };
+
+  return (
+    <Section title="No puedo hacer esta recogida">
+      <MotivoField
+        ambito="ABANDONO_ASIGNACION"
+        value={selection}
+        onChange={setSelection}
+        error={error}
+      />
+      <Button variant="danger" loading={isPending} onPress={submit}>
+        Confirmar abandono
+      </Button>
+      <Button variant="outline" disabled={isPending} onPress={onBack}>
+        Volver
+      </Button>
+    </Section>
+  );
+}
+
 const styles = StyleSheet.create({
+  dangerLink: { minHeight: 44, alignItems: "center", justifyContent: "center" },
+  dangerText: { color: colors.danger, fontSize: 13 },
   between: { justifyContent: "space-between" },
   title: { flex: 1, fontSize: 17, lineHeight: 24 },
   small: { fontSize: 12 },

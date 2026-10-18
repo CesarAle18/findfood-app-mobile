@@ -225,6 +225,7 @@ export const catalogosFixture: CatalogosDto = {
     { id: 42, ambito: "RECHAZO_ASIGNACION", codigo: "OTRO_RECHAZO", nombre: "Otro", requiere_comentario: true },
     { id: 43, ambito: "CANCELACION_DONACION", codigo: "DONANTE_CANCELA", nombre: "Ya no está disponible", requiere_comentario: false },
     { id: 44, ambito: "ABANDONO_ASIGNACION", codigo: "IMPREVISTO", nombre: "Imprevisto", requiere_comentario: true },
+    { id: 45, ambito: "ABANDONO_ASIGNACION", codigo: "SIN_VEHICULO", nombre: "Ya no tengo vehículo", requiere_comentario: false },
   ],
   tipos_incidencia: [
     { id: 61, codigo: "DONANTE_AUSENTE", nombre: "El donante no estaba", severidad_default: "MEDIA", bloquea_donacion: false },

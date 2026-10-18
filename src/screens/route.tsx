@@ -37,7 +37,7 @@ export function ActiveRouteScreen() {
       {ruta ? (
         <>
           <RouteDetail ruta={ruta} onNotice={setNotice} />
-          <AcceptedPickups standalone={false} />
+          <AcceptedPickups standalone={false} onNotice={setNotice} />
         </>
       ) : current.isError ? (
         <ErrorState
@@ -48,7 +48,7 @@ export function ActiveRouteScreen() {
       ) : current.isPending ? (
         <LoadingState label="Cargando tu ruta" />
       ) : (
-        <AcceptedPickups standalone />
+        <AcceptedPickups standalone onNotice={setNotice} />
       )}
     </Screen>
   );

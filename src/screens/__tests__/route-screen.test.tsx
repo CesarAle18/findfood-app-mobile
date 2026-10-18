@@ -330,3 +330,83 @@ describe("ActiveRouteScreen · route in progress", () => {
     });
   });
 });
+
+describe("ActiveRouteScreen · abandon a pickup", () => {
+  const enCurso = [rutaResumenFixture({ estado: "EN_CURSO" })];
+  const enCursoDetalle = rutaDetalleFixture({ estado: "EN_CURSO" });
+
+  function answerAbandon(donacion_republicada: boolean) {
+    mockApi.post.mockImplementation(async (path: string) =>
+      path.endsWith("/abandonar")
+        ? { id: "asg-8", estado: "ABANDONADA", donacion_republicada }
+        : rutaDetalleFixture(),
+    );
+  }
+
+  async function abandonWithoutComment() {
+    await fireEvent.press(await screen.findByRole("button", { name: "No puedo hacer esta recogida" }));
+    await fireEvent.press(await screen.findByRole("button", { name: /^Motivo/ }));
+    await fireEvent.press(screen.getByRole("radio", { name: "Ya no tengo vehículo" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Confirmar abandono" }));
+  }
+
+  it("gives up the next pickup of the route and says the donation was published again", async () => {
+    const alert = autoConfirm();
+    answerAbandon(true);
+    answerGets({
+      enCurso,
+      detalle: enCursoDetalle,
+      ofertas: [ofertaAceptadaFixture({ id: "asg-8", ruta_id: "ruta-1" })],
+    });
+
+    await renderRoutes();
+    await abandonWithoutComment();
+
+    expect(alert).toHaveBeenCalled();
+    expect(mockApi.post).toHaveBeenCalledWith("/asignaciones/asg-8/abandonar", {
+      body: { motivo_id: 45 },
+    });
+    expect(
+      await screen.findByText("Liberaste la recogida. La donación volvió a publicarse."),
+    ).toBeOnTheScreen();
+  });
+
+  it("requires a reason before calling the API", async () => {
+    answerGets({
+      enCurso,
+      detalle: enCursoDetalle,
+      ofertas: [ofertaAceptadaFixture({ id: "asg-8", ruta_id: "ruta-1" })],
+    });
+
+    await renderRoutes();
+
+    await fireEvent.press(await screen.findByRole("button", { name: "No puedo hacer esta recogida" }));
+    await fireEvent.press(await screen.findByRole("button", { name: "Confirmar abandono" }));
+
+    expect(screen.getByText("Selecciona un motivo.")).toBeOnTheScreen();
+    expect(mockApi.post).not.toHaveBeenCalled();
+  });
+
+  it("hides the action when the stop's assignment is unknown", async () => {
+    answerGets({ enCurso, detalle: enCursoDetalle, ofertas: [] });
+
+    await renderRoutes();
+
+    expect(await screen.findByText("Próxima parada")).toBeOnTheScreen();
+    expect(screen.queryByRole("button", { name: "No puedo hacer esta recogida" })).toBeNull();
+  });
+
+  it("gives up an accepted pickup still without a route", async () => {
+    autoConfirm();
+    answerAbandon(false);
+    answerGets({ ofertas: [ofertaAceptadaFixture({ id: "asg-8" })] });
+
+    await renderRoutes();
+    await abandonWithoutComment();
+
+    expect(mockApi.post).toHaveBeenCalledWith("/asignaciones/asg-8/abandonar", {
+      body: { motivo_id: 45 },
+    });
+    expect(await screen.findByText("Liberaste la recogida.")).toBeOnTheScreen();
+  });
+});
