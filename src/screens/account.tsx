@@ -654,20 +654,29 @@ const RATED_ROLE = { DONANTE: "VOLUNTARIO", VOLUNTARIO: "DONANTE" } as const sat
 const MAX_ASPECTS = 5;
 const NO_ASPECTS: AspectoCalificacionDto[] = [];
 
-/** Why the donor cannot send the rating, or null when the API would take it. */
-function ratingBlocker(dto: DonationDetail["dto"]): string | null {
+/**
+ * Why the rater cannot send the rating, or null when the API would take it. The volunteer
+ * rates once the bank confirms the delivery (the assignment turns COMPLETADA); before that
+ * the API answers `asignacion-no-completada`.
+ */
+function ratingBlocker(dto: DonationDetail["dto"], rater: Rater): string | null {
+  if (rater === "VOLUNTARIO") {
+    return dto.asignacion?.estado === "COMPLETADA"
+      ? null
+      : "Podrás calificar cuando la entrega se confirme en el banco.";
+  }
   if (dto.asignacion?.calificada_por_mi) return "Ya calificaste a este voluntario.";
   if (!isDelivered(dto.estado)) return "Podrás calificar cuando la donación se entregue en el banco.";
   return null;
 }
 
 /**
- * Opened with `?id=` (donation UUID). The donor's rating goes to
- * `POST /asignaciones/:id/calificacion`; the volunteer's (MOV-46) is not sent yet.
+ * Opened with `?id=` (donation UUID). Both sides rate through
+ * `POST /asignaciones/:id/calificacion`: the donor rates the volunteer (MOV-37), the volunteer
+ * the donor after the delivery (MOV-46). A volunteer who already rated sees it as done.
  */
 export function RatingScreen({ rater = "DONANTE" }: { rater?: Rater }) {
   const [aspects, setAspects] = useState<string[]>([]);
-  const [submitted, setSubmitted] = useState(false);
   const [rating, setRating] = useState(4);
   const [comment, setComment] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -701,9 +710,9 @@ export function RatingScreen({ rater = "DONANTE" }: { rater?: Rater }) {
       </Screen>
     );
   }
-  const sends = rater === "DONANTE";
-  const blocker = sends ? ratingBlocker(dto) : null;
-  const done = sends ? isSuccess : submitted;
+  const alreadyRated = rater === "VOLUNTARIO" && dto.asignacion?.calificada_por_mi === true;
+  const blocker = ratingBlocker(dto, rater);
+  const done = isSuccess || alreadyRated;
   const toggleAspect = (codigo: string) =>
     setAspects((current) =>
       current.includes(codigo)
@@ -713,10 +722,6 @@ export function RatingScreen({ rater = "DONANTE" }: { rater?: Rater }) {
           : [...current, codigo],
     );
   const send = async () => {
-    if (!sends) {
-      setSubmitted(true);
-      return;
-    }
     const asignacionId = dto.asignacion?.id;
     if (blocker !== null || !asignacionId) return;
     setError(null);
@@ -737,7 +742,7 @@ export function RatingScreen({ rater = "DONANTE" }: { rater?: Rater }) {
   };
   const back: Href =
     rater === "VOLUNTARIO"
-      ? { pathname: "/voluntario/registrar-recogida", params: { id: donation.id } }
+      ? "/voluntario/rutas"
       : { pathname: "/donante/detalle-donacion", params: { id: donation.id } };
   return (
     <Screen title={copy.title} subtitle={copy.subtitle} back>
@@ -809,12 +814,10 @@ export function RatingScreen({ rater = "DONANTE" }: { rater?: Rater }) {
       {done ? (
         <Animated.View entering={enterItem} layout={itemLayout} style={{ gap: 24 }}>
           <Copy tone="primary">
-            {sends
-              ? "¡Gracias! Registramos tu calificación."
-              : "El envío de calificaciones estará disponible próximamente."}
+            {isSuccess ? "¡Gracias! Registramos tu calificación." : "Ya calificaste a este donante."}
           </Copy>
           <NavButton href={back} dismissTo showArrow={false}>
-            {rater === "VOLUNTARIO" ? "Volver a recogida" : "Volver al detalle de donación"}
+            {rater === "VOLUNTARIO" ? "Volver a mis rutas" : "Volver al detalle de donación"}
           </NavButton>
         </Animated.View>
       ) : (

@@ -44,9 +44,9 @@ Volunteer screens exist but mostly render preview data. Home summary/activity, a
 | V5 | MOV-42 In-progress stop: arrival, contact, failed stop | delegated writer | [x] | `e82d13b` | |
 | V6 | MOV-45 Abandon in three places | delegated writer | [x] | `43a28ee` | |
 | V7 | API-10 in findfood-api | delegated writer (API repo) | [x] | API `2b43516` | medium · under_budget (161 lines) · pending; review at close |
-| V8 | MOV-43 Register pickup | delegated writer | [ ] | | |
-| V9 | MOV-44 Delivery and route close | delegated writer | [ ] | | |
-| V10 | MOV-46 Rate donor, docs, final checks | delegated writer | [ ] | | |
+| V8 | MOV-43 Register pickup | delegated writer (2+ non-trivial files) | [x] | | |
+| V9 | MOV-44 Delivery and route close | delegated writer | [x] | | |
+| V10 | MOV-46 Rate donor, docs, final checks (+ review follow-ups) | delegated writer | [x] | | |
 
 ## External prerequisites (user)
 - findfood-api: `supabase db push` + `npm run db:pull` for the API-10 migration; run the API locally.
@@ -69,8 +69,14 @@ Volunteer screens exist but mostly render preview data. Home summary/activity, a
 
 - V2/V3 review follow-ups (fix in V10): offer `expiredId` never clears when the server still lists the offer or its `expira_at` moves; Home treats an ofertas fetch error as "Sin rutas programadas" (no CTA/banner, no error).
 
+- V8 (`9b8a274`): `collection.test.ts` written first (RED: module missing) → GREEN 10/10; `collection-screen.test.tsx` RED 10/10 against the previous screen → GREEN 10/10 (legacy `?id=` empty state, completed/not-in-progress states, prefilled estimates + live total, confirm disabled without evidence, product condition required, exact body with precise fix, weak fix → native confirm + `confirmacion_manual: true`, server `precision-insuficiente` → manual retry, `evidencia-requerida` message). Shared `useConfirmStop` in `route-actions.tsx` captures `confirmada_en_dispositivo` on press, sends `precision_m` only when measured. "Calificar donante" link removed. The current fix is not attached to the evidence registration: `PhotoField` has no `ubicacion` prop and `photo-field.tsx` is outside the V8 surface. `scripts/check-render.cjs` answers the route detail and evidence lists and asserts the collection form.
+- V9 (`8fbcab5`): `delivery-screen.test.tsx` RED 5/5 → GREEN 5/5 (empty state, warehouse + pickup outcomes + kg, confirm body without pickup fields then COMPLETADA summary with duration and "Calificar donantes" link to `calificar-donante?id=`, summary survives reopening, `recogidas-pendientes` → "Volver a la ruta"). Stop helpers (`useStopParams`, `useStopRoute`, `StopUnavailable`) moved to `route-actions.tsx`. Location tracking check: `useVolunteerLocationTracking` derives tracking from `rutas.list(ROUTES_IN_PROGRESS).total`, and the confirm mutation invalidates `rutas.lists()`, so tracking stops once no route is EN_CURSO and the volunteer is not available (no change needed).
+- Review follow-ups (`a50853d`): offer expiry keyed by `id@expira_at` (RED 2 → GREEN: a later deadline for the same offer re-enables Aceptar; the new deadline expires again); Home offers error → "No pudimos cargar tus ofertas" with retry (RED 1 → GREEN); `ArrivalButton` wraps `getCurrentFix` in try/finally (RED: rejecting fix → GREEN posts llegada `{}` and stops loading); next-stop actions keyed by `parada.id`, failed-stop form and abandon form close on success (RED: form carried over → GREEN closed and empty on the next stop); route tests wait for the delivery content and the ofertas query before asserting absences; offer test restores spies in `afterEach`.
+- V10: `rating-screen.test.tsx` RED 3 → GREEN 14/14 (volunteer sends `{ puntaje, comentario }` to `/asignaciones/:id/calificacion` and returns to `/voluntario/rutas`; blocked with "Podrás calificar cuando la entrega se confirme en el banco." until the assignment is COMPLETADA; `calificada_por_mi` shows the done state). The aspects-hidden test passed before the change (the section already rendered only with catalog rows); kept as a regression test. Docs: `docs/integracion-backend.md` (volunteer flow endpoints, API-10, remaining API follow-ups) and `docs/pantallas.md` (`/ruta-activa` = Rutas tab; stop screens take `paradaId`/`rutaId`). Checks: typecheck, lint, `npm test`, `test:render` pass.
+
 ## Follow-ups
 - API-09, API-05, DONANTE rating aspects seed, failed stop leaves donation EN_RECOLECCION, bank web `estado_producto`, offline confirmation queue.
+- Attach the confirmation fix to the stop evidence (`PhotoField` needs a `ubicacion` input).
 
 ## Next step
-V8 (MOV-43 Register pickup).
+Final API review (API-10 `2b43516`, pending at close) and manual device QA in a development build (camera, GPS, push; walkthrough in the plan).
