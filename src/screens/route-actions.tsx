@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Alert, Platform, StyleSheet, View } from "react-native";
 
+import { isApiError } from "@/api/errors";
 import { messageFor } from "@/api/problem-messages";
 import { CallButton } from "@/components/findfood/call-button";
 import { QueryContent } from "@/components/findfood/feedback";
@@ -38,13 +39,16 @@ import {
   pickupWindowLabel,
   stopProgress,
 } from "@/domain/mappers/routes";
-import { getCurrentFix } from "@/location/current-fix";
+import { getCurrentFix, needsManualConfirmation, type CurrentFix } from "@/location/current-fix";
 import { useAbandonarAsignacionMutation, useOfertas } from "@/services/asignaciones";
 import { useMotivos, useTiposIncidencia, type TipoIncidenciaDto } from "@/services/catalogos";
 import { donacionQuery } from "@/services/donaciones";
 import {
+  useConfirmarParadaMutation,
   useParadaFallidaMutation,
   useRegistrarLlegadaMutation,
+  type ConfirmarParadaBody,
+  type ParadaDto,
   type ParadaRutaDto,
   type RutaDetalleDto,
 } from "@/services/rutas";
@@ -428,6 +432,88 @@ function AbandonForm({
       </Button>
     </Section>
   );
+}
+
+/** What each screen adds to a stop confirmation; time and location come from the hook. */
+export type StopConfirmationFields = Omit<
+  ConfirmarParadaBody,
+  "confirmada_en_dispositivo" | "ubicacion" | "precision_m" | "confirmacion_manual"
+>;
+
+/** The location part of a confirmation: only what the device actually measured. */
+function locationFields(fix: CurrentFix | null): Pick<ConfirmarParadaBody, "ubicacion" | "precision_m"> {
+  if (fix === null) return {};
+  return fix.precision_m !== null
+    ? { ubicacion: fix.ubicacion, precision_m: fix.precision_m }
+    : { ubicacion: fix.ubicacion };
+}
+
+/** Asks before confirming a stop without a fix the API accepts on its own. */
+function askManualConfirmation(onConfirm: () => void) {
+  confirmAction(
+    {
+      title: "Ubicación imprecisa",
+      question:
+        "La señal GPS es débil o no está disponible. ¿Confirmas que estás en el punto de la parada?",
+      confirmLabel: "Confirmar sin GPS preciso",
+    },
+    onConfirm,
+  );
+}
+
+/**
+ * `POST /paradas/:id/confirmar` for the pickup and delivery screens. Captures the device
+ * time when pressed, reads one fix and, when the API would refuse it (`precision-insuficiente`),
+ * asks the volunteer to confirm manually first; a server refusal over precision offers the
+ * same manual retry. `errorType` is the problem slug of the last failure, for screens that
+ * answer a specific one (`recogidas-pendientes`).
+ */
+export function useConfirmStop(paradaId: string) {
+  const { mutateAsync: confirmar, isPending } = useConfirmarParadaMutation();
+  const [locating, setLocating] = useState(false);
+  const [failure, setFailure] = useState<{ message: string; type: string | null } | null>(null);
+
+  const send = async (body: ConfirmarParadaBody, onDone: (parada: ParadaDto) => void) => {
+    let parada: ParadaDto;
+    try {
+      parada = await confirmar({ id: paradaId, body });
+    } catch (error) {
+      if (isApiError(error) && error.type === "precision-insuficiente" && !body.confirmacion_manual) {
+        askManualConfirmation(() => void send({ ...body, confirmacion_manual: true }, onDone));
+        return;
+      }
+      setFailure({ message: messageFor(error), type: isApiError(error) ? error.type : null });
+      return;
+    }
+    onDone(parada);
+  };
+
+  const confirm = async (fields: StopConfirmationFields, onDone: (parada: ParadaDto) => void) => {
+    setFailure(null);
+    const confirmada_en_dispositivo = new Date().toISOString();
+    setLocating(true);
+    let fix: CurrentFix | null = null;
+    try {
+      fix = await getCurrentFix();
+    } catch {
+      // `getCurrentFix` resolves null on its own; a rejection still means "no fix".
+    } finally {
+      setLocating(false);
+    }
+    const body: ConfirmarParadaBody = { confirmada_en_dispositivo, ...fields, ...locationFields(fix) };
+    if (needsManualConfirmation(fix)) {
+      askManualConfirmation(() => void send({ ...body, confirmacion_manual: true }, onDone));
+      return;
+    }
+    await send(body, onDone);
+  };
+
+  return {
+    confirm,
+    busy: locating || isPending,
+    error: failure?.message,
+    errorType: failure?.type ?? null,
+  };
 }
 
 const styles = StyleSheet.create({

@@ -1,9 +1,9 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { ApiError, isApiError } from "@/api/errors";
 import { messageFor } from "@/api/problem-messages";
-import type { MeVoluntarioDto, VerificacionVoluntarioDto } from "@/api/types";
+import type { EstadoProducto, MeVoluntarioDto, VerificacionVoluntarioDto } from "@/api/types";
 import { CallButton } from "@/components/findfood/call-button";
 import { Countdown } from "@/components/findfood/countdown";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
@@ -25,7 +25,17 @@ import { useMotivos, useTiposVehiculo, type TipoVehiculoDto } from "@/services/c
 import { useSolicitarVoluntarioMutation } from "@/services/perfil";
 import { offerFromOferta, selectOffer, type OfferView } from "@/domain/mappers/offers";
 import { formatKg } from "@/domain/mappers/profile";
-import { acceptedWithoutRoute } from "@/domain/mappers/routes";
+import { acceptedWithoutRoute, stopProgress } from "@/domain/mappers/routes";
+import {
+  OBSERVACIONES_MAX,
+  formatWeightInput,
+  liveTotalKg,
+  validateCollection,
+  type CollectionErrors,
+  type CollectionValues,
+} from "@/domain/validation/collection";
+import { useEvidencias } from "@/services/evidencias";
+import { rutaQuery } from "@/services/rutas";
 import { queryKeys } from "@/services/query-keys";
 import {
   useAceptarOfertaMutation,
@@ -52,8 +62,8 @@ import {
 } from "@/components/findfood/ui";
 import { colors } from "@/design/tokens";
 
-import { useDonationId } from "./donation-queries";
-import { AbandonAssignment } from "./route-actions";
+import { useDonationDetail } from "./donation-queries";
+import { AbandonAssignment, useConfirmStop } from "./route-actions";
 
 /**
  * The catalog vehicle types, keyed by their id as text (the select's value); the request
@@ -619,26 +629,215 @@ function RejectOffer({ asignacionId, onBack }: { asignacionId: string; onBack: (
   );
 }
 
-/** Opened from the active route; `?id=` is the stop's donation (UUID), when known. */
-export function CollectionScreen() {
-  const id = useDonationId();
-  const [condition, setCondition] = useState("Bueno");
-  const [weight, setWeight] = useState("20 kg");
-  const [notes, setNotes] = useState("");
+/** The `?paradaId=&rutaId=` a stop screen opens with; undefined when either is missing. */
+export function useStopParams(): { paradaId: string; rutaId: string } | undefined {
+  const { paradaId, rutaId } = useLocalSearchParams<{ paradaId?: string; rutaId?: string }>();
+  return typeof paradaId === "string" && paradaId !== "" && typeof rutaId === "string" && rutaId !== ""
+    ? { paradaId, rutaId }
+    : undefined;
+}
+
+/** `GET /rutas/:id`, idle without an id (the stop screens show their empty state). */
+export function useStopRoute(rutaId: string | undefined) {
+  return useQuery({ ...rutaQuery(rutaId ?? ""), enabled: Boolean(rutaId) });
+}
+
+/** A stop screen opened without its stop, or for a stop it cannot act on any more. */
+export function StopUnavailable({ title, description }: { title: string; description: string }) {
   return (
-    <Screen title="Registrar recogida" subtitle="Parada 3 de 4" back>
-      <SelectField label="Estado del producto" value={condition} onChange={setCondition} options={["Bueno", "Regular", "Malo"].map(value => ({ label: value, value }))} />
-      <Field label="Peso aprox." value={weight} onChangeText={setWeight} />
-      <Section title="Evidencia fotográfica">
-        <PhotoField label="Evidencia fotográfica" mode="evidence" proposito="EVIDENCIA" tipo="RECOGIDA" />
-      </Section>
-      <Field label="Observaciones" value={notes} onChangeText={setNotes} placeholder="Describe el estado del producto" multiline />
-      <NavButton href={{ pathname: "/voluntario/calificar-donante", params: { id } }} showArrow={false}>Calificar donante</NavButton>
-      <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
-        Confirmar recogida
-      </NavButton>
+    <EmptyState
+      icon="truck"
+      title={title}
+      description={description}
+      action={
+        <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
+          Ver mis rutas
+        </NavButton>
+      }
+    />
+  );
+}
+
+const PRODUCT_CONDITIONS: { label: string; value: EstadoProducto }[] = [
+  { label: "Bueno", value: "BUENO" },
+  { label: "Regular", value: "REGULAR" },
+  { label: "Malo", value: "MALO" },
+];
+
+/**
+ * Registers a pickup (MOV-43), opened from the route in progress with `?paradaId=&rutaId=`.
+ * The stop comes from the route detail (cached by Rutas) and the items from the donation
+ * (prefetched on arrival). Only an EN_SITIO or PENDIENTE pickup of a route in progress can
+ * be registered; anything else explains why and links back to the routes.
+ */
+export function CollectionScreen() {
+  const params = useStopParams();
+  const ruta = useStopRoute(params?.rutaId);
+  const parada = ruta.data?.paradas.find((stop) => stop.id === params?.paradaId);
+  return (
+    <Screen
+      title="Registrar recogida"
+      subtitle={ruta.data && parada ? `Parada ${stopProgress(ruta.data.paradas, parada)}` : "Voluntario"}
+      back
+    >
+      {params === undefined ? (
+        <StopUnavailable
+          title="Abre la recogida desde tu ruta"
+          description="Registra cada recogida desde la próxima parada de tu ruta en curso."
+        />
+      ) : (
+        <QueryContent query={ruta} loadingLabel="Cargando la parada">
+          {(detalle) =>
+            parada === undefined || parada.tipo !== "RECOGIDA" || parada.donacion_id === null ? (
+              <StopUnavailable
+                title="No encontramos esta recogida"
+                description="Pudo salir de la ruta. Revisa tu ruta en curso."
+              />
+            ) : parada.estado === "COMPLETADA" ? (
+              <StopUnavailable
+                title="Recogida registrada"
+                description="Esta recogida ya quedó confirmada."
+              />
+            ) : detalle.estado !== "EN_CURSO" ||
+              (parada.estado !== "EN_SITIO" && parada.estado !== "PENDIENTE") ? (
+              <StopUnavailable
+                title="Esta recogida no se puede registrar"
+                description="Solo se registran las recogidas abiertas de una ruta en curso."
+              />
+            ) : (
+              <CollectionContent paradaId={parada.id} donacionId={parada.donacion_id} />
+            )
+          }
+        </QueryContent>
+      )}
     </Screen>
   );
+}
+
+function CollectionContent({ paradaId, donacionId }: { paradaId: string; donacionId: string }) {
+  const donacion = useDonationDetail(donacionId);
+  return (
+    <QueryContent query={donacion} loadingLabel="Cargando los productos">
+      {({ dto }) => (
+        <CollectionForm
+          paradaId={paradaId}
+          rows={
+            dto.items.length > 0
+              ? dto.items.map((item) => ({
+                  itemId: item.id,
+                  label: `Peso real · ${item.descripcion ?? item.tipo_alimento.nombre} (kg)`,
+                  estimateKg: item.peso_estimado_kg,
+                }))
+              : [{ itemId: null, label: "Peso recogido (kg)", estimateKg: dto.peso_estimado_kg }]
+          }
+        />
+      )}
+    </QueryContent>
+  );
+}
+
+interface WeightField {
+  itemId: string | null;
+  label: string;
+  estimateKg: number;
+}
+
+function CollectionForm({ paradaId, rows }: { paradaId: string; rows: WeightField[] }) {
+  const [estado, setEstado] = useState<CollectionValues["estado"]>("");
+  const [pesos, setPesos] = useState(() => rows.map((row) => formatWeightInput(row.estimateKg)));
+  const [observaciones, setObservaciones] = useState("");
+  const [errors, setErrors] = useState<CollectionErrors>({ pesos: {} });
+  // Registered on this screen; the list also covers photos registered before reopening it.
+  const [uploaded, setUploaded] = useState(false);
+  const evidencias = useEvidencias({ parada_id: paradaId });
+  const hasEvidence = uploaded || (evidencias.data?.length ?? 0) > 0;
+  const { confirm, busy, error } = useConfirmStop(paradaId);
+
+  const values: CollectionValues = {
+    estado,
+    pesos: rows.map((row, index) => ({ itemId: row.itemId, value: pesos[index] ?? "" })),
+    observaciones,
+  };
+
+  const setPeso = (index: number) => (text: string) =>
+    setPesos((current) => current.map((value, i) => (i === index ? text : value)));
+
+  const submit = () => {
+    const result = validateCollection(values);
+    setErrors(result.ok ? { pesos: {} } : result.errors);
+    if (!result.ok) return;
+    const { estado_producto, items, peso_confirmado_kg, observaciones: obs } = result.data;
+    void confirm(
+      {
+        peso_confirmado_kg,
+        estado_producto,
+        ...(items.length > 0 ? { items } : {}),
+        ...(obs !== undefined ? { observaciones: obs } : {}),
+      },
+      () => router.dismissTo("/voluntario/rutas"),
+    );
+  };
+
+  return (
+    <>
+      <SelectField
+        label="Estado del producto *"
+        value={estado}
+        options={PRODUCT_CONDITIONS}
+        onChange={(value) => setEstado(value as EstadoProducto)}
+      />
+      <FormMessage message={errors.estado} />
+      <Section title="Peso recogido">
+        {rows.map((row, index) => (
+          <Field
+            key={row.itemId ?? "total"}
+            label={row.label}
+            value={pesos[index] ?? ""}
+            onChangeText={setPeso(index)}
+            keyboardType="decimal-pad"
+            accessibilityHint={`Estimado: ${formatKg(row.estimateKg)}`}
+            error={errors.pesos[index]}
+          />
+        ))}
+        <Copy weight="bold">{`Total recogido: ${formatTotalKg(liveTotalKg(values.pesos))}`}</Copy>
+      </Section>
+      <Section title="Evidencia fotográfica">
+        <PhotoField
+          label="Evidencia fotográfica"
+          mode="evidence"
+          proposito="EVIDENCIA"
+          tipo="RECOGIDA"
+          padre={{ parada_id: paradaId }}
+          onUploaded={() => setUploaded(true)}
+        />
+      </Section>
+      <Field
+        label="Observaciones"
+        value={observaciones}
+        onChangeText={setObservaciones}
+        placeholder="Describe el estado del producto"
+        multiline
+        maxLength={OBSERVACIONES_MAX}
+        error={errors.observaciones}
+      />
+      <Copy tone="secondary" style={styles.counter}>
+        {`${observaciones.length}/${OBSERVACIONES_MAX}`}
+      </Copy>
+      <FormMessage message={errors.form ?? error} />
+      <FormMessage
+        tone="info"
+        message={hasEvidence ? undefined : "Adjunta al menos una foto para confirmar la recogida."}
+      />
+      <Button loading={busy} disabled={!hasEvidence} onPress={submit}>
+        Confirmar recogida
+      </Button>
+    </>
+  );
+}
+
+/** `15,5 kg`, keeping the cents the volunteer typed. */
+function formatTotalKg(kg: number): string {
+  return `${String(kg).replace(".", ",")} kg`;
 }
 
 const styles = StyleSheet.create({
@@ -646,4 +845,5 @@ const styles = StyleSheet.create({
   offerCode: { fontSize: 20, lineHeight: 28 },
   divider: { height: 1, backgroundColor: colors.border },
   footnote: { fontSize: 11, textAlign: "center" },
+  counter: { fontSize: 11, textAlign: "right" },
 });

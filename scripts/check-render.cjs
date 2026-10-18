@@ -15,6 +15,8 @@ let accessPhase = "app";
 let me;
 let fixtures;
 let draft;
+/** What `GET /rutas/:id` answers for the stop screens. */
+let routeDetail;
 /** Raw answer of a query key (`["donaciones", "detail", id]`…), or undefined. */
 function answerFor(queryKey) {
   const [root, kind, arg] = queryKey;
@@ -23,6 +25,8 @@ function answerFor(queryKey) {
     return fixtures.bandejaFixture([fixtures.notificacionFixture()]);
   if (root === "asignaciones" && kind === "ofertas") return [fixtures.ofertaFixture()];
   if (root === "catalogos") return fixtures.catalogosFixture;
+  if (root === "rutas" && kind === "detail") return routeDetail;
+  if (root === "evidencias") return [];
   if (root !== "donaciones") return undefined;
   if (kind === "detail")
     return fixtures.detalleFixture({ id: arg, estado: "RECIBIDA" });
@@ -323,6 +327,13 @@ Module._load = function (name, parent, isMain) {
 Slot = require("expo-router/build/ui/Slot").Slot;
 fixtures = require("../src/test-utils/fixtures.ts");
 me = fixtures.meFixture();
+// A route in progress whose first pickup the volunteer reached.
+routeDetail = fixtures.rutaDetalleFixture({
+  estado: "EN_CURSO",
+  paradas: fixtures
+    .rutaDetalleFixture()
+    .paradas.map((p) => (p.id === "par-1" ? { ...p, estado: "EN_SITIO" } : p)),
+});
 const {
   initialDonationDraft,
   appendProduct,
@@ -396,6 +407,18 @@ try {
   assert(
     renderToStaticMarkup(React.createElement(OfferScreen)).includes(
       "Esta oferta ya no está disponible",
+    ),
+  );
+  // The pickup registration reads its stop from the route and the items from the donation.
+  const { CollectionScreen } = require("../src/screens/volunteer.tsx");
+  routeParams = { paradaId: "par-1", rutaId: "ruta-1" };
+  const collectionHtml = renderToStaticMarkup(React.createElement(CollectionScreen));
+  assert(collectionHtml.includes("Parada 1 de 3") && collectionHtml.includes("Estado del producto"));
+  assert(collectionHtml.includes("Total recogido: 35 kg"));
+  routeParams = {};
+  assert(
+    renderToStaticMarkup(React.createElement(CollectionScreen)).includes(
+      "Abre la recogida desde tu ruta",
     ),
   );
   const { RatingScreen } = require("../src/screens/account.tsx");
