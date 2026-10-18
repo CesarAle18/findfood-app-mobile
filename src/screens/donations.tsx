@@ -2,7 +2,7 @@ import { useState } from "react";
 import { router } from "expo-router";
 
 import { messageFor } from "@/api/problem-messages";
-import type { EstadoDonacion } from "@/api/types";
+import type { EstadoDonacion, EstadoParada } from "@/api/types";
 import { DateTimeField } from "@/components/findfood/date-time-field";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import { PhotoField } from "@/components/findfood/photo-field";
@@ -29,6 +29,7 @@ import {
   Button,
   Card,
   Copy,
+  Detail,
   Field,
   FormMessage,
   NavButton,
@@ -68,8 +69,14 @@ import {
   usePublicarDonacionMutation,
   type HistorialEstadoDto,
 } from "@/services/donaciones";
+import { useEvidencias } from "@/services/evidencias";
+import type { RutaDetalleDto } from "@/services/rutas";
+import { collectedKg } from "@/domain/mappers/routes";
+import { formatKg } from "@/domain/mappers/profile";
 import { useMobile } from "@/state/mobile-context";
 import { StyleSheet, View } from "react-native";
+
+import { StopUnavailable, useConfirmStop, useStopParams, useStopRoute } from "./route-actions";
 
 import {
   PUBLISHED_POLL_MS,
@@ -588,34 +595,187 @@ function CancelDonation({ id }: { id: string }) {
     </Section>
   );
 }
-/** The volunteer hands the route over at the bank; the donor has `DonorDeliveryScreen`. */
+/**
+ * The volunteer hands the route over at the bank (MOV-44), opened from the route in progress
+ * with `?paradaId=&rutaId=`; the donor has `DonorDeliveryScreen`. Confirming the delivery
+ * closes the route: the refetched detail turns COMPLETADA and the same screen shows the
+ * summary and the donors to rate, also when it is opened again later.
+ */
 export function DeliveryScreen() {
+  const params = useStopParams();
+  const ruta = useStopRoute(params?.rutaId);
+  const parada = ruta.data?.paradas.find((stop) => stop.id === params?.paradaId);
   return (
-    <Screen title="Entrega en banco" subtitle="Ruta R-045" back>
-      <Card soft>
-        <Row>
-          <Icon name="check" size={19} />
-          <Copy weight="medium">Ruta completada</Copy>
-        </Row>
-        <Copy weight="semibold" style={{ fontSize: 19, lineHeight: 27 }}>
-          4 recogidas · 118 kg
-        </Copy>
-      </Card>
-      <Section title="Evidencia de entrega">
-        <PhotoField label="Evidencia de entrega" mode="evidence" proposito="EVIDENCIA" tipo="ENTREGA" />
-      </Section>
-      <Stack gap={8}>
-        <Copy tone="secondary" style={{ fontSize: 12 }}>
-          Hora de entrega
-        </Copy>
-        <Copy weight="semibold" style={{ fontSize: 22, lineHeight: 30 }}>
-          18:42
-        </Copy>
-      </Stack>
-      <View style={{ flex: 1, minHeight: 20 }} />
-      <NavButton href="/voluntario" dismissTo showArrow={false}>
-        Finalizar ruta
-      </NavButton>
+    <Screen
+      title="Entrega en banco"
+      subtitle={ruta.data ? `Ruta ${ruta.data.codigo}` : "Voluntario"}
+      back
+    >
+      {params === undefined ? (
+        <StopUnavailable
+          title="Abre la entrega desde tu ruta"
+          description="Registra la entrega desde la última parada de tu ruta en curso."
+        />
+      ) : (
+        <QueryContent query={ruta} loadingLabel="Cargando la ruta">
+          {(detalle) =>
+            detalle.estado === "COMPLETADA" ? (
+              <RouteCompleted ruta={detalle} />
+            ) : parada === undefined || parada.tipo !== "ENTREGA" ? (
+              <StopUnavailable
+                title="No encontramos esta entrega"
+                description="Revisa tu ruta en curso."
+              />
+            ) : detalle.estado !== "EN_CURSO" ||
+              (parada.estado !== "EN_SITIO" && parada.estado !== "PENDIENTE") ? (
+              <StopUnavailable
+                title="Esta entrega no se puede registrar"
+                description="Solo se registra la entrega de una ruta en curso."
+              />
+            ) : (
+              <DeliveryForm ruta={detalle} paradaId={parada.id} />
+            )
+          }
+        </QueryContent>
+      )}
     </Screen>
   );
 }
+
+/** How many pickups of the route ended in `estado`. */
+const pickupsIn = (ruta: RutaDetalleDto, estado: EstadoParada) =>
+  ruta.paradas.filter((parada) => parada.tipo === "RECOGIDA" && parada.estado === estado).length;
+
+function DeliveryForm({ ruta, paradaId }: { ruta: RutaDetalleDto; paradaId: string }) {
+  const [observaciones, setObservaciones] = useState("");
+  const [uploaded, setUploaded] = useState(false);
+  const evidencias = useEvidencias({ parada_id: paradaId });
+  const hasEvidence = uploaded || (evidencias.data?.length ?? 0) > 0;
+  const { confirm, busy, error, errorType } = useConfirmStop(paradaId);
+  const tooLong = observaciones.trim().length > DELIVERY_NOTES_MAX;
+
+  const submit = () => {
+    if (tooLong) return;
+    const obs = observaciones.trim();
+    // The refetched route turns COMPLETADA and this screen shows the summary.
+    void confirm(obs !== "" ? { observaciones: obs } : {}, () => {});
+  };
+
+  return (
+    <>
+      <Card>
+        <Detail
+          label="Almacén"
+          value={`${ruta.almacen_destino.nombre} · ${ruta.almacen_destino.direccion}`}
+          icon="pin"
+        />
+        <View style={styles.divider} />
+        <Detail label="Recogido" value={formatKg(collectedKg(ruta.paradas))} icon="box" />
+        <View style={styles.divider} />
+        <Detail
+          label="Recogidas"
+          value={`${pickupsIn(ruta, "COMPLETADA")} completadas · ${pickupsIn(ruta, "FALLIDA")} fallidas · ${pickupsIn(ruta, "OMITIDA")} omitidas`}
+          icon="truck"
+        />
+      </Card>
+      <Section title="Evidencia de entrega">
+        <PhotoField
+          label="Evidencia de entrega"
+          mode="evidence"
+          proposito="EVIDENCIA"
+          tipo="ENTREGA"
+          padre={{ parada_id: paradaId }}
+          onUploaded={() => setUploaded(true)}
+        />
+      </Section>
+      <Field
+        label="Observaciones"
+        value={observaciones}
+        onChangeText={setObservaciones}
+        placeholder="Algo que el banco deba saber de la entrega"
+        multiline
+        maxLength={DELIVERY_NOTES_MAX}
+        error={tooLong ? `Las observaciones admiten hasta ${DELIVERY_NOTES_MAX} caracteres.` : undefined}
+      />
+      <Copy tone="secondary" style={styles.counter}>
+        {`${observaciones.length}/${DELIVERY_NOTES_MAX}`}
+      </Copy>
+      <FormMessage message={error} />
+      {errorType === "recogidas-pendientes" ? (
+        <NavButton href="/voluntario/rutas" dismissTo showArrow={false} variant="outline">
+          Volver a la ruta
+        </NavButton>
+      ) : null}
+      <FormMessage
+        tone="info"
+        message={hasEvidence ? undefined : "Adjunta al menos una foto para confirmar la entrega."}
+      />
+      <Button loading={busy} disabled={!hasEvidence} onPress={submit}>
+        Confirmar entrega
+      </Button>
+    </>
+  );
+}
+
+/** `48 min` or `1 h 05 min`. */
+function durationLabel(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")} min`;
+}
+
+/** The closed route: what was delivered and the donors the volunteer can now rate. */
+function RouteCompleted({ ruta }: { ruta: RutaDetalleDto }) {
+  const recogidas = ruta.paradas.filter(
+    (parada) => parada.tipo === "RECOGIDA" && parada.estado === "COMPLETADA" && parada.donacion_id !== null,
+  );
+  return (
+    <>
+      <Card soft>
+        <Row>
+          <Icon name="check" size={19} />
+          <Copy weight="medium">{`Ruta ${ruta.codigo} completada`}</Copy>
+        </Row>
+        <Copy weight="semibold" style={styles.summary}>
+          {`${recogidas.length} ${recogidas.length === 1 ? "recogida" : "recogidas"} · ${formatKg(collectedKg(ruta.paradas))} entregados`}
+        </Copy>
+        {ruta.duracion_real_min !== null ? (
+          <Copy tone="secondary">{`Duración: ${durationLabel(ruta.duracion_real_min)}`}</Copy>
+        ) : null}
+      </Card>
+      {recogidas.length > 0 ? (
+        <Section title="Calificar donantes">
+          {recogidas.map((parada) => (
+            <Card key={parada.id}>
+              <Copy weight="semibold">{parada.contacto_nombre ?? "Donante"}</Copy>
+              {parada.donacion_codigo !== null ? (
+                <Copy tone="secondary">{parada.donacion_codigo}</Copy>
+              ) : null}
+              <NavButton
+                href={{
+                  pathname: "/voluntario/calificar-donante",
+                  params: { id: parada.donacion_id ?? "" },
+                }}
+                variant="outline"
+                showArrow={false}
+              >
+                {`Calificar a ${parada.contacto_nombre ?? "este donante"}`}
+              </NavButton>
+            </Card>
+          ))}
+        </Section>
+      ) : null}
+      <NavButton href="/voluntario" dismissTo showArrow={false}>
+        Volver al inicio
+      </NavButton>
+    </>
+  );
+}
+
+/** Mirrors the API limit of `observaciones` on `POST /paradas/:id/confirmar`. */
+const DELIVERY_NOTES_MAX = 1000;
+
+const styles = StyleSheet.create({
+  divider: { height: 1, backgroundColor: colors.border },
+  counter: { fontSize: 11, textAlign: "right" },
+  summary: { fontSize: 19, lineHeight: 27 },
+});

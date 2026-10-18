@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { ApiError, isApiError } from "@/api/errors";
@@ -35,7 +35,6 @@ import {
   type CollectionValues,
 } from "@/domain/validation/collection";
 import { useEvidencias } from "@/services/evidencias";
-import { rutaQuery } from "@/services/rutas";
 import { queryKeys } from "@/services/query-keys";
 import {
   useAceptarOfertaMutation,
@@ -63,7 +62,13 @@ import {
 import { colors } from "@/design/tokens";
 
 import { useDonationDetail } from "./donation-queries";
-import { AbandonAssignment, useConfirmStop } from "./route-actions";
+import {
+  AbandonAssignment,
+  StopUnavailable,
+  useConfirmStop,
+  useStopParams,
+  useStopRoute,
+} from "./route-actions";
 
 /**
  * The catalog vehicle types, keyed by their id as text (the select's value); the request
@@ -626,35 +631,6 @@ function RejectOffer({ asignacionId, onBack }: { asignacionId: string; onBack: (
         Volver
       </Button>
     </Section>
-  );
-}
-
-/** The `?paradaId=&rutaId=` a stop screen opens with; undefined when either is missing. */
-export function useStopParams(): { paradaId: string; rutaId: string } | undefined {
-  const { paradaId, rutaId } = useLocalSearchParams<{ paradaId?: string; rutaId?: string }>();
-  return typeof paradaId === "string" && paradaId !== "" && typeof rutaId === "string" && rutaId !== ""
-    ? { paradaId, rutaId }
-    : undefined;
-}
-
-/** `GET /rutas/:id`, idle without an id (the stop screens show their empty state). */
-export function useStopRoute(rutaId: string | undefined) {
-  return useQuery({ ...rutaQuery(rutaId ?? ""), enabled: Boolean(rutaId) });
-}
-
-/** A stop screen opened without its stop, or for a stop it cannot act on any more. */
-export function StopUnavailable({ title, description }: { title: string; description: string }) {
-  return (
-    <EmptyState
-      icon="truck"
-      title={title}
-      description={description}
-      action={
-        <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
-          Ver mis rutas
-        </NavButton>
-      }
-    />
   );
 }
 

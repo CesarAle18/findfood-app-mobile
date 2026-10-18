@@ -3,14 +3,15 @@
  * the next stop of a route in progress (arrival, contact, detail, failed stop) and giving an
  * accepted pickup up.
  */
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Platform, StyleSheet, View } from "react-native";
 
 import { isApiError } from "@/api/errors";
 import { messageFor } from "@/api/problem-messages";
 import { CallButton } from "@/components/findfood/call-button";
-import { QueryContent } from "@/components/findfood/feedback";
+import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import { Pressing } from "@/components/findfood/motion";
 import {
   MotivoField,
@@ -44,6 +45,7 @@ import { useAbandonarAsignacionMutation, useOfertas } from "@/services/asignacio
 import { useMotivos, useTiposIncidencia, type TipoIncidenciaDto } from "@/services/catalogos";
 import { donacionQuery } from "@/services/donaciones";
 import {
+  rutaQuery,
   useConfirmarParadaMutation,
   useParadaFallidaMutation,
   useRegistrarLlegadaMutation,
@@ -431,6 +433,35 @@ function AbandonForm({
         Volver
       </Button>
     </Section>
+  );
+}
+
+/** The `?paradaId=&rutaId=` a stop screen opens with; undefined when either is missing. */
+export function useStopParams(): { paradaId: string; rutaId: string } | undefined {
+  const { paradaId, rutaId } = useLocalSearchParams<{ paradaId?: string; rutaId?: string }>();
+  return typeof paradaId === "string" && paradaId !== "" && typeof rutaId === "string" && rutaId !== ""
+    ? { paradaId, rutaId }
+    : undefined;
+}
+
+/** `GET /rutas/:id`, idle without an id (the stop screens show their empty state). */
+export function useStopRoute(rutaId: string | undefined) {
+  return useQuery({ ...rutaQuery(rutaId ?? ""), enabled: Boolean(rutaId) });
+}
+
+/** A stop screen opened without its stop, or for a stop it cannot act on any more. */
+export function StopUnavailable({ title, description }: { title: string; description: string }) {
+  return (
+    <EmptyState
+      icon="truck"
+      title={title}
+      description={description}
+      action={
+        <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
+          Ver mis rutas
+        </NavButton>
+      }
+    />
   );
 }
 

@@ -421,6 +421,17 @@ try {
       "Abre la recogida desde tu ruta",
     ),
   );
+  // The delivery shows the warehouse of the route in progress.
+  const { DeliveryScreen } = require("../src/screens/donations.tsx");
+  routeParams = { paradaId: "par-3", rutaId: "ruta-1" };
+  const volunteerDeliveryHtml = renderToStaticMarkup(React.createElement(DeliveryScreen));
+  assert(volunteerDeliveryHtml.includes("Ruta R-045") && volunteerDeliveryHtml.includes("Bodega Norte"));
+  routeParams = {};
+  assert(
+    renderToStaticMarkup(React.createElement(DeliveryScreen)).includes(
+      "Abre la entrega desde tu ruta",
+    ),
+  );
   const { RatingScreen } = require("../src/screens/account.tsx");
   routeParams = { id: fixtures.DONATION_ID };
   const donorRatingHtml = renderToStaticMarkup(React.createElement(RatingScreen));
