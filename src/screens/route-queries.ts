@@ -42,6 +42,10 @@ export function useCurrentRoute({ enabled = true }: { enabled?: boolean } = {}) 
     ruta,
     isPending: isPending && !isError,
     isError,
+    /** The first failure among the requests that matter, for the error state. */
+    error: isError
+      ? (enCurso.error ?? (plannedMatters ? planificadas.error : null) ?? ruta.error)
+      : null,
     refetch,
     totals: { enCurso: enCurso.data?.total ?? 0, planificadas: planificadas.data?.total ?? 0 },
   };

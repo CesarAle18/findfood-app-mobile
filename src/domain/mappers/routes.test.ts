@@ -13,6 +13,7 @@ import {
   liveOffers,
   nextStop,
   pendingStops,
+  pickupWindowLabel,
   stopProgress,
   validateRouteSelection,
 } from "./routes";
@@ -116,5 +117,18 @@ describe("validateRouteSelection", () => {
     expect(validateRouteSelection([pickup(1), pickup(2, "alm-2")])).toBe(
       "Las recogidas seleccionadas van a almacenes distintos. Elige recogidas del mismo almacén.",
     );
+  });
+});
+
+describe("pickupWindowLabel", () => {
+  it("reads the window in Bogotá time", () => {
+    expect(pickupWindowLabel("2026-10-13T21:00:00Z", "2026-10-13T23:00:00Z")).toBe(
+      "13/10/2026 · 16:00–18:00",
+    );
+  });
+
+  it("is null for the delivery stop and for an unreadable window", () => {
+    expect(pickupWindowLabel(null, null)).toBeNull();
+    expect(pickupWindowLabel("2026-10-13T23:00:00Z", "2026-10-13T21:00:00Z")).toBeNull();
   });
 });

@@ -6,6 +6,9 @@ import type { EstadoParada } from "@/api/types";
 import type { OfertaDto } from "@/services/asignaciones";
 import type { ParadaRutaDto } from "@/services/rutas";
 
+import { fromPickupWindow } from "./dates";
+import { MappingError } from "./errors";
+
 /** Mirrors the API parameter `MAX_PARADAS_POR_RUTA` (pickups; the delivery is added). */
 export const MAX_STOPS_PER_ROUTE = 5;
 
@@ -85,4 +88,18 @@ export function validateRouteSelection(
     return "Las recogidas seleccionadas van a almacenes distintos. Elige recogidas del mismo almacén.";
   }
   return null;
+}
+
+/**
+ * The display line of a pickup window, or null without one (the delivery stop) or when the
+ * API sent an unreadable one: a stop never disappears over its window.
+ */
+export function pickupWindowLabel(inicio: string | null, fin: string | null): string | null {
+  if (inicio === null || fin === null) return null;
+  try {
+    return fromPickupWindow(inicio, fin).display;
+  } catch (error) {
+    if (!(error instanceof MappingError)) throw error;
+    return null;
+  }
 }
