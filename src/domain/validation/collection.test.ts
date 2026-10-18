@@ -122,4 +122,17 @@ describe("validateCollection", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors.form).toBe("El total recogido debe ser mayor que 0.");
   });
+
+  it("says the total is too high when the rows add up above the API maximum", () => {
+    const result = validateCollection(
+      values({
+        pesos: [
+          { itemId: "item-1", value: String(MAX_WEIGHT_KG) },
+          { itemId: "item-2", value: "1" },
+        ],
+      }),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.form).toBe("El total recogido supera el máximo permitido.");
+  });
 });

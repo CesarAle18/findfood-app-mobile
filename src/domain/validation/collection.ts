@@ -58,6 +58,7 @@ const weight = z
   );
 
 const TOTAL_REQUIRED = "El total recogido debe ser mayor que 0.";
+const TOTAL_TOO_HIGH = "El total recogido supera el máximo permitido.";
 
 const collectionSchema = z.object({
   estado: z.enum(["BUENO", "REGULAR", "MALO"], "Selecciona el estado del producto."),
@@ -118,7 +119,8 @@ export function validateCollection(values: CollectionValues): CollectionResult {
   const { estado, pesos, observaciones } = parsed.data;
   const total = roundKg(pesos.reduce((sum, row) => sum + row.value, 0));
   if (total <= 0 || total > MAX_WEIGHT_KG) {
-    return { ok: false, errors: { pesos: {}, form: TOTAL_REQUIRED } };
+    const form = total > MAX_WEIGHT_KG ? TOTAL_TOO_HIGH : TOTAL_REQUIRED;
+    return { ok: false, errors: { pesos: {}, form } };
   }
   return {
     ok: true,
