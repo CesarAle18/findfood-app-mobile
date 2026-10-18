@@ -38,11 +38,11 @@ Volunteer screens exist but mostly render preview data. Home summary/activity, a
 | ID | Task | Route | Status | Commit | Review |
 |---|---|---|---|---|---|
 | V1 | Shared foundation (current fix, countdown, call button, route mappers, `useCurrentRoute`, push invalidation, problem messages, fixtures) | delegated writer (2+ non-trivial files) | [x] | `b2e2da2` | medium · granted · approved (1 lens, 2 WARNING follow-ups → V3) |
-| V2 | MOV-40 Home | delegated writer | [x] | `71715b7` (+ fix `b918d08`) | |
-| V3 | MOV-41 Offer | delegated writer | [x] | `2aa8fb4` + render fix | |
-| V4 | MOV-42 Rutas: build/create/start/cancel route, stop list | delegated writer | [x] | | |
-| V5 | MOV-42 In-progress stop: arrival, contact, failed stop | delegated writer | [x] | | |
-| V6 | MOV-45 Abandon in three places | delegated writer | [x] | | |
+| V2 | MOV-40 Home | delegated writer | [x] | `71715b7` (+ fix `b918d08`) | medium · granted · approved `review-102d43f64ae567dd` (2 WARNING follow-ups → V10) |
+| V3 | MOV-41 Offer | delegated writer | [x] | `2aa8fb4` + render fix | medium · granted · approved `review-102d43f64ae567dd` (2 WARNING follow-ups → V10) |
+| V4 | MOV-42 Rutas: build/create/start/cancel route, stop list | delegated writer | [x] | `a86dca7` | |
+| V5 | MOV-42 In-progress stop: arrival, contact, failed stop | delegated writer | [x] | `e82d13b` | |
+| V6 | MOV-45 Abandon in three places | delegated writer | [x] | `43a28ee` | |
 | V7 | API-10 in findfood-api | delegated writer (API repo) | [x] | API `2b43516` | medium · under_budget (161 lines) · pending; review at close |
 | V8 | MOV-43 Register pickup | delegated writer | [ ] | | |
 | V9 | MOV-44 Delivery and route close | delegated writer | [ ] | | |
@@ -66,6 +66,8 @@ Volunteer screens exist but mostly render preview data. Home summary/activity, a
 - V4 (`a86dca7`): `route-screen.test.tsx` RED 8/8 (no `ActiveRouteScreen` behavior) → GREEN 8/8: accepted pickups preselected, create sends exactly `{ donacion_ids }`, unchecked rows left out, >5 and mixed warehouses blocked client-side, empty state links to the offers, planned route start and confirmed cancel, "Aceptadas sin ruta" below a route. New `pickupWindowLabel` mapper (tolerant of unreadable windows; written with its test, no separate RED). `useCurrentRoute` now exposes `error`. Preview data and the TODO removed.
 - V5 (`e82d13b`): RED 7 → GREEN 15/15: "Llegué al punto" posts llegada with `ubicacion` only when `getCurrentFix` returns a fix; EN_SITIO links to `registrar-recogida` / `entrega-voluntario` with `{ paradaId, rutaId }`; ENTREGA arrival "Llegué al banco"; "Ver detalle" opens `detalle-donacion?id=`; failed stop blocks descriptions under 5 characters and sends `{ tipo_incidencia_id, descripcion }` after a native confirm. The next pickup's donation detail is prefetched. `scripts/check-render.cjs` stubs `@/location/current-fix` (expo-location has no Node build).
 - V6: RED 3 (route) + 1 (offer) → GREEN: `AbandonAssignment` sends `{ motivo_id }` behind a native confirm and reports "Liberaste la recogida. La donación volvió a publicarse." / "Liberaste la recogida." via the Rutas notice; placed in the accepted offer (then `dismissTo("/voluntario")`), each accepted-without-route row and the next pickup card (hidden without a matching assignment). Fixture motivo 45 (ABANDONO_ASIGNACION without comment) added. Checks: typecheck, lint, `npm test` (92 suites, 1564 tests), `test:render` pass.
+
+- V2/V3 review follow-ups (fix in V10): offer `expiredId` never clears when the server still lists the offer or its `expira_at` moves; Home treats an ofertas fetch error as "Sin rutas programadas" (no CTA/banner, no error).
 
 ## Follow-ups
 - API-09, API-05, DONANTE rating aspects seed, failed stop leaves donation EN_RECOLECCION, bank web `estado_producto`, offline confirmation queue.
