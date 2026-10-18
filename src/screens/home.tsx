@@ -88,6 +88,14 @@ export function HomeScreen() {
             title="No pudimos cargar tu ruta"
             onRetry={() => void route.refetch()}
           />
+        ) : ofertas.data === undefined && ofertas.isError ? (
+          // Without the offers, "no route" could still hide accepted pickups or live offers.
+          <ErrorState
+            error={ofertas.error}
+            title="No pudimos cargar tus ofertas"
+            onRetry={() => void ofertas.refetch()}
+            retrying={ofertas.isFetching}
+          />
         ) : accepted > 0 ? (
           <Card>
             <Copy weight="medium">

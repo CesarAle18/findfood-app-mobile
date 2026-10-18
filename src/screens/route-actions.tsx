@@ -121,7 +121,11 @@ export function NextStop({
         ) : null}
       </Card>
       {parada.estado === "PENDIENTE" ? (
-        <ArrivalButton paradaId={parada.id} label={pickup ? "Llegué al punto" : "Llegué al banco"} />
+        <ArrivalButton
+          key={parada.id}
+          paradaId={parada.id}
+          label={pickup ? "Llegué al punto" : "Llegué al banco"}
+        />
       ) : (
         <NavButton
           href={{
@@ -133,7 +137,8 @@ export function NextStop({
           {pickup ? "Registrar recogida" : "Registrar entrega"}
         </NavButton>
       )}
-      {pickup ? <PickupActions parada={parada} onNotice={onNotice} /> : null}
+      {/* Keyed by stop: an open form or its text never carries over to the next stop. */}
+      {pickup ? <PickupActions key={parada.id} parada={parada} onNotice={onNotice} /> : null}
     </Section>
   );
 }
@@ -181,8 +186,14 @@ function ArrivalButton({ paradaId, label }: { paradaId: string; label: string })
   const arrive = async () => {
     setError(undefined);
     setLocating(true);
-    const fix = await getCurrentFix();
-    setLocating(false);
+    let fix: CurrentFix | null = null;
+    try {
+      fix = await getCurrentFix();
+    } catch {
+      // `getCurrentFix` resolves null on its own; a rejection still means "no fix".
+    } finally {
+      setLocating(false);
+    }
     try {
       await registrar({ id: paradaId, body: fix ? { ubicacion: fix.ubicacion } : {} });
     } catch (failure) {
@@ -287,6 +298,7 @@ function FailedStopForm({
       return;
     }
     onNotice("Reportamos el problema de la parada.");
+    onBack();
   };
 
   const submit = () => {
@@ -359,7 +371,14 @@ export function AbandonAssignment({
 }) {
   const [open, setOpen] = useState(false);
   return open ? (
-    <AbandonForm asignacionId={asignacionId} onBack={() => setOpen(false)} onDone={onDone} />
+    <AbandonForm
+      asignacionId={asignacionId}
+      onBack={() => setOpen(false)}
+      onDone={(message) => {
+        setOpen(false);
+        onDone(message);
+      }}
+    />
   ) : (
     <Pressing
       accessibilityRole="button"

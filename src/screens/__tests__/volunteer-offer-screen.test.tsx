@@ -97,6 +97,8 @@ beforeEach(() => {
 
 afterEach(() => {
   client.clear();
+  // Also undoes a test's own Alert spy and real timers when one of its assertions fails.
+  jest.restoreAllMocks();
   jest.useRealTimers();
 });
 
@@ -125,6 +127,37 @@ describe("OfferScreen (MOV-41)", () => {
     expect(screen.getByText("Esta oferta venció")).toBeOnTheScreen();
     expect(screen.getByRole("button", { name: "Aceptar" })).toBeDisabled();
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.asignaciones.ofertas() });
+  });
+
+  it("enables Aceptar again when a refetch brings the same offer with a later deadline", async () => {
+    await renderOffer();
+    await screen.findByText("Vence en 10:00");
+    await act(() => jest.advanceTimersByTimeAsync(10 * 60_000));
+    expect(screen.getByRole("button", { name: "Aceptar" })).toBeDisabled();
+
+    // The server moved the deadline of the same assignment five minutes ahead.
+    ofertas = [ofertaFixture({ expira_at: "2026-10-13T20:15:00Z" })];
+    // The next poll lists it again; give its answer a second to land.
+    await act(() => jest.advanceTimersByTimeAsync(16_000));
+
+    expect(screen.queryByText("Esta oferta venció")).toBeNull();
+    expect(screen.getByRole("button", { name: "Aceptar" })).toBeEnabled();
+    expect(screen.getByText(/^Vence en 04:4\d$/)).toBeOnTheScreen();
+  });
+
+  it("expires the new deadline too, keeping the server's deadline as the authority", async () => {
+    await renderOffer();
+    await screen.findByText("Vence en 10:00");
+    await act(() => jest.advanceTimersByTimeAsync(10 * 60_000));
+    ofertas = [ofertaFixture({ expira_at: "2026-10-13T20:11:00Z" })];
+    // The next poll lists it again; give its answer a second to land.
+    await act(() => jest.advanceTimersByTimeAsync(16_000));
+    expect(screen.getByRole("button", { name: "Aceptar" })).toBeEnabled();
+
+    await act(() => jest.advanceTimersByTimeAsync(46_000));
+
+    expect(screen.getByText("Esta oferta venció")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "Aceptar" })).toBeDisabled();
   });
 
   it("polls the offers every 15 s while one waits for an answer", async () => {
@@ -197,6 +230,5 @@ describe("OfferScreen (MOV-41)", () => {
       body: { motivo_id: 45 },
     });
     expect(await screen.findByText("Inicio")).toBeOnTheScreen();
-    jest.restoreAllMocks();
   });
 });

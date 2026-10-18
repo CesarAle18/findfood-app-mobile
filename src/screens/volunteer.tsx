@@ -409,13 +409,15 @@ export function OfferScreen() {
   const queryClient = useQueryClient();
   const { data: me } = useMe();
   const capacityKg = me?.voluntario?.capacidad_carga_kg ?? null;
-  // The id of the offer whose countdown reached zero (another offer starts unexpired).
-  const [expiredId, setExpiredId] = useState<string | null>(null);
-  const expired = offer !== null && expiredId === offer.id;
+  // The offer and deadline whose countdown reached zero. Another offer, or the same one
+  // listed again with a new `expira_at`, starts unexpired: the server's deadline decides.
+  const deadlineKey = offer ? `${offer.id}@${offer.expiresAtIso}` : null;
+  const [expiredKey, setExpiredKey] = useState<string | null>(null);
+  const expired = deadlineKey !== null && expiredKey === deadlineKey;
 
   const onExpire = () => {
-    if (offer === null) return;
-    setExpiredId(offer.id);
+    if (deadlineKey === null) return;
+    setExpiredKey(deadlineKey);
     // The API drops expired offers: the list answers whether it is really gone.
     void queryClient.invalidateQueries({ queryKey: queryKeys.asignaciones.ofertas() });
   };
@@ -426,7 +428,7 @@ export function OfferScreen() {
       subtitle="Voluntario"
       badge={
         offer && !offer.accepted ? (
-          <Countdown key={offer.id} expiresAt={offer.expiresAtIso} onExpire={onExpire} />
+          <Countdown key={deadlineKey} expiresAt={offer.expiresAtIso} onExpire={onExpire} />
         ) : null
       }
     >

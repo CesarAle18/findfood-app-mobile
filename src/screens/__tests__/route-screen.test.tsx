@@ -5,13 +5,14 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Slot, useLocalSearchParams } from "expo-router";
-import { fireEvent, renderRouter, screen } from "expo-router/testing-library";
+import { fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
 import { Alert, Text } from "react-native";
 
 import { api } from "@/api";
 import type { OfertaDto } from "@/services/asignaciones";
 import type { RutaDetalleDto, RutaResumenDto } from "@/services/rutas";
 import { ActiveRouteScreen } from "@/screens/route";
+import { queryKeys } from "@/services/query-keys";
 import type { ApiMock } from "@/test-utils/api";
 import {
   catalogosFixture,
@@ -256,6 +257,20 @@ describe("ActiveRouteScreen · route in progress", () => {
     expect(mockApi.post).toHaveBeenCalledWith("/paradas/par-1/llegada", { body: {} });
   });
 
+  it("still registers the arrival when reading the position fails", async () => {
+    mockGetCurrentFix.mockRejectedValue(new Error("location unavailable"));
+    answerGets({ enCurso, detalle: withStops(first, second, entrega) });
+
+    await renderRoutes();
+
+    await fireEvent.press(await screen.findByRole("button", { name: "Llegué al punto" }));
+
+    expect(mockApi.post).toHaveBeenCalledWith("/paradas/par-1/llegada", { body: {} });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Llegué al punto" })).not.toBeBusy(),
+    );
+  });
+
   it("opens the pickup registration once on site", async () => {
     answerGets({ enCurso, detalle: withStops({ ...first, estado: "EN_SITIO" }, second, entrega) });
 
@@ -285,8 +300,9 @@ describe("ActiveRouteScreen · route in progress", () => {
 
     await renderRoutes();
 
+    const arrive = await screen.findByRole("button", { name: "Llegué al banco" });
     expect(screen.queryByRole("button", { name: "Reportar problema" })).toBeNull();
-    await fireEvent.press(await screen.findByRole("button", { name: "Llegué al banco" }));
+    await fireEvent.press(arrive);
     expect(mockApi.post).toHaveBeenCalledWith("/paradas/par-3/llegada", { body: {} });
   });
 
@@ -328,6 +344,30 @@ describe("ActiveRouteScreen · route in progress", () => {
     expect(mockApi.post).toHaveBeenCalledWith("/paradas/par-1/fallida", {
       body: { tipo_incidencia_id: 61, descripcion: "No abrió la puerta" },
     });
+  });
+
+  it("starts the next stop with a closed, empty report form", async () => {
+    autoConfirm();
+    answerGets({ enCurso, detalle: withStops(first, second, entrega) });
+    mockApi.post.mockResolvedValue({ ...first, ruta_id: "ruta-1", estado: "FALLIDA" });
+
+    await renderRoutes();
+
+    await fireEvent.press(await screen.findByRole("button", { name: "Reportar problema" }));
+    await fireEvent.press(await screen.findByRole("button", { name: /^Tipo de problema/ }));
+    await fireEvent.press(screen.getByRole("radio", { name: "El donante no estaba" }));
+    await fireEvent.changeText(screen.getByLabelText(/^Descripción/), "No abrió la puerta");
+    // The refetched route moves on to the second pickup.
+    answerGets({ enCurso, detalle: withStops({ ...first, estado: "FALLIDA" }, second, entrega) });
+    await fireEvent.press(screen.getByRole("button", { name: "Reportar parada fallida" }));
+
+    expect(await screen.findByText("2 de 3")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "Reportar problema" })).toBeOnTheScreen();
+    expect(screen.queryByLabelText(/^Descripción/)).toBeNull();
+
+    await fireEvent.press(screen.getByRole("button", { name: "Reportar problema" }));
+
+    expect(await screen.findByLabelText(/^Descripción/)).toHaveDisplayValue("");
   });
 });
 
@@ -393,6 +433,10 @@ describe("ActiveRouteScreen · abandon a pickup", () => {
     await renderRoutes();
 
     expect(await screen.findByText("Próxima parada")).toBeOnTheScreen();
+    // Absent because the offers answered without the assignment, not because they are loading.
+    await waitFor(() =>
+      expect(client.getQueryState(queryKeys.asignaciones.ofertas())?.status).toBe("success"),
+    );
     expect(screen.queryByRole("button", { name: "No puedo hacer esta recogida" })).toBeNull();
   });
 

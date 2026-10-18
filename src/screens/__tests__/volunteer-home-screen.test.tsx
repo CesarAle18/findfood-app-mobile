@@ -9,6 +9,7 @@ import { fireEvent, renderRouter, screen } from "expo-router/testing-library";
 import { Text } from "react-native";
 
 import { api } from "@/api";
+import { ApiError } from "@/api/errors";
 import type { MeDto } from "@/api/types";
 import type { OfertaDto } from "@/services/asignaciones";
 import type { RutaDetalleDto, RutaResumenDto } from "@/services/rutas";
@@ -208,5 +209,28 @@ describe("HomeScreen (voluntario)", () => {
     await renderHome();
 
     expect(await screen.findByText("Aún no tienes actividad")).toBeOnTheScreen();
+  });
+
+  it("reports an offers error instead of an empty schedule, and retries it", async () => {
+    answerGets({});
+    const answer = mockApi.get.getMockImplementation();
+    let offersFail = true;
+    mockApi.get.mockImplementation(async (path: string, options?: { query?: Query }) => {
+      if (path === "/asignaciones/ofertas" && offersFail) {
+        throw new ApiError({ status: 500, type: "error-interno", title: "Error" });
+      }
+      return answer?.(path, options);
+    });
+
+    await renderHome();
+
+    expect(await screen.findByText("No pudimos cargar tus ofertas")).toBeOnTheScreen();
+    expect(screen.queryByText("Sin rutas programadas")).toBeNull();
+
+    offersFail = false;
+    answerGets({ ofertas: [ofertaAceptadaFixture()] });
+    await fireEvent.press(screen.getByRole("button", { name: "Reintentar" }));
+
+    expect(await screen.findByRole("link", { name: "Armar ruta" })).toBeOnTheScreen();
   });
 });
