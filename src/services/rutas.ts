@@ -1,13 +1,14 @@
 /**
  * Pickup routes of the signed-in volunteer (`/rutas`) and their stops (`/paradas`).
  */
-import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQuery, type QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api";
 import type {
   Coordenada,
   EstadoDonacion,
   EstadoParada,
+  EstadoProducto,
   EstadoRuta,
   Paged,
   Paginacion,
@@ -18,7 +19,7 @@ import { invalidateOnSuccess, queryKeys, type Invalidation } from "./query-keys"
 
 // --- DTOs ------------------------------------------------------------------------------
 
-/** `POST /rutas`: 1 to 10 accepted donations, all to the same warehouse and day. */
+/** `POST /rutas`: 1 to 5 accepted donations, all to the same warehouse and day. */
 export type CrearRutaBody = {
   donacion_ids: string[];
   /** Defaults to the last known position, or the volunteer's base. */
@@ -65,6 +66,8 @@ export interface ParadaDto {
   precision_confirmacion_m: number | null;
   confirmada_at: string | null;
   observaciones: string | null;
+  /** Condition of the food, on confirmed pickups that reported it (API-10). */
+  estado_producto: EstadoProducto | null;
 }
 
 /** A stop inside `GET /rutas/:id`, with its donation (null fields on the delivery). */
@@ -131,6 +134,8 @@ export type ConfirmarParadaBody = {
   precision_m?: number;
   confirmacion_manual?: boolean;
   observaciones?: string;
+  /** Pickups only: condition of the food (API-10). */
+  estado_producto?: EstadoProducto;
 };
 
 /** `POST /paradas/:id/fallida`: pickups only; opens an incident. */
@@ -187,6 +192,15 @@ export function reportarParadaFallida(
 
 // --- Queries -----------------------------------------------------------------------------
 
+/**
+ * The volunteer's route in progress; one row is enough to know whether there is any. Home,
+ * Rutas and the location tracking share it, so they share one cache entry.
+ */
+export const ROUTES_IN_PROGRESS = { estado: "EN_CURSO", limite: 1 } as const;
+
+/** The next planned route (and, through `total`, how many are planned). */
+export const ROUTES_PLANNED = { estado: "PLANIFICADA", limite: 1 } as const;
+
 export function rutasQuery(filters: RutasFilters = {}) {
   return queryOptions({
     queryKey: queryKeys.rutas.list(filters),
@@ -230,20 +244,13 @@ const invalidates = {
     asignaciones.ofertas(),
     ...donacion_ids.map((id) => donaciones.detail(id)),
   ],
-  /** Its donations move to EN_RECOLECCION. */
-  iniciar: (_: unknown, id: string) => [
-    rutas.lists(),
-    rutas.detail(id),
-    asignaciones.ofertas(),
-    donaciones.all,
-  ],
-  /** The assignments leave the route (the bank fleet's donations are published again). */
-  cancelar: (_: unknown, id: string) => [
-    rutas.lists(),
-    rutas.detail(id),
-    asignaciones.ofertas(),
-    donaciones.all,
-  ],
+  /** Its donations move to EN_RECOLECCION. The detail comes cached from the answer. */
+  iniciar: () => [rutas.lists(), asignaciones.ofertas(), donaciones.all],
+  /**
+   * The assignments leave the route (the bank fleet's donations are published again). The
+   * detail comes cached from the answer.
+   */
+  cancelar: () => [rutas.lists(), asignaciones.ofertas(), donaciones.all],
   /** The stop changes; a pickup stop also shows in its donation's history. */
   llegada: (parada: ParadaDto) => [rutas.detail(parada.ruta_id), ...historialDe(parada)],
   /**
@@ -261,24 +268,41 @@ const invalidates = {
   fallida: (parada: ParadaDto) => [rutas.detail(parada.ruta_id), ...historialDe(parada)],
 } satisfies Record<string, Invalidation<never, never>>;
 
+/**
+ * `onSuccess` for the mutations that answer with the whole route: caches it as the detail
+ * (the screen shows the new state without a refetch or a loading flash), then invalidates.
+ */
+function cacheRouteOnSuccess<TVariables>(invalidation: Invalidation<RutaDetalleDto, TVariables>) {
+  const invalidate = invalidateOnSuccess(invalidation);
+  return (
+    data: RutaDetalleDto,
+    variables: TVariables,
+    onMutateResult: unknown,
+    context: { client: QueryClient },
+  ): void => {
+    context.client.setQueryData(rutas.detail(data.id), data);
+    invalidate(data, variables, onMutateResult, context);
+  };
+}
+
 export function useCrearRutaMutation() {
   return useMutation({
     mutationFn: crearRuta,
-    onSuccess: invalidateOnSuccess(invalidates.crear),
+    onSuccess: cacheRouteOnSuccess(invalidates.crear),
   });
 }
 
 export function useIniciarRutaMutation() {
   return useMutation({
     mutationFn: iniciarRuta,
-    onSuccess: invalidateOnSuccess(invalidates.iniciar),
+    onSuccess: cacheRouteOnSuccess(invalidates.iniciar),
   });
 }
 
 export function useCancelarRutaMutation() {
   return useMutation({
     mutationFn: cancelarRuta,
-    onSuccess: invalidateOnSuccess(invalidates.cancelar),
+    onSuccess: cacheRouteOnSuccess(invalidates.cancelar),
   });
 }
 

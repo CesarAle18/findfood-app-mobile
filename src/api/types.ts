@@ -56,6 +56,9 @@ export type EstadoParada = "PENDIENTE" | "EN_SITIO" | "COMPLETADA" | "FALLIDA" |
 
 export type TipoParada = "RECOGIDA" | "ENTREGA";
 
+/** Condition of the collected food, reported when confirming a pickup (API-10). */
+export type EstadoProducto = "BUENO" | "REGULAR" | "MALO";
+
 export type EstadoVerificacion = "NO_INICIADA" | "PENDIENTE" | "APROBADA" | "RECHAZADA";
 
 export type TipoAlmacenamiento = "SECO" | "REFRIGERADO";

@@ -15,11 +15,8 @@ import {
   trackingStatusStore,
   type TrackingStatus,
 } from "@/location/tracking";
-import { rutasQuery } from "@/services/rutas";
+import { ROUTES_IN_PROGRESS, rutasQuery } from "@/services/rutas";
 import { useAccess, useMe } from "@/state/session";
-
-/** Only routes in progress matter; one row is enough to know whether there is any. */
-export const ROUTES_IN_PROGRESS = { estado: "EN_CURSO", limite: 1 } as const;
 
 /** Whether the account acts as an approved volunteer right now. */
 export function isActiveVolunteer(activeRole: MobileRole | null, me: MeDto | undefined): boolean {

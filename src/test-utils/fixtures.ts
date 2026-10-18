@@ -12,6 +12,7 @@ import type { OfertaDto } from "@/services/asignaciones";
 import type { CatalogosDto } from "@/services/catalogos";
 import type { BandejaDto, NotificacionDto } from "@/services/notificaciones";
 import type { ImpactoDto } from "@/services/perfil";
+import type { ParadaRutaDto, RutaDetalleDto, RutaResumenDto } from "@/services/rutas";
 
 export const DONATION_ID = "7d4f6a1e-0c2b-4f7e-9a51-3b8f2d1c9e10";
 
@@ -225,7 +226,10 @@ export const catalogosFixture: CatalogosDto = {
     { id: 43, ambito: "CANCELACION_DONACION", codigo: "DONANTE_CANCELA", nombre: "Ya no está disponible", requiere_comentario: false },
     { id: 44, ambito: "ABANDONO_ASIGNACION", codigo: "IMPREVISTO", nombre: "Imprevisto", requiere_comentario: true },
   ],
-  tipos_incidencia: [],
+  tipos_incidencia: [
+    { id: 61, codigo: "DONANTE_AUSENTE", nombre: "El donante no estaba", severidad_default: "MEDIA", bloquea_donacion: false },
+    { id: 62, codigo: "PRODUCTO_EN_MAL_ESTADO", nombre: "Producto en mal estado", severidad_default: "ALTA", bloquea_donacion: true },
+  ],
   tipos_destino_distribucion: [],
   aspectos_calificacion: [
     { id: 51, rol_calificado: "VOLUNTARIO", codigo: "PUNTUALIDAD", nombre: "Puntualidad" },
@@ -295,6 +299,141 @@ export function ofertaFixture(overrides: Partial<OfertaDto> = {}): OfertaDto {
     productos: [
       { tipo: "Lácteos", cantidad: 20, unidad: "L", peso_estimado_kg: 20, requiere_refrigeracion: true },
       { tipo: "Pan", cantidad: 25, unidad: "KG", peso_estimado_kg: 25, requiere_refrigeracion: false },
+    ],
+    ...overrides,
+  };
+}
+
+/** An accepted assignment of `GET /asignaciones/ofertas` still waiting for a route. */
+export function ofertaAceptadaFixture(overrides: Partial<OfertaDto> = {}): OfertaDto {
+  return ofertaFixture({
+    id: "asg-8",
+    estado: "ACEPTADA",
+    aceptada_at: "2026-10-13T20:05:00Z",
+    donacion_estado: "ASIGNADA",
+    almacen_id: "alm-1",
+    almacen_nombre: "Bodega Norte",
+    almacen_direccion: "Carrera 1 # 40-10, Cali",
+    contacto_nombre: "Laura Gómez",
+    contacto_telefono: "+57 300 111 2233",
+    ...overrides,
+  });
+}
+
+/** A row of `GET /rutas`: a planned route of three stops. */
+export function rutaResumenFixture(overrides: Partial<RutaResumenDto> = {}): RutaResumenDto {
+  return {
+    id: "ruta-1",
+    codigo: "R-045",
+    estado: "PLANIFICADA",
+    fecha_programada: "2026-10-13",
+    distancia_total_km: 12.4,
+    duracion_estimada_min: 48,
+    peso_total_estimado_kg: 70,
+    iniciada_at: null,
+    finalizada_at: null,
+    almacen_destino: { id: "alm-1", nombre: "Bodega Norte" },
+    paradas: 3,
+    ...overrides,
+  };
+}
+
+/** A pickup stop inside `GET /rutas/:id`, before the volunteer arrives. */
+export function paradaFixture(overrides: Partial<ParadaRutaDto> = {}): ParadaRutaDto {
+  return {
+    id: "par-1",
+    orden: 1,
+    tipo: "RECOGIDA",
+    estado: "PENDIENTE",
+    donacion_id: DONATION_ID,
+    almacen_id: null,
+    direccion: "Calle 5 # 38-25, Cali",
+    lat: 3.42,
+    lng: -76.54,
+    hora_estimada_llegada: "2026-10-13T21:10:00Z",
+    hora_real_llegada: null,
+    peso_confirmado_kg: null,
+    confirmacion_manual: false,
+    precision_confirmacion_m: null,
+    confirmada_at: null,
+    observaciones: null,
+    estado_producto: null,
+    donacion_codigo: "DON-1048",
+    donacion_estado: "ASIGNADA",
+    peso_estimado_kg: 45,
+    ventana_recogida_inicio: "2026-10-13T21:00:00Z",
+    ventana_recogida_fin: "2026-10-13T23:00:00Z",
+    referencia_recogida: "Muelle de carga",
+    contacto_nombre: "Laura Gómez",
+    contacto_telefono: "+57 300 111 2233",
+    ...overrides,
+  };
+}
+
+/** The delivery stop: no donation, so its donation fields are null. */
+const entregaFixture: Partial<ParadaRutaDto> = {
+  tipo: "ENTREGA",
+  donacion_id: null,
+  almacen_id: "alm-1",
+  direccion: "Carrera 1 # 40-10, Cali",
+  donacion_codigo: null,
+  donacion_estado: null,
+  peso_estimado_kg: null,
+  ventana_recogida_inicio: null,
+  ventana_recogida_fin: null,
+  referencia_recogida: null,
+  contacto_nombre: null,
+  contacto_telefono: null,
+};
+
+/** `GET /rutas/:id`: two pickups and the delivery, in visiting order. */
+export function rutaDetalleFixture(overrides: Partial<RutaDetalleDto> = {}): RutaDetalleDto {
+  return {
+    id: "ruta-1",
+    codigo: "R-045",
+    estado: "PLANIFICADA",
+    fecha_programada: "2026-10-13",
+    distancia_total_km: 12.4,
+    duracion_estimada_min: 48,
+    duracion_real_min: null,
+    peso_total_estimado_kg: 70,
+    proveedor_ruteo: "osrm",
+    iniciada_at: null,
+    finalizada_at: null,
+    cancelada_at: null,
+    created_at: "2026-10-13T20:06:00Z",
+    flota_banco: false,
+    almacen_destino: { id: "alm-1", nombre: "Bodega Norte", direccion: "Carrera 1 # 40-10, Cali" },
+    voluntario: {
+      id: "vol-1",
+      nombres: "Carlos",
+      apellidos: "Ruiz",
+      telefono: "+573001112233",
+      placa_vehiculo: "XYZ987",
+    },
+    geometria: {
+      type: "LineString",
+      coordinates: [
+        [-76.54, 3.42],
+        [-76.53, 3.44],
+        [-76.52, 3.46],
+      ],
+    },
+    paradas: [
+      paradaFixture(),
+      paradaFixture({
+        id: "par-2",
+        orden: 2,
+        donacion_id: "8e5a7b2f-1d3c-4a8f-8b62-4c9e3f2d0a21",
+        donacion_codigo: "DON-1049",
+        direccion: "Avenida 6N # 23-50, Cali",
+        lat: 3.44,
+        lng: -76.53,
+        peso_estimado_kg: 25,
+        contacto_nombre: "Panadería Delicias",
+        contacto_telefono: "3009998877",
+      }),
+      paradaFixture({ ...entregaFixture, id: "par-3", orden: 3, lat: 3.46, lng: -76.52 }),
     ],
     ...overrides,
   };

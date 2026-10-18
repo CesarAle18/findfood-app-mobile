@@ -13,14 +13,11 @@ import {
   Screen,
   Section,
 } from "@/components/findfood/ui";
-import { rutaQuery, rutasQuery } from "@/services/rutas";
-
-/** The volunteer's route in progress (the same request the location tracking makes). */
-const ROUTE_IN_PROGRESS = { estado: "EN_CURSO", limite: 1 } as const;
+import { ROUTES_IN_PROGRESS, rutaQuery, rutasQuery } from "@/services/rutas";
 
 /** Map of the route in progress: `GET /rutas?estado=EN_CURSO`, then `GET /rutas/:id`. */
 function ActiveRouteMap() {
-  const rutas = useQuery(rutasQuery(ROUTE_IN_PROGRESS));
+  const rutas = useQuery(rutasQuery(ROUTES_IN_PROGRESS));
   const id = rutas.data?.datos[0]?.id;
   const ruta = useQuery({ ...rutaQuery(id ?? ""), enabled: Boolean(id) });
   if (ruta.data) {

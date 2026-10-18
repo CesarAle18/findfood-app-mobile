@@ -13,10 +13,12 @@ import {
   selectAspectosCalificacion,
   selectMotivos,
   selectTiposAlimento,
+  selectTiposIncidencia,
   selectTiposVehiculo,
   selectUnidades,
   useMotivos,
   useTiposAlimento,
+  useTiposIncidencia,
   useTiposVehiculo,
   useUnidades,
 } from "./catalogos";
@@ -101,6 +103,7 @@ describe("selectors", () => {
     expect(selectTiposAlimento(catalogosFixture)).toBe(catalogosFixture.tipos_alimento);
     expect(selectUnidades(catalogosFixture)).toBe(catalogosFixture.unidades_medida);
     expect(selectTiposVehiculo(catalogosFixture)).toBe(catalogosFixture.tipos_vehiculo);
+    expect(selectTiposIncidencia(catalogosFixture)).toBe(catalogosFixture.tipos_incidencia);
   });
 
   it("filter reasons by scope", () => {
@@ -135,6 +138,7 @@ describe("derived hooks", () => {
       unidades: useUnidades(),
       vehiculos: useTiposVehiculo(),
       cancelacion: useMotivos("CANCELACION_DONACION"),
+      incidencias: useTiposIncidencia(),
     }));
 
     await waitFor(() => expect(result.current.cancelacion.isSuccess).toBe(true));
@@ -143,6 +147,7 @@ describe("derived hooks", () => {
     expect(result.current.tipos.data).toEqual(catalogosFixture.tipos_alimento);
     expect(result.current.unidades.data).toEqual(catalogosFixture.unidades_medida);
     expect(result.current.vehiculos.data).toEqual(catalogosFixture.tipos_vehiculo);
+    expect(result.current.incidencias.data).toEqual(catalogosFixture.tipos_incidencia);
     expect(result.current.cancelacion.data?.map((motivo) => motivo.codigo)).toEqual([
       "DONANTE_CANCELA",
     ]);

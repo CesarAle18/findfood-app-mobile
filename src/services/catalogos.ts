@@ -177,6 +177,7 @@ export function catalogosQuery() {
 export const selectTiposAlimento = (catalogos: CatalogosDto) => catalogos.tipos_alimento;
 export const selectUnidades = (catalogos: CatalogosDto) => catalogos.unidades_medida;
 export const selectTiposVehiculo = (catalogos: CatalogosDto) => catalogos.tipos_vehiculo;
+export const selectTiposIncidencia = (catalogos: CatalogosDto) => catalogos.tipos_incidencia;
 
 type MotivoSelector = (catalogos: CatalogosDto) => MotivoDto[];
 
@@ -226,4 +227,9 @@ export function useMotivos(ambito: AmbitoMotivo) {
 /** The rating aspects about `rol` (the rated party), from the shared catalog request. */
 export function useAspectosCalificacion(rol: RolCalificado) {
   return useQuery({ ...catalogosQuery(), select: selectAspectosCalificacion(rol) });
+}
+
+/** Incident types, to report a failed pickup (`POST /paradas/:id/fallida`). */
+export function useTiposIncidencia() {
+  return useQuery({ ...catalogosQuery(), select: selectTiposIncidencia });
 }

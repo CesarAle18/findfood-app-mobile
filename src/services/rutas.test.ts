@@ -1,8 +1,9 @@
-import { waitFor } from "@testing-library/react-native";
+import { act, waitFor } from "@testing-library/react-native";
 
 import { api } from "@/api";
 import { queryKeys } from "@/services/query-keys";
 import { resetApiMock, sentRequests, type ApiMock, type SentRequest } from "@/test-utils/api";
+import { rutaDetalleFixture } from "@/test-utils/fixtures";
 import { mutationCase, renderWithClient } from "@/test-utils/query";
 
 import {
@@ -62,6 +63,7 @@ function parada(overrides: Partial<ParadaDto> = {}): ParadaDto {
     precision_confirmacion_m: null,
     confirmada_at: null,
     observaciones: null,
+    estado_producto: null,
     ...overrides,
   };
 }
@@ -145,14 +147,12 @@ describe("mutations invalidate exactly the queries they change", () => {
     // Its donations move to EN_RECOLECCION.
     mutationCase("POST /rutas/:id/iniciar", useIniciarRutaMutation, "r-1", [
       rutas.lists(),
-      rutas.detail("r-1"),
       asignaciones.ofertas(),
       donaciones.all,
     ]),
     // The assignments leave the route (or, for the bank fleet, the donations are published again).
     mutationCase("POST /rutas/:id/cancelar", useCancelarRutaMutation, "r-1", [
       rutas.lists(),
-      rutas.detail("r-1"),
       asignaciones.ofertas(),
       donaciones.all,
     ]),
@@ -190,5 +190,25 @@ describe("mutations invalidate exactly the queries they change", () => {
     );
 
     expect(await invalidated()).toEqual(expected);
+  });
+});
+
+describe("route mutations cache the detail they answer with", () => {
+  it.each([
+    ["POST /rutas", useCrearRutaMutation, { donacion_ids: ["d-1"] }],
+    ["POST /rutas/:id/iniciar", useIniciarRutaMutation, "ruta-1"],
+    ["POST /rutas/:id/cancelar", useCancelarRutaMutation, "ruta-1"],
+  ] as const)("%s", async (_name, useMutationHook, variables) => {
+    const detalle = rutaDetalleFixture({ estado: "EN_CURSO" });
+    mockedApi.post.mockResolvedValue(detalle);
+    const { result, client } = await renderWithClient(() => useMutationHook());
+
+    await act(async () => {
+      await (result.current.mutateAsync as (v: typeof variables) => Promise<unknown>)(variables);
+    });
+
+    // No refetch of the detail: the screen shows the new state at once.
+    expect(client.getQueryData(rutas.detail("ruta-1"))).toBe(detalle);
+    expect(mockedApi.get).not.toHaveBeenCalled();
   });
 });
