@@ -23,17 +23,20 @@ import {
 } from "@/services/rutas";
 
 import { AcceptedPickups } from "./accepted-pickups";
-import { confirmAction } from "./route-actions";
+import { NextStop, confirmAction } from "./route-actions";
 import { useCurrentRoute } from "./route-queries";
 
 export function ActiveRouteScreen() {
   const current = useCurrentRoute();
   const ruta = current.ruta.data;
+  // The outcome of an action that removed its own control (a failed or abandoned stop).
+  const [notice, setNotice] = useState<string>();
   return (
     <Screen title="Mis rutas" subtitle="Voluntario">
+      <FormMessage tone="success" message={notice} />
       {ruta ? (
         <>
-          <RouteDetail ruta={ruta} />
+          <RouteDetail ruta={ruta} onNotice={setNotice} />
           <AcceptedPickups standalone={false} />
         </>
       ) : current.isError ? (
@@ -78,7 +81,13 @@ function StatusBadge({ status }: { status: StatusView }) {
   return <Badge warning={status.tone === "warning"}>{status.label}</Badge>;
 }
 
-function RouteDetail({ ruta }: { ruta: RutaDetalleDto }) {
+function RouteDetail({
+  ruta,
+  onNotice,
+}: {
+  ruta: RutaDetalleDto;
+  onNotice: (message: string) => void;
+}) {
   const metrics = routeMetrics(ruta);
   return (
     <>
@@ -94,6 +103,7 @@ function RouteDetail({ ruta }: { ruta: RutaDetalleDto }) {
       </Card>
       <RouteMapView geometria={ruta.geometria} paradas={ruta.paradas} />
       {ruta.estado === "PLANIFICADA" ? <PlannedActions rutaId={ruta.id} /> : null}
+      {ruta.estado === "EN_CURSO" ? <NextStop ruta={ruta} onNotice={onNotice} /> : null}
       <Section title="Paradas">
         <Card>
           {ruta.paradas.map((parada) => (

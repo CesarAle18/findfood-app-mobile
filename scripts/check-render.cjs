@@ -219,6 +219,8 @@ Module._load = function (name, parent, isMain) {
       stopLocationTracking: async () => {},
       trackingStatusStore: { get: () => "off", subscribe: () => () => {} },
     };
+  // expo-location has no Node build; the stop actions only read a fix from handlers.
+  if (name === "@/location/current-fix") return { getCurrentFix: async () => null };
   // No requests leave this check: the query hooks are stubbed above.
   if (name === "@/api") return { api: {} };
   // Photo capture and upload need the native picker, manipulator and file system; the

@@ -28,6 +28,12 @@ jest.mock("@/api", () => ({
   api: jest.requireActual<typeof import("@/test-utils/api")>("@/test-utils/api").createApiMock(),
 }));
 
+const mockGetCurrentFix = jest.fn();
+
+jest.mock("@/location/current-fix", () => ({
+  getCurrentFix: (...args: unknown[]) => mockGetCurrentFix(...args),
+}));
+
 const mockApi = api as unknown as ApiMock;
 
 type Query = { estado?: string } | undefined;
@@ -214,5 +220,113 @@ describe("ActiveRouteScreen · planned route", () => {
 
     expect(await screen.findByText("Aceptadas sin ruta")).toBeOnTheScreen();
     expect(screen.getByText("DON-7")).toBeOnTheScreen();
+  });
+});
+
+describe("ActiveRouteScreen · route in progress", () => {
+  const enCurso = [rutaResumenFixture({ estado: "EN_CURSO" })];
+  const withStops = (...paradas: RutaDetalleDto["paradas"]) =>
+    rutaDetalleFixture({ estado: "EN_CURSO", paradas });
+  const [first, second, entrega] = rutaDetalleFixture().paradas;
+
+  it("registers the arrival at a pending pickup with the current position", async () => {
+    mockGetCurrentFix.mockResolvedValue({ ubicacion: { lat: 3.42, lng: -76.54 }, precision_m: 12 });
+    answerGets({ enCurso, detalle: withStops(first, second, entrega) });
+
+    await renderRoutes();
+
+    expect(await screen.findByText("Próxima parada")).toBeOnTheScreen();
+    expect(screen.getByText("1 de 3")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "Contactar al donante" })).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole("button", { name: "Llegué al punto" }));
+
+    expect(mockApi.post).toHaveBeenCalledWith("/paradas/par-1/llegada", {
+      body: { ubicacion: { lat: 3.42, lng: -76.54 } },
+    });
+  });
+
+  it("registers the arrival without a position when there is no fix", async () => {
+    mockGetCurrentFix.mockResolvedValue(null);
+    answerGets({ enCurso, detalle: withStops(first, second, entrega) });
+
+    await renderRoutes();
+
+    await fireEvent.press(await screen.findByRole("button", { name: "Llegué al punto" }));
+
+    expect(mockApi.post).toHaveBeenCalledWith("/paradas/par-1/llegada", { body: {} });
+  });
+
+  it("opens the pickup registration once on site", async () => {
+    answerGets({ enCurso, detalle: withStops({ ...first, estado: "EN_SITIO" }, second, entrega) });
+
+    await renderRoutes();
+
+    await fireEvent.press(await screen.findByRole("link", { name: "Registrar recogida" }));
+
+    expect(
+      await screen.findByText('recogida {"paradaId":"par-1","rutaId":"ruta-1"}'),
+    ).toBeOnTheScreen();
+  });
+
+  it("opens the donation detail of the pickup", async () => {
+    answerGets({ enCurso, detalle: withStops(first, second, entrega) });
+
+    await renderRoutes();
+
+    await fireEvent.press(await screen.findByRole("link", { name: "Ver detalle" }));
+
+    expect(await screen.findByText(/^detalle .*7d4f6a1e/)).toBeOnTheScreen();
+  });
+
+  it("drives the delivery once every pickup is closed", async () => {
+    mockGetCurrentFix.mockResolvedValue(null);
+    const done = { estado: "COMPLETADA" } as const;
+    answerGets({ enCurso, detalle: withStops({ ...first, ...done }, { ...second, ...done }, entrega) });
+
+    await renderRoutes();
+
+    expect(screen.queryByRole("button", { name: "Reportar problema" })).toBeNull();
+    await fireEvent.press(await screen.findByRole("button", { name: "Llegué al banco" }));
+    expect(mockApi.post).toHaveBeenCalledWith("/paradas/par-3/llegada", { body: {} });
+  });
+
+  it("opens the delivery registration once at the bank", async () => {
+    const done = { estado: "COMPLETADA" } as const;
+    answerGets({
+      enCurso,
+      detalle: withStops({ ...first, ...done }, { ...second, ...done }, { ...entrega, estado: "EN_SITIO" }),
+    });
+
+    await renderRoutes();
+
+    await fireEvent.press(await screen.findByRole("link", { name: "Registrar entrega" }));
+
+    expect(
+      await screen.findByText('entrega {"paradaId":"par-3","rutaId":"ruta-1"}'),
+    ).toBeOnTheScreen();
+  });
+
+  it("reports a failed pickup with a valid description only", async () => {
+    const alert = autoConfirm();
+    answerGets({ enCurso, detalle: withStops(first, second, entrega) });
+
+    await renderRoutes();
+
+    await fireEvent.press(await screen.findByRole("button", { name: "Reportar problema" }));
+    await fireEvent.press(await screen.findByRole("button", { name: /^Tipo de problema/ }));
+    await fireEvent.press(screen.getByRole("radio", { name: "El donante no estaba" }));
+    await fireEvent.changeText(screen.getByLabelText(/^Descripción/), "Nada");
+    await fireEvent.press(screen.getByRole("button", { name: "Reportar parada fallida" }));
+
+    expect(screen.getByText("Describe el problema con al menos 5 caracteres.")).toBeOnTheScreen();
+    expect(mockApi.post).not.toHaveBeenCalled();
+
+    await fireEvent.changeText(screen.getByLabelText(/^Descripción/), " No abrió la puerta ");
+    await fireEvent.press(screen.getByRole("button", { name: "Reportar parada fallida" }));
+
+    expect(alert).toHaveBeenCalled();
+    expect(mockApi.post).toHaveBeenCalledWith("/paradas/par-1/fallida", {
+      body: { tipo_incidencia_id: 61, descripcion: "No abrió la puerta" },
+    });
   });
 });
