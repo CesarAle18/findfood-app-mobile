@@ -14,9 +14,10 @@ import { messageFor } from "@/api/problem-messages";
 import type { MeDto } from "@/api/types";
 import type { AccessPhase } from "@/auth/access";
 import { ForgotPasswordScreen } from "@/screens/auth";
-import { ChangePasswordScreen, ResetPasswordScreen } from "@/screens/password";
+import { ChangePasswordScreen, RESET_DONE, ResetPasswordScreen } from "@/screens/password";
 import { CompleteProfileScreen } from "@/screens/profile-setup";
 import { queryKeys } from "@/services/query-keys";
+import { clearLoginNotice, readLoginNotice } from "@/state/login-notice";
 import { meFixture } from "@/test-utils/fixtures";
 import { createTestQueryClient } from "@/test-utils/query";
 
@@ -166,6 +167,7 @@ beforeEach(() => {
   mockPatch.mockReset();
   mockSetRecovering.mockClear();
   mockCerrarSesion.mockClear();
+  clearLoginNotice();
 });
 
 // --- Forgot password -----------------------------------------------------------------------
@@ -408,18 +410,20 @@ describe("ResetPasswordScreen", () => {
     expect(await screen.findByText(/mismo teléfono/)).toBeOnTheScreen();
   });
 
-  it("sets the new password, ends the recovery and hands over to the gate", async () => {
+  it("sets the new password, signs out and leaves the success notice for the login", async () => {
     exchangeSucceeds();
     await renderAt(linkUrl);
     await screen.findByLabelText("Nueva contraseña");
-    const refetch = jest.spyOn(client, "refetchQueries");
 
     await choosePassword("nueva1234");
     await press("Guardar contraseña");
 
     expect(mockAuth.updateUser).toHaveBeenCalledWith({ password: "nueva1234" });
-    expect(refetch).toHaveBeenCalledWith({ queryKey: queryKeys.me }, { cancelRefetch: false });
-    expect(mockSetRecovering).toHaveBeenLastCalledWith(false);
+    expect(mockCerrarSesion).toHaveBeenCalledTimes(1);
+    expect(mockAuth.updateUser.mock.invocationCallOrder[0]).toBeLessThan(
+      mockCerrarSesion.mock.invocationCallOrder[0]!,
+    );
+    expect(readLoginNotice()).toBe(RESET_DONE);
     expect(await screen.findByText("route:index")).toBeOnTheScreen();
     expect(pathname()).toBe("/");
   });
@@ -435,6 +439,8 @@ describe("ResetPasswordScreen", () => {
 
     expect(await screen.findByText("La nueva contraseña debe ser distinta de la actual.")).toBeOnTheScreen();
     expect(mockSetRecovering).not.toHaveBeenCalledWith(false);
+    expect(mockCerrarSesion).not.toHaveBeenCalled();
+    expect(readLoginNotice()).toBeUndefined();
     expect(pathname()).toBe("/restablecer-contrasena");
   });
 

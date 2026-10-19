@@ -1,6 +1,6 @@
 import { isAuthError, isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { router } from "expo-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 
 import { authErrorMessages, messageFor } from "@/api/problem-messages";
@@ -28,6 +28,7 @@ import { Pressing } from "@/components/findfood/motion";
 import { colors } from "@/design/tokens";
 import { forgotPasswordSchema, loginSchema, registerSchema } from "@/domain/validation/auth";
 import { useZodForm } from "@/hooks/use-zod-form";
+import { clearLoginNotice, readLoginNotice } from "@/state/login-notice";
 
 /**
  * `/verificar-correo` params. `origen=registro`: a sign-up just made Supabase send a code
@@ -106,7 +107,11 @@ export function LoginScreen() {
   const available = isEmailAuthAvailable();
   const google = useGoogleSignIn();
   const form = useZodForm(loginSchema, LOGIN_INITIAL);
+  // Left by the flow that led here (a password reset): shown once, until the user signs in.
+  const [notice, setNotice] = useState(readLoginNotice);
+  useEffect(clearLoginNotice, []);
   const submit = form.handleSubmit(async (credentials) => {
+    setNotice(undefined);
     try {
       await signIn(credentials);
     } catch (error) {
@@ -128,6 +133,7 @@ export function LoginScreen() {
         </Copy>
       </View>
       {available ? null : <LocalProfileNotice />}
+      <FormMessage message={notice} tone="success" />
       <Stack gap={24}>
         <Field
           label="Correo electrónico"
@@ -176,7 +182,10 @@ export function LoginScreen() {
         </Copy>
         <Button
           variant="outline"
-          onPress={() => void google.start()}
+          onPress={() => {
+            setNotice(undefined);
+            void google.start();
+          }}
           loading={google.busy}
           disabled={!google.available || form.submitting}
         >

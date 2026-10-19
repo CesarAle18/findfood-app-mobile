@@ -1,8 +1,9 @@
 /**
  * The password reset deep link end to end through the real root layout, gate and reset
  * screen: the exchange creates a session before the new password exists, and the recovery
- * flag must keep the user on the reset screen instead of the app. Supabase and the session
- * are fakes; every other route file is a stub that prints its name.
+ * flag must keep the user on the reset screen instead of the app, and the saved password
+ * signs out to the login, which says the reset worked. Supabase and the session are fakes;
+ * every other route file is a stub that prints its name.
  */
 import { fireEvent, getMockContext, renderRouter, screen, type MockContextConfig } from "expo-router/testing-library";
 import { Text } from "react-native";
@@ -11,10 +12,12 @@ import * as RootLayoutModule from "@/app/_layout";
 import * as DonorTabsModule from "@/app/donante/(tabs)/_layout";
 import * as DonorLayoutModule from "@/app/donante/_layout";
 import * as GateModule from "@/app/index";
+import * as LoginModule from "@/app/login";
 import * as ResetModule from "@/app/restablecer-contrasena";
 import * as VolunteerTabsModule from "@/app/voluntario/(tabs)/_layout";
 import * as VolunteerLayoutModule from "@/app/voluntario/_layout";
 import type { AccessPhase } from "@/auth/access";
+import { RESET_DONE } from "@/screens/password";
 
 /** A donor's account behind the session, once there is one. */
 interface FakeSession {
@@ -114,6 +117,7 @@ type MemoryContext = Exclude<MockContextConfig, string | string[] | { appDir: st
 const REAL_MODULES: MemoryContext = {
   _layout: RootLayoutModule,
   index: GateModule,
+  login: LoginModule,
   "restablecer-contrasena": ResetModule,
   "donante/_layout": DonorLayoutModule,
   "donante/(tabs)/_layout": DonorTabsModule,
@@ -132,7 +136,7 @@ const appDir: MemoryContext = Object.fromEntries(
     }),
 );
 
-it("keeps a signed-out user on the reset screen through the exchange, then opens the app", async () => {
+it("keeps a signed-out user on the reset screen through the exchange, then signs out to the login", async () => {
   mockSessionStore.state = { present: false, recovering: false };
   const rendered = renderRouter(appDir, {
     initialUrl: "/restablecer-contrasena?code=auth-code-1&sb_flow_id=flow-id-1234",
@@ -152,6 +156,8 @@ it("keeps a signed-out user on the reset screen through the exchange, then opens
   await fireEvent.press(screen.getByRole("button", { name: "Guardar contraseña" }));
 
   expect(mockUpdateUser).toHaveBeenCalledWith({ password: "nueva1234" });
-  expect(await screen.findByText("route:donante/(tabs)/index")).toBeOnTheScreen();
-  expect(rendered.getPathname()).toBe("/donante");
+  expect(await screen.findByText(RESET_DONE)).toBeOnTheScreen();
+  expect(rendered.getPathname()).toBe("/login");
+  expect(mockSessionStore.state).toEqual({ present: false, recovering: false });
+  expect(screen.queryByText(/^route:donante/)).toBeNull();
 });
