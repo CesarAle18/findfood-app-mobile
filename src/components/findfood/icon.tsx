@@ -22,6 +22,7 @@ export type IconName =
   | "search"
   | "box"
   | "eye"
+  | "eye-off"
   | "arrow"
   | "file";
 
@@ -46,6 +47,8 @@ const paths: Record<IconName, string> = {
   search: "M16 10a6 6 0 1 1-12 0 6 6 0 0 1 12 0m-1 5 6 6",
   box: "m3 7 9-4 9 4v11l-9 4-9-4zM3 7l9 5 9-5M12 12v10M7 5l10 5",
   eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0",
+  "eye-off":
+    "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0M3 3l18 18",
   arrow: "M5 12h14m-6-6 6 6-6 6",
   file: "M5 2h9l5 5v15H5zM14 2v6h5M8 12h8M8 16h6",
 };

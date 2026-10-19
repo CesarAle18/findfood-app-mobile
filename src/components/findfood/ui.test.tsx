@@ -74,6 +74,19 @@ describe("Field", () => {
     expect(onSubmitEditing).toHaveBeenCalledTimes(1);
   });
 
+  it("reveals and hides a secure value with the eye button", async () => {
+    await render(
+      <Field label="Contraseña" value="secreta123" onChangeText={jest.fn()} secure />,
+    );
+    const input = screen.getByLabelText("Contraseña");
+
+    expect(input).toHaveProp("secureTextEntry", true);
+    await fireEvent.press(screen.getByRole("button", { name: "Mostrar contraseña" }));
+    expect(input).toHaveProp("secureTextEntry", false);
+    await fireEvent.press(screen.getByRole("button", { name: "Ocultar contraseña" }));
+    expect(input).toHaveProp("secureTextEntry", true);
+  });
+
   it("stays read-only without onChangeText", async () => {
     await render(<Field label="Documento" value="1234567890" />);
 

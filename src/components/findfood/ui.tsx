@@ -367,6 +367,8 @@ export function Field({
   | "maxLength"
 >) {
   const [focused, setFocused] = useState(false);
+  // Only a secure field can be revealed; the eye toggles it.
+  const [revealed, setRevealed] = useState(false);
   const focusBorder = useActiveStyle(focused, { border: true });
   const hint =
     [error, accessibilityHint].filter(Boolean).join(" ") || undefined;
@@ -397,7 +399,7 @@ export function Field({
           }}
           onSubmitEditing={onSubmitEditing}
           placeholder={placeholder}
-          secureTextEntry={secure}
+          secureTextEntry={secure && !revealed}
           multiline={multiline}
           keyboardType={keyboardType}
           autoComplete={autoComplete}
@@ -410,13 +412,27 @@ export function Field({
             multiline && { minHeight: 62, textAlignVertical: "top" },
           ]}
         />
-        {(select || secure) && (
-          <Icon
-            name={secure ? "eye" : "chevron"}
-            size={16}
-            color={colors.secondary}
-          />
-        )}
+        {secure ? (
+          <Pressing
+            accessibilityRole="button"
+            accessibilityLabel={
+              revealed ? "Ocultar contraseña" : "Mostrar contraseña"
+            }
+            accessibilityState={{ checked: revealed }}
+            hitSlop={12}
+            scale={0.9}
+            onPress={() => setRevealed((r) => !r)}
+            surface={styles.revealButton}
+          >
+            <Icon
+              name={revealed ? "eye-off" : "eye"}
+              size={18}
+              color={colors.secondary}
+            />
+          </Pressing>
+        ) : select ? (
+          <Icon name="chevron" size={16} color={colors.secondary} />
+        ) : null}
       </Animated.View>
       {error ? (
         <View accessibilityLiveRegion="polite">
@@ -694,6 +710,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     paddingVertical: 13,
     minWidth: 0,
+  },
+  // A 40pt target inside the 48pt row; hitSlop extends it to the row's edge.
+  revealButton: {
+    width: 40,
+    height: 40,
+    marginRight: -10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   button: {
     minHeight: 52,
