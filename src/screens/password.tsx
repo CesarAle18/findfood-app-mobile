@@ -12,6 +12,7 @@ import { EmptyState, LoadingState } from "@/components/findfood/feedback";
 import { NewPasswordForm } from "@/components/findfood/new-password-form";
 import { Button, Card, Copy, FormMessage, NavButton, Screen } from "@/components/findfood/ui";
 import { queryKeys } from "@/services/query-keys";
+import { setLoginNotice } from "@/state/login-notice";
 import { useAccess, useSessionActions } from "@/state/session";
 
 import { SignOutButton } from "./access";
@@ -117,17 +118,21 @@ function LinkProblem({ description }: { description: string }) {
   );
 }
 
+/** Shown on the login screen once the new password is saved. */
+export const RESET_DONE =
+  "Tu contraseña se restableció correctamente. Inicia sesión con tu nueva contraseña.";
+
 function ResetForm() {
-  const queryClient = useQueryClient();
-  const { setRecovering, cerrarSesion } = useSessionActions();
+  const { cerrarSesion } = useSessionActions();
   const [cancelling, setCancelling] = useState(false);
 
   const save = async (password: string) => {
     await updatePassword(password);
-    // The recovery session is now an ordinary one: once `/me` is fresh, the gate opens the
-    // account's screen. This screen is never guarded, so it has to hand over itself.
-    await refreshMe(queryClient);
-    await setRecovering(false);
+    // The user signs in again with the new password: the recovery session ends here (with
+    // the recovery flag) and the gate opens the login, which shows the notice. This screen
+    // is never guarded, so it has to hand over itself.
+    setLoginNotice(RESET_DONE);
+    await cerrarSesion();
     router.replace("/");
   };
 

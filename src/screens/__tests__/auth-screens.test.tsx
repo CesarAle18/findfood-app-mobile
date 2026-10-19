@@ -11,6 +11,7 @@ import { Text } from "react-native";
 
 import { VerifyEmailScreen } from "@/screens/account";
 import { LoginScreen, RegisterScreen } from "@/screens/auth";
+import { clearLoginNotice, readLoginNotice, setLoginNotice } from "@/state/login-notice";
 import { createTestQueryClient } from "@/test-utils/query";
 
 /** The session the verification falls back to (`verify-email` phase): none by default. */
@@ -98,6 +99,7 @@ beforeEach(() => {
   for (const fn of Object.values(mockAuth)) fn.mockReset().mockResolvedValue(ok);
   mockGoogleAvailable = false;
   mockSignInWithGoogle.mockReset();
+  clearLoginNotice();
 });
 
 afterEach(() => {
@@ -121,6 +123,37 @@ describe("LoginScreen", () => {
       password: "secreta123",
     });
     expect(pathname()).toBe("/login");
+  });
+
+  describe("notice left by the flow that led here", () => {
+    const NOTICE = "Tu contraseña se restableció correctamente. Inicia sesión con tu nueva contraseña.";
+
+    it("shows no notice by default", async () => {
+      await renderAt("/login");
+
+      expect(screen.queryByText(NOTICE)).toBeNull();
+    });
+
+    it("shows it once: opening the login again does not repeat it", async () => {
+      setLoginNotice(NOTICE);
+      await renderAt("/login");
+
+      expect(screen.getByText(NOTICE)).toBeOnTheScreen();
+      expect(readLoginNotice()).toBeUndefined();
+
+      await act(() => router.push("/registro"));
+      await act(() => router.replace("/login"));
+      expect(screen.queryByText(NOTICE)).toBeNull();
+    });
+
+    it("hides it when the user signs in", async () => {
+      setLoginNotice(NOTICE);
+      await renderAt("/login");
+
+      await signInAs("ana@correo.com", "secreta123");
+
+      expect(screen.queryByText(NOTICE)).toBeNull();
+    });
   });
 
   it("validates before calling Supabase", async () => {
