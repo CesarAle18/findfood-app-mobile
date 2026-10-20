@@ -29,3 +29,5 @@ Fuente: Mock Up Proyecto de grado.fig. 22 marcos móviles; la pantalla 37 aparec
 
 
 Nueva pantalla adicional al Figma: `/voluntario-asignado`, accesible desde Donación publicada y la galería, muestra la asignación y el mapa de ejemplo para el donante.
+
+En la app, `/ruta-activa` (marco 11) es la pestaña Rutas del voluntario (`/voluntario/rutas`). `registrar-recogida` y `entrega-voluntario` se abren desde la próxima parada de la ruta en curso con `?paradaId=&rutaId=`; sin esos parámetros muestran un estado vacío que lleva a Rutas.

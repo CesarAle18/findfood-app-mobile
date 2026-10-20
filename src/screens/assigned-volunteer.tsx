@@ -1,13 +1,9 @@
-import { useState } from "react";
-import { Linking } from "react-native";
-
+import { CallButton } from "@/components/findfood/call-button";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import {
-  Button,
   Card,
   Copy,
   Detail,
-  FormMessage,
   NavButton,
   Screen,
   Section,
@@ -25,33 +21,9 @@ const backHome = (
   </NavButton>
 );
 
-/**
- * "Contactar voluntario": dials the volunteer. Callers render it only once the API shares
- * the phone (after acceptance). No `canOpenURL` check: Android 11+ would need a manifest
- * query for `tel:`, so a failed open is caught and the number shown instead.
- */
+/** "Contactar voluntario": dials the volunteer once the API shares the phone (after acceptance). */
 export function ContactVolunteerButton({ phone }: { phone: string }) {
-  const [failed, setFailed] = useState(false);
-  const call = async () => {
-    setFailed(false);
-    try {
-      await Linking.openURL(`tel:${phone}`);
-    } catch {
-      setFailed(true);
-    }
-  };
-  return (
-    <>
-      <FormMessage
-        message={
-          failed ? `No pudimos abrir la app de llamadas. Marca al ${phone}.` : undefined
-        }
-      />
-      <Button variant="outline" onPress={() => void call()}>
-        Contactar voluntario
-      </Button>
-    </>
-  );
+  return <CallButton phone={phone} label="Contactar voluntario" />;
 }
 
 function AssignedVolunteer({ detail: { dto, view } }: { detail: DonationDetail }) {

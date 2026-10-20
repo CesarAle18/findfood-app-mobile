@@ -1,8 +1,11 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { ApiError, isApiError } from "@/api/errors";
 import { messageFor } from "@/api/problem-messages";
-import type { MeVoluntarioDto, VerificacionVoluntarioDto } from "@/api/types";
+import type { EstadoProducto, MeVoluntarioDto, VerificacionVoluntarioDto } from "@/api/types";
+import { CallButton } from "@/components/findfood/call-button";
+import { Countdown } from "@/components/findfood/countdown";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import { LocationPicker } from "@/components/findfood/map";
 import { PhotoField } from "@/components/findfood/photo-field";
@@ -21,13 +24,25 @@ import { useZodForm } from "@/hooks/use-zod-form";
 import { useMotivos, useTiposVehiculo, type TipoVehiculoDto } from "@/services/catalogos";
 import { useSolicitarVoluntarioMutation } from "@/services/perfil";
 import { offerFromOferta, selectOffer, type OfferView } from "@/domain/mappers/offers";
+import { formatKg } from "@/domain/mappers/profile";
+import { acceptedWithoutRoute, stopProgress } from "@/domain/mappers/routes";
+import {
+  OBSERVACIONES_MAX,
+  formatWeightInput,
+  liveTotalKg,
+  validateCollection,
+  type CollectionErrors,
+  type CollectionValues,
+} from "@/domain/validation/collection";
+import { useEvidencias } from "@/services/evidencias";
+import { queryKeys } from "@/services/query-keys";
 import {
   useAceptarOfertaMutation,
   useOfertas,
   useRechazarOfertaMutation,
 } from "@/services/asignaciones";
 import { useAccess, useMe } from "@/state/session";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import {
   Badge,
   Button,
@@ -46,7 +61,14 @@ import {
 } from "@/components/findfood/ui";
 import { colors } from "@/design/tokens";
 
-import { useDonationId } from "./donation-queries";
+import { useDonationDetail } from "./donation-queries";
+import {
+  AbandonAssignment,
+  StopUnavailable,
+  useConfirmStop,
+  useStopParams,
+  useStopRoute,
+} from "./route-actions";
 
 /**
  * The catalog vehicle types, keyed by their id as text (the select's value); the request
@@ -372,24 +394,56 @@ function VolunteerRequestFormView({ onSent }: { onSent: () => void }) {
 /**
  * A live offer, opened from its push or inbox row with `?asignacionId=`. Without one, the
  * first offer still waiting for an answer. An offer no longer listed (expired, taken or
- * already rejected) says so instead of showing stale data.
+ * already rejected) says so instead of showing stale data. While the screen is open the
+ * offers are polled, and the countdown disables accepting at `expira_at`; the server stays
+ * the authority (`oferta-vencida`).
  */
 export function OfferScreen() {
   const { asignacionId } = useLocalSearchParams<{ asignacionId?: string }>();
   const requestedId = typeof asignacionId === "string" && asignacionId !== "" ? asignacionId : undefined;
-  const ofertas = useOfertas();
+  // A stack leaf (nothing opens on top of it), so mounted means visible; TanStack pauses
+  // the polling while the app is in the background.
+  const ofertas = useOfertas({ live: true });
   const oferta = ofertas.data ? selectOffer(ofertas.data, requestedId) : null;
   const offer = oferta ? offerFromOferta(oferta) : null;
+  const queryClient = useQueryClient();
+  const { data: me } = useMe();
+  const capacityKg = me?.voluntario?.capacidad_carga_kg ?? null;
+  // The offer and deadline whose countdown reached zero. Another offer, or the same one
+  // listed again with a new `expira_at`, starts unexpired: the server's deadline decides.
+  const deadlineKey = offer ? `${offer.id}@${offer.expiresAtIso}` : null;
+  const [expiredKey, setExpiredKey] = useState<string | null>(null);
+  const expired = deadlineKey !== null && expiredKey === deadlineKey;
+
+  const onExpire = () => {
+    if (deadlineKey === null) return;
+    setExpiredKey(deadlineKey);
+    // The API drops expired offers: the list answers whether it is really gone.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.asignaciones.ofertas() });
+  };
+
   return (
     <Screen
       title="Nueva oferta"
       subtitle="Voluntario"
-      badge={offer && !offer.accepted ? <Badge warning>{`Vence ${offer.expiresAt}`}</Badge> : null}
+      badge={
+        offer && !offer.accepted ? (
+          <Countdown key={deadlineKey} expiresAt={offer.expiresAtIso} onExpire={onExpire} />
+        ) : null
+      }
     >
       <QueryContent query={ofertas} loadingLabel="Cargando la oferta">
-        {() =>
+        {(rows) =>
           offer ? (
-            <OfferDetails offer={offer} />
+            <OfferDetails
+              offer={offer}
+              expired={expired}
+              capacityKg={capacityKg}
+              acceptedKg={acceptedWithoutRoute(rows).reduce(
+                (total, row) => total + row.peso_estimado_kg,
+                0,
+              )}
+            />
           ) : (
             <EmptyState
               icon="truck"
@@ -412,10 +466,33 @@ export function OfferScreen() {
   );
 }
 
-function OfferDetails({ offer }: { offer: OfferView }) {
+/** "45 kg de tu capacidad de 500 kg", or the weight alone while the capacity is unknown. */
+function loadDisplay(weightKg: number, capacityKg: number | null): string {
+  return capacityKg === null
+    ? formatKg(weightKg)
+    : `${formatKg(weightKg)} de tu capacidad de ${formatKg(capacityKg)}`;
+}
+
+function OfferDetails({
+  offer,
+  expired,
+  capacityKg,
+  acceptedKg,
+}: {
+  offer: OfferView;
+  /** The countdown reached `expira_at`: accepting would answer `oferta-vencida`. */
+  expired: boolean;
+  capacityKg: number | null;
+  /** Estimated weight of the accepted pickups still waiting for a route. */
+  acceptedKg: number;
+}) {
   const [rejecting, setRejecting] = useState(false);
   const { mutateAsync: aceptar, isPending: accepting } = useAceptarOfertaMutation();
   const [error, setError] = useState<string>();
+  // One route carries the accepted pickups: more than the vehicle holds ends in
+  // `excede-capacidad` when the route is created.
+  const overCapacity =
+    !offer.accepted && capacityKg !== null && offer.weightKg + acceptedKg > capacityKg;
 
   const accept = async () => {
     setError(undefined);
@@ -431,7 +508,7 @@ function OfferDetails({ offer }: { offer: OfferView }) {
   return (
     <>
       <Card>
-        <Copy weight="bold" style={{ fontSize: 20, lineHeight: 28 }}>
+        <Copy weight="bold" style={styles.offerCode}>
           {offer.code}
         </Copy>
         <Copy weight="medium">{offer.title}</Copy>
@@ -443,13 +520,23 @@ function OfferDetails({ offer }: { offer: OfferView }) {
           <Detail label="Recogida" value={offer.address} icon="pin" />
           {offer.distance !== null ? (
             <>
-              <View style={{ height: 1, backgroundColor: colors.border }} />
+              <View style={styles.divider} />
               <Detail label="Distancia" value={offer.distance} icon="truck" />
             </>
           ) : null}
-          <View style={{ height: 1, backgroundColor: colors.border }} />
+          <View style={styles.divider} />
+          <Detail label="Peso" value={loadDisplay(offer.weightKg, capacityKg)} icon="box" />
+          <View style={styles.divider} />
           <Detail label="Responde antes de" value={offer.expiresAt} icon="clock" />
         </Card>
+        <FormMessage
+          tone="info"
+          message={
+            overCapacity
+              ? "Con tus recogidas aceptadas superarías tu capacidad para una sola ruta"
+              : undefined
+          }
+        />
       </Section>
       {offer.products.length > 0 ? (
         <Section title="Productos">
@@ -463,28 +550,46 @@ function OfferDetails({ offer }: { offer: OfferView }) {
         </Section>
       ) : null}
       {offer.accepted ? (
-        <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
-          Ver mis rutas
-        </NavButton>
+        <>
+          <Section title="Contacto del donante">
+            <Card>
+              {offer.contactName !== null ? (
+                <Detail label="Donante" value={offer.contactName} icon="user" />
+              ) : null}
+              <CallButton phone={offer.contactPhone} label="Contactar al donante" />
+            </Card>
+          </Section>
+          <AbandonAssignment
+            asignacionId={offer.id}
+            onDone={() => router.dismissTo("/voluntario")}
+          />
+          <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
+            Ver mis rutas
+          </NavButton>
+        </>
       ) : rejecting ? (
         <RejectOffer asignacionId={offer.id} onBack={() => setRejecting(false)} />
       ) : (
         <>
-          <FormMessage message={error} />
+          <FormMessage message={expired ? "Esta oferta venció" : error} />
           <Row>
-            <View style={{ flex: 1 }}>
-              <Button variant="outline" disabled={accepting} onPress={() => setRejecting(true)}>
+            <View style={styles.flex}>
+              <Button
+                variant="outline"
+                disabled={accepting || expired}
+                onPress={() => setRejecting(true)}
+              >
                 Rechazar
               </Button>
             </View>
-            <View style={{ flex: 1 }}>
-              <Button loading={accepting} onPress={() => void accept()}>
+            <View style={styles.flex}>
+              <Button loading={accepting} disabled={expired} onPress={() => void accept()}>
                 Aceptar
               </Button>
             </View>
           </Row>
-          <Copy tone="secondary" style={{ fontSize: 11, textAlign: "center" }}>
-            Al aceptar, la ruta se agregará automáticamente.
+          <Copy tone="secondary" style={styles.footnote}>
+            Al aceptar, podrás armar tu ruta con tus recogidas aceptadas.
           </Copy>
         </>
       )}
@@ -531,24 +636,192 @@ function RejectOffer({ asignacionId, onBack }: { asignacionId: string; onBack: (
   );
 }
 
-/** Opened from the active route; `?id=` is the stop's donation (UUID), when known. */
+const PRODUCT_CONDITIONS: { label: string; value: EstadoProducto }[] = [
+  { label: "Bueno", value: "BUENO" },
+  { label: "Regular", value: "REGULAR" },
+  { label: "Malo", value: "MALO" },
+];
+
+/**
+ * Registers a pickup (MOV-43), opened from the route in progress with `?paradaId=&rutaId=`.
+ * The stop comes from the route detail (cached by Rutas) and the items from the donation
+ * (prefetched on arrival). Only an EN_SITIO or PENDIENTE pickup of a route in progress can
+ * be registered; anything else explains why and links back to the routes.
+ */
 export function CollectionScreen() {
-  const id = useDonationId();
-  const [condition, setCondition] = useState("Bueno");
-  const [weight, setWeight] = useState("20 kg");
-  const [notes, setNotes] = useState("");
+  const params = useStopParams();
+  const ruta = useStopRoute(params?.rutaId);
+  const parada = ruta.data?.paradas.find((stop) => stop.id === params?.paradaId);
   return (
-    <Screen title="Registrar recogida" subtitle="Parada 3 de 4" back>
-      <SelectField label="Estado del producto" value={condition} onChange={setCondition} options={["Bueno", "Regular", "Malo"].map(value => ({ label: value, value }))} />
-      <Field label="Peso aprox." value={weight} onChangeText={setWeight} />
-      <Section title="Evidencia fotográfica">
-        <PhotoField label="Evidencia fotográfica" mode="evidence" proposito="EVIDENCIA" tipo="RECOGIDA" />
-      </Section>
-      <Field label="Observaciones" value={notes} onChangeText={setNotes} placeholder="Describe el estado del producto" multiline />
-      <NavButton href={{ pathname: "/voluntario/calificar-donante", params: { id } }} showArrow={false}>Calificar donante</NavButton>
-      <NavButton href="/voluntario/rutas" dismissTo showArrow={false}>
-        Confirmar recogida
-      </NavButton>
+    <Screen
+      title="Registrar recogida"
+      subtitle={ruta.data && parada ? `Parada ${stopProgress(ruta.data.paradas, parada)}` : "Voluntario"}
+      back
+    >
+      {params === undefined ? (
+        <StopUnavailable
+          title="Abre la recogida desde tu ruta"
+          description="Registra cada recogida desde la próxima parada de tu ruta en curso."
+        />
+      ) : (
+        <QueryContent query={ruta} loadingLabel="Cargando la parada">
+          {(detalle) =>
+            parada === undefined || parada.tipo !== "RECOGIDA" || parada.donacion_id === null ? (
+              <StopUnavailable
+                title="No encontramos esta recogida"
+                description="Pudo salir de la ruta. Revisa tu ruta en curso."
+              />
+            ) : parada.estado === "COMPLETADA" ? (
+              <StopUnavailable
+                title="Recogida registrada"
+                description="Esta recogida ya quedó confirmada."
+              />
+            ) : detalle.estado !== "EN_CURSO" ||
+              (parada.estado !== "EN_SITIO" && parada.estado !== "PENDIENTE") ? (
+              <StopUnavailable
+                title="Esta recogida no se puede registrar"
+                description="Solo se registran las recogidas abiertas de una ruta en curso."
+              />
+            ) : (
+              <CollectionContent paradaId={parada.id} donacionId={parada.donacion_id} />
+            )
+          }
+        </QueryContent>
+      )}
     </Screen>
   );
 }
+
+function CollectionContent({ paradaId, donacionId }: { paradaId: string; donacionId: string }) {
+  const donacion = useDonationDetail(donacionId);
+  return (
+    <QueryContent query={donacion} loadingLabel="Cargando los productos">
+      {({ dto }) => (
+        <CollectionForm
+          paradaId={paradaId}
+          rows={
+            dto.items.length > 0
+              ? dto.items.map((item) => ({
+                  itemId: item.id,
+                  label: `Peso real · ${item.descripcion ?? item.tipo_alimento.nombre} (kg)`,
+                  estimateKg: item.peso_estimado_kg,
+                }))
+              : [{ itemId: null, label: "Peso recogido (kg)", estimateKg: dto.peso_estimado_kg }]
+          }
+        />
+      )}
+    </QueryContent>
+  );
+}
+
+interface WeightField {
+  itemId: string | null;
+  label: string;
+  estimateKg: number;
+}
+
+function CollectionForm({ paradaId, rows }: { paradaId: string; rows: WeightField[] }) {
+  const [estado, setEstado] = useState<CollectionValues["estado"]>("");
+  const [pesos, setPesos] = useState(() => rows.map((row) => formatWeightInput(row.estimateKg)));
+  const [observaciones, setObservaciones] = useState("");
+  const [errors, setErrors] = useState<CollectionErrors>({ pesos: {} });
+  // Registered on this screen; the list also covers photos registered before reopening it.
+  const [uploaded, setUploaded] = useState(false);
+  const evidencias = useEvidencias({ parada_id: paradaId });
+  const hasEvidence = uploaded || (evidencias.data?.length ?? 0) > 0;
+  const { confirm, busy, error } = useConfirmStop(paradaId);
+
+  const values: CollectionValues = {
+    estado,
+    pesos: rows.map((row, index) => ({ itemId: row.itemId, value: pesos[index] ?? "" })),
+    observaciones,
+  };
+
+  const setPeso = (index: number) => (text: string) =>
+    setPesos((current) => current.map((value, i) => (i === index ? text : value)));
+
+  const submit = () => {
+    const result = validateCollection(values);
+    setErrors(result.ok ? { pesos: {} } : result.errors);
+    if (!result.ok) return;
+    const { estado_producto, items, peso_confirmado_kg, observaciones: obs } = result.data;
+    void confirm(
+      {
+        peso_confirmado_kg,
+        estado_producto,
+        ...(items.length > 0 ? { items } : {}),
+        ...(obs !== undefined ? { observaciones: obs } : {}),
+      },
+      () => router.dismissTo("/voluntario/rutas"),
+    );
+  };
+
+  return (
+    <>
+      <SelectField
+        label="Estado del producto *"
+        value={estado}
+        options={PRODUCT_CONDITIONS}
+        onChange={(value) => setEstado(value as EstadoProducto)}
+      />
+      <FormMessage message={errors.estado} />
+      <Section title="Peso recogido">
+        {rows.map((row, index) => (
+          <Field
+            key={row.itemId ?? "total"}
+            label={row.label}
+            value={pesos[index] ?? ""}
+            onChangeText={setPeso(index)}
+            keyboardType="decimal-pad"
+            accessibilityHint={`Estimado: ${formatKg(row.estimateKg)}`}
+            error={errors.pesos[index]}
+          />
+        ))}
+        <Copy weight="bold">{`Total recogido: ${formatTotalKg(liveTotalKg(values.pesos))}`}</Copy>
+      </Section>
+      <Section title="Evidencia fotográfica">
+        <PhotoField
+          label="Evidencia fotográfica"
+          mode="evidence"
+          proposito="EVIDENCIA"
+          tipo="RECOGIDA"
+          padre={{ parada_id: paradaId }}
+          onUploaded={() => setUploaded(true)}
+        />
+      </Section>
+      <Field
+        label="Observaciones"
+        value={observaciones}
+        onChangeText={setObservaciones}
+        placeholder="Describe el estado del producto"
+        multiline
+        maxLength={OBSERVACIONES_MAX}
+        error={errors.observaciones}
+      />
+      <Copy tone="secondary" style={styles.counter}>
+        {`${observaciones.length}/${OBSERVACIONES_MAX}`}
+      </Copy>
+      <FormMessage message={errors.form ?? error} />
+      <FormMessage
+        tone="info"
+        message={hasEvidence ? undefined : "Adjunta al menos una foto para confirmar la recogida."}
+      />
+      <Button loading={busy} disabled={!hasEvidence} onPress={submit}>
+        Confirmar recogida
+      </Button>
+    </>
+  );
+}
+
+/** `15,5 kg`, keeping the cents the volunteer typed. */
+function formatTotalKg(kg: number): string {
+  return `${String(kg).replace(".", ",")} kg`;
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  offerCode: { fontSize: 20, lineHeight: 28 },
+  divider: { height: 1, backgroundColor: colors.border },
+  footnote: { fontSize: 11, textAlign: "center" },
+  counter: { fontSize: 11, textAlign: "right" },
+});

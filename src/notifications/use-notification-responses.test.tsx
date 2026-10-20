@@ -14,6 +14,7 @@ import {
   donationKeysForPush,
   notificationFromData,
   useNotificationResponses,
+  volunteerKeysForPush,
 } from "./use-notification-responses";
 
 jest.mock("@/api", () => ({
@@ -241,6 +242,43 @@ describe("useNotificationResponses", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.donaciones.historial("don-3") });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.donaciones.lists() });
   });
+
+  it("refreshes the volunteer's offers and routes when a donation is cancelled", async () => {
+    await renderResponses();
+    const invalidate = jest.spyOn(client!, "invalidateQueries");
+    const received = mocked.addNotificationReceivedListener.mock.calls.at(-1)![0];
+    const notification = {
+      request: { content: { data: { tipo: "DONACION_CANCELADA", donacion_id: "don-3" } } },
+    } as unknown as Notifications.Notification;
+
+    await act(() => received(notification));
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.asignaciones.ofertas() });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.rutas.all });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.donaciones.detail("don-3") });
+  });
+});
+
+describe("volunteerKeysForPush", () => {
+  it("refreshes the offers when a new one arrives", () => {
+    expect(volunteerKeysForPush({ tipo: "ASIGNACION_OFRECIDA" })).toEqual([
+      queryKeys.asignaciones.ofertas(),
+    ]);
+  });
+
+  it("refreshes the offers and routes when a donation is cancelled", () => {
+    expect(volunteerKeysForPush({ tipo: "DONACION_CANCELADA" })).toEqual([
+      queryKeys.asignaciones.ofertas(),
+      queryKeys.rutas.all,
+    ]);
+  });
+
+  it.each([undefined, null, {}, { tipo: "ASIGNACION_ACEPTADA" }, { tipo: 7 }])(
+    "is empty for other pushes (%p)",
+    (data) => {
+      expect(volunteerKeysForPush(data as Record<string, unknown> | null | undefined)).toEqual([]);
+    },
+  );
 });
 
 describe("donationKeysForPush", () => {

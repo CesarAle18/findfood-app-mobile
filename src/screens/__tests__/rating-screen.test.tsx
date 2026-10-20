@@ -1,6 +1,6 @@
 /**
- * Calificar voluntario (MOV-37): aspects from the catalog, `POST /asignaciones/:id/calificacion`
- * once the donation is delivered and not rated yet. The volunteer side (MOV-46) stays local.
+ * Calificar voluntario (MOV-37) and donante (MOV-46): aspects from the catalog,
+ * `POST /asignaciones/:id/calificacion` once the assignment allows it and is not rated yet.
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -173,17 +173,67 @@ describe("RatingScreen", () => {
     expect(submit()).toBeDisabled();
   });
 
-  it("keeps the volunteer side local for now", async () => {
-    answer(detalleFixture({ estado: "RECIBIDA" }));
+  it("lets the volunteer rate the donor once the assignment is completed", async () => {
+    answer(delivered);
+    mockApi.post.mockResolvedValue({ id: "c-2", puntaje: 4, comentario: "Todo listo", aspectos: [], created_at: "" });
     await renderRating("VOLUNTARIO");
     await screen.findByText("María García");
 
+    await fireEvent.changeText(screen.getByLabelText("Comentario adicional"), " Todo listo ");
     await fireEvent.press(submit());
 
+    expect(await screen.findByText("¡Gracias! Registramos tu calificación.")).toBeOnTheScreen();
+    expect(mockApi.post).toHaveBeenCalledWith(ratingPath, {
+      body: { puntaje: 4, comentario: "Todo listo" },
+    });
+    expect(screen.getByRole("link", { name: "Volver a mis rutas" })).toBeOnTheScreen();
+  });
+
+  it("blocks the volunteer until the bank confirms the delivery", async () => {
+    answer(detalleFixture({ estado: "EN_TRANSITO" }));
+    await renderRating("VOLUNTARIO");
+
     expect(
-      screen.getByText("El envío de calificaciones estará disponible próximamente."),
+      await screen.findByText("Podrás calificar cuando la entrega se confirme en el banco."),
     ).toBeOnTheScreen();
-    expect(mockApi.post).not.toHaveBeenCalled();
+    expect(submit()).toBeDisabled();
+  });
+
+  it("shows the volunteer's rating as done when the donor was already rated", async () => {
+    answer(
+      detalleFixture({
+        estado: "ENTREGADA",
+        asignacion: asignacionFixture({ estado: "COMPLETADA", calificada_por_mi: true }),
+      }),
+    );
+    await renderRating("VOLUNTARIO");
+
+    expect(await screen.findByText("Ya calificaste a este donante.")).toBeOnTheScreen();
+    expect(screen.queryByRole("button", { name: "Enviar calificación" })).toBeNull();
+  });
+
+  it("hides the aspects when the catalog has none for donors", async () => {
+    answer(delivered);
+    mockApi.get.mockImplementation(async (path: string) => {
+      if (path === "/catalogos") {
+        return {
+          ...catalogosFixture,
+          aspectos_calificacion: catalogosFixture.aspectos_calificacion.filter(
+            (aspecto) => aspecto.rol_calificado !== "DONANTE",
+          ),
+        };
+      }
+      if (path === detailPath) return delivered;
+      throw new Error(`unexpected GET ${path}`);
+    });
+    await renderRating("VOLUNTARIO");
+
+    await screen.findByText("María García");
+    await waitFor(() =>
+      expect(mockApi.get).toHaveBeenCalledWith("/catalogos", expect.anything()),
+    );
+    expect(screen.queryByText("Aspectos a evaluar")).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
   it("cannot rate a donation without a volunteer", async () => {

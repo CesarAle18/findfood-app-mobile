@@ -1,6 +1,6 @@
 /**
- * Tapped pushes open their screen; pushes received in the foreground refresh the inbox and
- * the donation they are about.
+ * Tapped pushes open their screen; pushes received in the foreground refresh the inbox, the
+ * donation they are about and, for a volunteer, their offers and routes.
  *
  * A tap can arrive before the app can navigate: on a cold start the session is still
  * loading and `Stack.Protected` has not mounted the signed-in routes. The tap is kept as
@@ -53,6 +53,21 @@ export function donationKeysForPush(data: Record<string, unknown> | null | undef
     queryKeys.donaciones.historial(id),
     queryKeys.donaciones.lists(),
   ];
+}
+
+/**
+ * What a received push leaves stale on the volunteer's side: a new offer refreshes the
+ * offers; a cancelled donation can drop an accepted offer and a stop from a route.
+ */
+export function volunteerKeysForPush(data: Record<string, unknown> | null | undefined) {
+  switch (optionalString(data?.tipo)) {
+    case "ASIGNACION_OFRECIDA":
+      return [queryKeys.asignaciones.ofertas()];
+    case "DONACION_CANCELADA":
+      return [queryKeys.asignaciones.ofertas(), queryKeys.rutas.all];
+    default:
+      return [];
+  }
 }
 
 /** Only a tap on the notification itself opens it (not an action button). */
@@ -110,7 +125,8 @@ export function useNotificationResponses(navigatorReady: boolean): void {
     const received = Notifications.addNotificationReceivedListener((notification) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.notificaciones.all });
       // Optional chaining: a push without content still refreshes the inbox.
-      for (const queryKey of donationKeysForPush(notification?.request?.content?.data)) {
+      const data = notification?.request?.content?.data;
+      for (const queryKey of [...donationKeysForPush(data), ...volunteerKeysForPush(data)]) {
         void queryClient.invalidateQueries({ queryKey });
       }
     });

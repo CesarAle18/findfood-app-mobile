@@ -15,6 +15,8 @@ let accessPhase = "app";
 let me;
 let fixtures;
 let draft;
+/** What `GET /rutas/:id` answers for the stop screens. */
+let routeDetail;
 /** Raw answer of a query key (`["donaciones", "detail", id]`…), or undefined. */
 function answerFor(queryKey) {
   const [root, kind, arg] = queryKey;
@@ -23,6 +25,8 @@ function answerFor(queryKey) {
     return fixtures.bandejaFixture([fixtures.notificacionFixture()]);
   if (root === "asignaciones" && kind === "ofertas") return [fixtures.ofertaFixture()];
   if (root === "catalogos") return fixtures.catalogosFixture;
+  if (root === "rutas" && kind === "detail") return routeDetail;
+  if (root === "evidencias") return [];
   if (root !== "donaciones") return undefined;
   if (kind === "detail")
     return fixtures.detalleFixture({ id: arg, estado: "RECIBIDA" });
@@ -219,6 +223,8 @@ Module._load = function (name, parent, isMain) {
       stopLocationTracking: async () => {},
       trackingStatusStore: { get: () => "off", subscribe: () => () => {} },
     };
+  // expo-location has no Node build; the stop actions only read a fix from handlers.
+  if (name === "@/location/current-fix") return { getCurrentFix: async () => null };
   // No requests leave this check: the query hooks are stubbed above.
   if (name === "@/api") return { api: {} };
   // Photo capture and upload need the native picker, manipulator and file system; the
@@ -321,6 +327,13 @@ Module._load = function (name, parent, isMain) {
 Slot = require("expo-router/build/ui/Slot").Slot;
 fixtures = require("../src/test-utils/fixtures.ts");
 me = fixtures.meFixture();
+// A route in progress whose first pickup the volunteer reached.
+routeDetail = fixtures.rutaDetalleFixture({
+  estado: "EN_CURSO",
+  paradas: fixtures
+    .rutaDetalleFixture()
+    .paradas.map((p) => (p.id === "par-1" ? { ...p, estado: "EN_SITIO" } : p)),
+});
 const {
   initialDonationDraft,
   appendProduct,
@@ -389,11 +402,34 @@ try {
   // The offer shows a real assignment: by its link, else the first one pending.
   const { OfferScreen } = require("../src/screens/volunteer.tsx");
   const offerHtml = renderToStaticMarkup(React.createElement(OfferScreen));
-  assert(offerHtml.includes("DON-1048") && offerHtml.includes("Vence 15:10"));
+  assert(offerHtml.includes("DON-1048") && offerHtml.includes("15:10"));
   routeParams = { asignacionId: "otra" };
   assert(
     renderToStaticMarkup(React.createElement(OfferScreen)).includes(
       "Esta oferta ya no está disponible",
+    ),
+  );
+  // The pickup registration reads its stop from the route and the items from the donation.
+  const { CollectionScreen } = require("../src/screens/volunteer.tsx");
+  routeParams = { paradaId: "par-1", rutaId: "ruta-1" };
+  const collectionHtml = renderToStaticMarkup(React.createElement(CollectionScreen));
+  assert(collectionHtml.includes("Parada 1 de 3") && collectionHtml.includes("Estado del producto"));
+  assert(collectionHtml.includes("Total recogido: 35 kg"));
+  routeParams = {};
+  assert(
+    renderToStaticMarkup(React.createElement(CollectionScreen)).includes(
+      "Abre la recogida desde tu ruta",
+    ),
+  );
+  // The delivery shows the warehouse of the route in progress.
+  const { DeliveryScreen } = require("../src/screens/donations.tsx");
+  routeParams = { paradaId: "par-3", rutaId: "ruta-1" };
+  const volunteerDeliveryHtml = renderToStaticMarkup(React.createElement(DeliveryScreen));
+  assert(volunteerDeliveryHtml.includes("Ruta R-045") && volunteerDeliveryHtml.includes("Bodega Norte"));
+  routeParams = {};
+  assert(
+    renderToStaticMarkup(React.createElement(DeliveryScreen)).includes(
+      "Abre la entrega desde tu ruta",
     ),
   );
   const { RatingScreen } = require("../src/screens/account.tsx");

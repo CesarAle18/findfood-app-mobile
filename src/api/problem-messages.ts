@@ -76,7 +76,8 @@ const ASSIGNMENT_MESSAGES = {
 };
 
 const ROUTING_MESSAGES = {
-  "demasiadas-paradas": "La ruta tiene demasiadas paradas.",
+  // Mirrors MAX_PARADAS_POR_RUTA (MAX_STOPS_PER_ROUTE in src/domain/mappers/routes.ts).
+  "demasiadas-paradas": "Una ruta admite como máximo 5 recogidas.",
   "sin-banco": "No hay un banco de alimentos asociado.",
   "banco-sin-flota": "El banco de alimentos no tiene vehículos disponibles.",
   "asignacion-invalida": "La asignación no es válida para esta ruta.",
