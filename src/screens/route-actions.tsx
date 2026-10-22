@@ -122,7 +122,7 @@ export function NextStop({
       </Card>
       {parada.estado === "PENDIENTE" ? (
         <ArrivalButton
-          key={parada.id}
+          key={`llegada-${parada.id}`}
           paradaId={parada.id}
           label={pickup ? "Llegué al punto" : "Llegué al banco"}
         />
@@ -137,8 +137,10 @@ export function NextStop({
           {pickup ? "Registrar recogida" : "Registrar entrega"}
         </NavButton>
       )}
-      {/* Keyed by stop: an open form or its text never carries over to the next stop. */}
-      {pickup ? <PickupActions key={parada.id} parada={parada} onNotice={onNotice} /> : null}
+      {/* Keyed by stop (distinct from its sibling): an open form or its text never carries over to the next stop. */}
+      {pickup ? (
+        <PickupActions key={`acciones-${parada.id}`} parada={parada} onNotice={onNotice} />
+      ) : null}
     </Section>
   );
 }

@@ -1,6 +1,7 @@
 /**
  * Offers of `GET /asignaciones/ofertas` → what the offer screen shows, in Bogotá time.
  */
+import type { Coordenada } from "@/api/types";
 import type { OfertaDto } from "@/services/asignaciones";
 
 import { fromIsoToBogota, fromPickupWindow } from "./dates";
@@ -17,6 +18,8 @@ export interface OfferView {
   pickupWindow: string;
   /** Pickup address, plus the donor's reference when given. */
   address: string;
+  /** The pickup point, for the offer's map. */
+  point: Coordenada;
   /** "2,8 km", or null when the API could not compute it. */
   distance: string | null;
   /** Bogotá `HH:mm` when the offer lapses. */
@@ -52,6 +55,7 @@ export function offerFromOferta(dto: OfertaDto): OfferView {
     summary: `${dto.peso_estimado_kg} kg · ${cold}`,
     pickupWindow: windowDisplay(dto),
     address: reference ? `${dto.direccion_recogida} · ${reference}` : dto.direccion_recogida,
+    point: { lat: dto.lat, lng: dto.lng },
     distance:
       dto.distancia_km === null ? null : `${dto.distancia_km.toFixed(1).replace(".", ",")} km`,
     expiresAt: fromIsoToBogota(dto.expira_at).time,

@@ -107,7 +107,7 @@ Este documento describe el código presente en `src/design/tokens.ts`, `src/comp
 
 `background` cubre la pantalla; `surface`, tarjetas, campos y navegación. `border` delimita controles y divisores. `soft` señala resúmenes y estados seleccionados; `muted` reserva áreas fotográficas. `warning` sobre `warningSoft` representa estados pendientes; `danger` identifica cancelación. El borde de cancelación usa el valor local `#E7CACA`.
 
-El mapa ilustrativo contiene colores locales de terreno y calles (`#EEF3EE`, `#D6E2D7`, `#D8E7D6`); no forman una escala general. No hay tema oscuro implementado.
+Los mapas son Google Maps; el radio de cobertura usa `primary` con relleno translúcido. No hay tema oscuro implementado.
 
 ## Typography
 
@@ -139,7 +139,7 @@ Los controles tienen esquinas suaves, las tarjetas una curva algo mayor y las in
 - **Card:** margen interior 18 y separación 14; variante suave con fondo y borde `soft`.
 - **Badge y Choices:** Badge muestra estados; Choices permite selección local con estado accesible. Badge usa texto medio; Choices utiliza altura mínima 42, radio 8 y selección verde sobre fondo suave.
 - **BottomNav:** cuatro posiciones iguales, cada una de altura mínima 54; el icono activo tiene fondo suave y la etiqueta activa es seminegrita. Las rutas de Inicio, Donaciones o Rutas, Alertas y Perfil dependen del contexto donante o voluntario; ambos perfiles tienen pantalla. El menú de cuenta permite cambiar de vista localmente.
-- **Icon y RouteMap:** iconos SVG de línea con trazo 1.7 y extremos redondeados; tamaño predeterminado 22. El mapa es un esquema SVG local de altura 264 y cuatro paradas de ejemplo, sin proveedor de mapas ni ubicación real.
+- **Icon y RouteMap:** iconos SVG de línea con trazo 1.7 y extremos redondeados; tamaño predeterminado 22. Los mapas usan Google Maps (`FindFoodMap`), uno por pantalla y nunca dentro de un elemento de lista.
 
 El formulario 19 conserva desplazamiento vertical y agrupaciones de datos personales y vehículo. Incluye tipo de identificación y espacios separados para documento, vehículo y licencia; estos espacios no cargan fotografías. Los perfiles donante y voluntario reutilizan una composición compartida.
 

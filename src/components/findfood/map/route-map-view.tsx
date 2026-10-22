@@ -12,18 +12,28 @@ import { Marker, Polyline } from "./maps";
 export type RouteStop = Pick<ParadaRutaDto, "id" | "orden" | "direccion" | "lat" | "lng">;
 
 const EDGE_PADDING = { top: 48, right: 48, bottom: 48, left: 48 };
+/** The leg from the volunteer to the next stop, over the planned (green) path. */
+const NEXT_LEG_COLOR = "#1F5FBF";
 
 /**
  * The planned path (`geometria`, GeoJSON `[lng, lat]`) and the numbered stops of a route.
  * Without geometry it shows the stops only. Fits everything once the map is ready.
+ *
+ * With `showsUserLocation` (location permission granted) the map shows the device's
+ * position and Android's "my location" button; `tramo` draws the path from there to the
+ * next stop (`GET /rutas/:id/seguimiento`).
  */
 export function RouteMapView({
   geometria,
   paradas,
+  tramo = null,
+  showsUserLocation = false,
   height = 264,
 }: {
   geometria: GeometriaRutaDto | null;
   paradas: readonly RouteStop[];
+  tramo?: GeometriaRutaDto | null;
+  showsUserLocation?: boolean;
   height?: number;
 }) {
   const mapRef = useRef<MapView>(null);
@@ -41,6 +51,7 @@ export function RouteMapView({
     return { path, stops, bounds };
   }, [geometria, paradas]);
   const initialRegion = useMemo(() => regionForPoints(bounds), [bounds]);
+  const leg = useMemo(() => lineStringToLatLngs(tramo), [tramo]);
 
   const fit = () => {
     if (bounds.length < 2) return;
@@ -54,6 +65,8 @@ export function RouteMapView({
       height={height}
       initialRegion={initialRegion}
       onMapReady={fit}
+      showsUserLocation={showsUserLocation}
+      showsMyLocationButton={showsUserLocation}
       accessibilityLabel={`Mapa de la ruta con ${stops.length} paradas`}
     >
       {path.length > 1 ? (
@@ -62,6 +75,15 @@ export function RouteMapView({
           coordinates={path}
           strokeColor={colors.primary}
           strokeWidth={5}
+        />
+      ) : null}
+      {leg.length > 1 ? (
+        <Polyline
+          testID="route-next-leg"
+          coordinates={leg}
+          strokeColor={NEXT_LEG_COLOR}
+          strokeWidth={6}
+          zIndex={1}
         />
       ) : null}
       {stops.map((stop) => (

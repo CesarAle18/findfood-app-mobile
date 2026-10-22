@@ -308,6 +308,9 @@ export function NewDonationScreen() {
         <LocationPicker
           value={draft.ubicacionRecogida}
           address={draft.direccion}
+          onAddressChosen={(direccion) =>
+            setDraft((current) => setDireccion(current, direccion))
+          }
           onChange={(point, source) => setDraft((current) => setUbicacion(current, point, source))}
           // Only while the address is empty: a typed address is never replaced.
           onAddressSuggestion={

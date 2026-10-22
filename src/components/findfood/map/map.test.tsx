@@ -2,15 +2,40 @@ import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import * as Location from "expo-location";
 import { Platform } from "react-native";
 
+import { ApiError } from "@/api/errors";
 import { hasGoogleMapsKey } from "@/config/maps";
+import { clearReverseGeocodeCache } from "@/location/geocode";
+import {
+  autocompletarDireccion,
+  geocodificar,
+  geocodificarInversa,
+  getLugar,
+} from "@/services/geo";
 import type { GeometriaRutaDto } from "@/services/rutas";
 
-import { LocationPicker } from "./location-picker";
+import {
+  APPROXIMATE_NOTICE,
+  AUTOCOMPLETE_DELAY_MS,
+  LocationPicker,
+  REVERSE_GEOCODE_DELAY_MS,
+} from "./location-picker";
 import { PointMap } from "./point-map";
 import { RouteMapView, type RouteStop } from "./route-map-view";
 
 // A build with the Maps key of its platform, unless a test says otherwise.
 jest.mock("@/config/maps", () => ({ hasGoogleMapsKey: jest.fn(() => true) }));
+
+// The API's address search (Google), unavailable unless a test says otherwise.
+jest.mock("@/services/geo", () => ({
+  ...jest.requireActual<typeof import("@/services/geo")>("@/services/geo"),
+  autocompletarDireccion: jest.fn(),
+  getLugar: jest.fn(),
+  geocodificar: jest.fn(),
+  geocodificarInversa: jest.fn(),
+}));
+
+const noGoogle = () =>
+  new ApiError({ type: "geo-no-disponible", status: 503, title: "No disponible" });
 
 const permission = (granted: boolean, canAskAgain: boolean) => ({
   status: granted ? "granted" : "denied",
@@ -31,6 +56,10 @@ const defaultHook = jest.mocked(Location.useForegroundPermissions).getMockImplem
 
 beforeEach(() => {
   jest.clearAllMocks();
+  clearReverseGeocodeCache();
+  for (const search of [autocompletarDireccion, getLugar, geocodificar, geocodificarInversa]) {
+    jest.mocked(search).mockRejectedValue(noGoogle());
+  }
 });
 
 afterEach(() => {
@@ -186,6 +215,173 @@ describe("LocationPicker", () => {
   });
 });
 
+describe("LocationPicker with Google through the API", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+    (Location.geocodeAsync as Partial<jest.Mock>).mockRestore?.();
+  });
+
+  const locate = () =>
+    act(async () => {
+      fireEvent.press(screen.getByRole("button", { name: "Ubicar dirección" }));
+    });
+
+  it("locates with Google first, without the phone geocoder or its Android permission", async () => {
+    const os = jest.replaceProperty(Platform, "OS", "android");
+    try {
+      mockForegroundPermission(permission(false, true));
+      jest.mocked(geocodificar).mockResolvedValue({
+        direccion: "Cra. 45 #12-30, Bogotá",
+        ubicacion: { lat: 4.62, lng: -74.08 },
+        precision: "ROOFTOP",
+      });
+      const geocode = jest.spyOn(Location, "geocodeAsync");
+      const onChange = jest.fn();
+      await render(<LocationPicker value={null} onChange={onChange} address=" Cra 45 #12-30 " />);
+
+      await locate();
+
+      expect(geocodificar).toHaveBeenCalledWith("Cra 45 #12-30");
+      expect(onChange).toHaveBeenCalledWith({ lat: 4.62, lng: -74.08 }, "address");
+      expect(geocode).not.toHaveBeenCalled();
+      expect(screen.queryByText(APPROXIMATE_NOTICE)).toBeNull();
+    } finally {
+      os.restore();
+    }
+  });
+
+  it("asks to adjust the pin when Google only found the zone", async () => {
+    jest.mocked(geocodificar).mockResolvedValue({
+      direccion: "Chapinero, Bogotá",
+      ubicacion: { lat: 4.64, lng: -74.06 },
+      precision: "APPROXIMATE",
+    });
+    await render(<LocationPicker value={null} onChange={jest.fn()} address="Chapinero" />);
+
+    await locate();
+
+    expect(screen.getByText(APPROXIMATE_NOTICE)).toBeOnTheScreen();
+  });
+
+  it("trusts Google's 'no such address' and does not ask the phone", async () => {
+    jest
+      .mocked(geocodificar)
+      .mockRejectedValue(new ApiError({ type: "no-encontrado", status: 404, title: "No" }));
+    const geocode = jest.spyOn(Location, "geocodeAsync");
+    const onChange = jest.fn();
+    await render(<LocationPicker value={null} onChange={onChange} address="Dirección rara" />);
+
+    await locate();
+
+    expect(screen.getByText(/No pudimos ubicar esa dirección/)).toBeOnTheScreen();
+    expect(geocode).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("suggests addresses while typing; picking one sets the address before the point", async () => {
+    jest.useFakeTimers();
+    jest.mocked(autocompletarDireccion).mockResolvedValue({
+      sugerencias: [{ place_id: "ChIJ72", principal: "Calle 72 #10-34", secundario: "Bogotá" }],
+    });
+    jest.mocked(getLugar).mockResolvedValue({
+      place_id: "ChIJ72",
+      direccion: "Cl. 72 #10-34, Bogotá",
+      ubicacion: { lat: 4.657, lng: -74.056 },
+    });
+    const calls: string[] = [];
+    const onChange = jest.fn(() => calls.push("point"));
+    const onAddressChosen = jest.fn(() => calls.push("address"));
+    const view = await render(
+      <LocationPicker
+        value={null}
+        onChange={onChange}
+        address="Calle 7"
+        onAddressChosen={onAddressChosen}
+      />,
+    );
+    await view.rerender(
+      <LocationPicker
+        value={null}
+        onChange={onChange}
+        address="Calle 72"
+        onAddressChosen={onAddressChosen}
+      />,
+    );
+
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOCOMPLETE_DELAY_MS);
+    });
+
+    // Typing restarts the pause: only the last text is searched.
+    expect(autocompletarDireccion).toHaveBeenCalledTimes(1);
+    const [query, sesion] = jest.mocked(autocompletarDireccion).mock.calls[0];
+    expect(query).toBe("Calle 72");
+
+    await act(async () => {
+      fireEvent.press(screen.getByRole("button", { name: "Calle 72 #10-34, Bogotá" }));
+    });
+
+    expect(getLugar).toHaveBeenCalledWith("ChIJ72", sesion);
+    expect(onAddressChosen).toHaveBeenCalledWith("Cl. 72 #10-34, Bogotá");
+    expect(onChange).toHaveBeenCalledWith({ lat: 4.657, lng: -74.056 }, "address");
+    expect(calls).toEqual(["address", "point"]);
+  });
+
+  it("stops suggesting once the API says it cannot search", async () => {
+    jest.useFakeTimers();
+    const onAddressChosen = jest.fn();
+    const view = await render(
+      <LocationPicker value={null} onChange={jest.fn()} address="Calle 72" onAddressChosen={onAddressChosen} />,
+    );
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOCOMPLETE_DELAY_MS);
+    });
+    await view.rerender(
+      <LocationPicker value={null} onChange={jest.fn()} address="Calle 72 #1" onAddressChosen={onAddressChosen} />,
+    );
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOCOMPLETE_DELAY_MS);
+    });
+
+    expect(autocompletarDireccion).toHaveBeenCalledTimes(1);
+  });
+
+  it("suggests the address of a dropped pin once the map rests, without location permission", async () => {
+    jest.useFakeTimers();
+    jest.mocked(geocodificarInversa).mockResolvedValue({ direccion: "Calle 76 #15-20, Bogotá" });
+    const onAddressSuggestion = jest.fn();
+    await render(
+      <LocationPicker value={null} onChange={jest.fn()} onAddressSuggestion={onAddressSuggestion} />,
+    );
+    const map = screen.getByTestId("location-picker-map");
+
+    await act(async () => {
+      fireEvent(map, "regionChangeComplete", region, { isGesture: true });
+      fireEvent(map, "regionChangeComplete", { ...region, latitude: 4.71 }, { isGesture: true });
+    });
+    expect(geocodificarInversa).not.toHaveBeenCalled();
+
+    await act(async () => {
+      jest.advanceTimersByTime(REVERSE_GEOCODE_DELAY_MS);
+    });
+
+    expect(geocodificarInversa).toHaveBeenCalledTimes(1);
+    expect(geocodificarInversa).toHaveBeenCalledWith({ lat: 4.71, lng: -74.1 });
+    expect(onAddressSuggestion).toHaveBeenCalledWith("Calle 76 #15-20, Bogotá");
+    expect(Location.reverseGeocodeAsync).not.toHaveBeenCalled();
+  });
+
+  it("draws the coverage radius around the chosen point", async () => {
+    await render(
+      <LocationPicker value={{ lat: 4.65, lng: -74.06 }} onChange={jest.fn()} coverageKm={12} />,
+    );
+
+    const circle = screen.getByTestId("location-picker-coverage");
+    expect(circle.props.center).toEqual({ latitude: 4.65, longitude: -74.06 });
+    expect(circle.props.radius).toBe(12_000);
+  });
+});
+
 describe("RouteMapView", () => {
   const geometria: GeometriaRutaDto = {
     type: "LineString",
@@ -208,6 +404,25 @@ describe("RouteMapView", () => {
       { latitude: 4.66, longitude: -74.07 },
       { latitude: 4.67, longitude: -74.08 },
     ]);
+  });
+
+  it("draws the leg to the next stop over the route and shows the device's position", async () => {
+    await render(
+      <RouteMapView
+        geometria={geometria}
+        paradas={paradas}
+        showsUserLocation
+        tramo={{ type: "LineString", coordinates: [[-74.05, 4.64], [-74.06, 4.65]] }}
+      />,
+    );
+
+    expect(screen.getByTestId("route-next-leg").props.coordinates).toEqual([
+      { latitude: 4.64, longitude: -74.05 },
+      { latitude: 4.65, longitude: -74.06 },
+    ]);
+    const map = screen.getByTestId("route-map");
+    expect(map.props.showsUserLocation).toBe(true);
+    expect(map.props.showsMyLocationButton).toBe(true);
   });
 
   it("numbers the stops by their order and shows them without geometry", async () => {

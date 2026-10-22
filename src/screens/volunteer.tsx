@@ -7,7 +7,7 @@ import type { EstadoProducto, MeVoluntarioDto, VerificacionVoluntarioDto } from 
 import { CallButton } from "@/components/findfood/call-button";
 import { Countdown } from "@/components/findfood/countdown";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
-import { LocationPicker } from "@/components/findfood/map";
+import { LocationPicker, PointMap } from "@/components/findfood/map";
 import { PhotoField } from "@/components/findfood/photo-field";
 import {
   MotivoField,
@@ -215,6 +215,18 @@ function onPhotoField(error: unknown): unknown {
 
 const REFRIGERATION = ["Sí, dispone", "No dispone"];
 const GROUP = ["A título personal", "Con una organización"];
+/** What the API stores when the field is left empty (`radio_cobertura_km = 10`). */
+const DEFAULT_COVERAGE_KM = 10;
+
+/**
+ * The radius the map draws: the API only offers donations inside it (hard filter). None
+ * while the typed value is out of range, so the map never shows a radius it would reject.
+ */
+export function coverageKm(typed: string): number | undefined {
+  if (!typed.trim()) return DEFAULT_COVERAGE_KM;
+  const km = Number(typed.replace(",", "."));
+  return Number.isFinite(km) && km >= 1 && km <= 100 ? km : undefined;
+}
 
 function VolunteerRequestFormView({ onSent }: { onSent: () => void }) {
   // Read once: the age is checked against the day the form was opened.
@@ -341,6 +353,7 @@ function VolunteerRequestFormView({ onSent }: { onSent: () => void }) {
           <LocationPicker
             value={values.ubicacion_base}
             onChange={(point) => form.setValue("ubicacion_base", point)}
+            coverageKm={coverageKm(values.radio_cobertura_km)}
           />
           <FormMessage message={errors.ubicacion_base} />
           <Field
@@ -516,6 +529,7 @@ function OfferDetails({
         <Copy tone="secondary">{`Ventana: ${offer.pickupWindow}`}</Copy>
       </Card>
       <Section title="Información para decidir">
+        <PointMap point={offer.point} title={offer.address} height={180} />
         <Card>
           <Detail label="Recogida" value={offer.address} icon="pin" />
           {offer.distance !== null ? (

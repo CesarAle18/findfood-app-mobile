@@ -6,7 +6,7 @@ Frontend móvil en React Native, Expo SDK 57 y TypeScript, basado en `Mock Up Pr
 
 Interfaz con componentes nativos, identidad verde, Inter local, navegación de demostración y datos simulados. No incluye backend, autenticación real, persistencia, solicitudes HTTP, envío de correo, verificación OTP, cámara ni GPS. La preparación de modelos y repositorio no define todavía el contrato API final.
 
-Los enlaces y algunos botones permiten recorrer flujos sin ejecutar operaciones de negocio. Los demás botones de negocio están deshabilitados. Algunos campos admiten edición local; otros conservan valores ilustrativos de solo lectura. La edición no se envía ni se guarda. Las fotografías son espacios de muestra sin carga de archivos; los mapas son esquemas locales sin geolocalización. Estados como «10:00 min», «Reenviar código en 00:42» y «Ruta completada» son textos de demostración.
+Los enlaces y algunos botones permiten recorrer flujos sin ejecutar operaciones de negocio. Los demás botones de negocio están deshabilitados. Algunos campos admiten edición local; otros conservan valores ilustrativos de solo lectura. La edición no se envía ni se guarda. Las fotografías son espacios de muestra sin carga de archivos. (Actualizado: los mapas ya son Google Maps reales; ver «Mapas y direcciones».) Estados como «10:00 min», «Reenviar código en 00:42» y «Ruta completada» son textos de demostración.
 
 ## Ejecutar
 
@@ -51,7 +51,7 @@ Perfiles de `eas.json`:
 Primera vez (requiere una cuenta de Expo):
 
 1. `npx eas-cli@latest login` y `npx eas-cli@latest init` (vincula el proyecto y agrega `extra.eas.projectId` a `app.json`). Si prefieres no versionar el ID, defínelo como `EAS_PROJECT_ID` (en `.env.local` y en EAS): `app.config.ts` lo copia a `extra.eas.projectId`, que las notificaciones push necesitan para obtener el token.
-   - Mapas: definir `GOOGLE_MAPS_ANDROID_API_KEY` y `GOOGLE_MAPS_IOS_API_KEY` (variables de compilación, no `EXPO_PUBLIC_*`) en `.env.local` y en cada entorno de EAS con `--visibility sensitive`. `app.config.ts` agrega el plugin de `react-native-maps` solo si existe alguna de las dos; cambiarlas exige un build nuevo.
+   - Mapas: definir `GOOGLE_MAPS_ANDROID_API_KEY` (variable de compilación, no `EXPO_PUBLIC_*`) en `.env.local` y en cada entorno de EAS con `--visibility sensitive`. La llave se restringe en Google Cloud a *Maps SDK for Android*, al paquete `co.findfood.app` y al SHA-1 de cada keystore (debug, EAS y Play App Signing). La app es solo Android: `GOOGLE_MAPS_IOS_API_KEY` queda vacía. `app.config.ts` agrega el plugin de `react-native-maps` solo si existe la llave; cambiarla exige un build nuevo.
 2. Cargar las variables públicas en cada entorno de EAS (`development`, `preview`, `production`): `npx eas-cli@latest env:create --environment preview --name EXPO_PUBLIC_API_URL --value <url> --visibility plaintext`, y lo mismo para `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` y los client IDs de Google. **Nunca** `EXPO_PUBLIC_DEV_TOKEN` ni `EXPO_PUBLIC_APP_ENV=local`. `src/config/build-config.test.ts` solo impide declararlos en `eas.json`; las variables remotas de EAS no las puede ver, así que revisa `npx eas-cli@latest env:list` antes de cada build.
 3. `npx eas-cli@latest build --profile development --platform android` e instalar el APK desde el enlace que entrega EAS.
 4. En el computador, `npm run start:local` o `npm run start:real` y abrir el proyecto desde el dev client.
@@ -149,16 +149,26 @@ Se completaron TypeScript, ESLint, el smoke test SSR de las 22 pantallas/variant
 
 La revisión visual está pendiente: el navegador de revisión bloqueó localhost con `ERR_BLOCKED_BY_CLIENT`. No se validó en dispositivo nativo ni se certifica correspondencia píxel a píxel. Antes de una entrega de producción deben revisarse las 22 pantallas en Android/iOS, incluyendo áreas seguras, teclado, desplazamiento, fuentes y barras del sistema.
 
+## Mapas y direcciones
+
+- **Mapas:** Google Maps mediante `react-native-maps` (`src/components/findfood/map/`). Sin `GOOGLE_MAPS_ANDROID_API_KEY` en el build se muestra un aviso en lugar del mapa.
+- **Búsqueda de direcciones:** va primero a la API (`/v1/geo/*`, `src/services/geo.ts`), que consulta Google Places y Geocoding con la llave del servidor. Si la API responde 503 `geo-no-disponible` o no hay conexión, `src/location/geocode.ts` recurre al geocoder del teléfono.
+- **Nueva donación:** al escribir la dirección aparecen sugerencias de Google. Al elegir una se fija primero la dirección y después el punto, y el mapa se centra en él.
+- **Punto guardado:** siempre es el pin que confirma el usuario. Si Google solo encontró la zona (`GEOMETRIC_CENTER` o `APPROXIMATE`), la app pide ajustar el pin, porque ese punto decide qué voluntarios pasan los filtros duros de cercanía de la API.
+- **Registro de voluntario:** el mapa dibuja el radio de cobertura alrededor de la base.
+- **Ofertas:** el voluntario ve el punto de recogida en un mapa.
+- **Costo:** la dirección de un pin se consulta 800 ms después del último movimiento y se guarda en caché por punto. Las muestras de rastreo nunca se geocodifican.
+
 ## Formulario de donación
 
-«Añadir otro producto» agrega bloques editables con cantidad, unidad (KG, L, ML o G), vencimiento y cadena de frío. La ubicación es un bloque visual común, pendiente de integrar con Google Maps, sin captura manual ni detección real. La ventana de recogida también es común. El borrador vive en memoria en el proveedor; se conserva entre edición y revisión y se pierde al cerrar o recargar la aplicación. Las fotos siguen sin carga. «Calificar voluntario» abre la vista de demostración desde el detalle, conservando el identificador, sin validar el estado de la entrega ni enviar la calificación.
+«Añadir otro producto» agrega bloques editables con cantidad, unidad (KG, L, ML o G), vencimiento y cadena de frío. La ubicación es un punto común elegido en Google Maps (ver «Mapas y direcciones»). La ventana de recogida también es común. El borrador vive en memoria en el proveedor; se conserva entre edición y revisión y se pierde al cerrar o recargar la aplicación. Las fotos siguen sin carga. «Calificar voluntario» abre la vista de demostración desde el detalle, conservando el identificador, sin validar el estado de la entrega ni enviar la calificación.
 
 
 ## Actualización de formulario y asignación
 
 El menú de tres puntos mide 32 unidades dentro del área táctil de 48. Nueva donación utiliza un catálogo de productos de ejemplo (`productOptions`), selección de unidades, calendario mensual y selector de hora de 24 horas. Cada producto se puede quitar mientras quede al menos uno. El borrador se mantiene en memoria entre las vistas; no hay persistencia ni envío.
 
-Desde Donación publicada, «Ver voluntario asignado (demo)» abre `/voluntario-asignado`. Muestra el perfil del voluntario de los datos de demostración, el resumen del borrador y un mapa esquemático con marcadores V (voluntario) y D (donante). No hay GPS, Google Maps ni asignación automática. La futura integración deberá reemplazar el catálogo local, la asignación y las coordenadas con datos reales.
+Desde Donación publicada, «Ver voluntario asignado (demo)» abre `/voluntario-asignado`. Muestra el perfil del voluntario de los datos de demostración, el resumen del borrador y un mapa de Google con el punto de recogida. La ubicación en vivo del voluntario sigue pendiente (API-06). La futura integración deberá reemplazar el catálogo local, la asignación y las coordenadas con datos reales.
 
 Las fechas siguen usando DD/MM/AAAA y las horas HH:mm en el modelo de presentación; un adaptador de backend deberá convertirlas al contrato acordado, incluida la zona horaria. No se implementaron reglas de disponibilidad o vencimiento.
 

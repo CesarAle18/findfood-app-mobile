@@ -50,14 +50,14 @@ Los formularios de nueva donación y de registro de voluntario mantienen sus dat
 
 ## Borrador de donación
 
-`src/domain/donation-draft.ts` define productos con unidad KG/L/ML/G y una ventana de recogida común. `MobileProvider` conserva el borrador durante la navegación para compartirlo entre nueva donación y revisión. No hay almacenamiento persistente, envío ni normalización de unidades contra el backend. La ubicación es un bloque visual único pendiente de Google Maps. El enlace «Calificar voluntario» del detalle solo aparece cuando la donación fue entregada y tiene voluntario.
+`src/domain/donation-draft.ts` define productos con unidad KG/L/ML/G y una ventana de recogida común. `MobileProvider` conserva el borrador durante la navegación para compartirlo entre nueva donación y revisión. No hay almacenamiento persistente, envío ni normalización de unidades contra el backend. La ubicación es un punto único elegido en Google Maps, con sugerencias de dirección de `/v1/geo`. El enlace «Calificar voluntario» del detalle solo aparece cuando la donación fue entregada y tiene voluntario.
 
 
 ## Actualización de formulario y asignación
 
 El menú de tres puntos mide 32 unidades dentro del área táctil de 48. Nueva donación utiliza un catálogo de productos de ejemplo (`productOptions`), selección de unidades, calendario mensual y selector de hora de 24 horas. Cada producto se puede quitar mientras quede al menos uno. El borrador se mantiene en memoria entre las vistas; no hay persistencia ni envío.
 
-Desde Donación publicada, «Ver voluntario asignado (demo)» abre `/donante/voluntario-asignado`; como ese flujo aún no publica la donación, llega sin `id` y muestra un estado vacío. Con el `id` de la donación muestra el voluntario asignado según `GET /donaciones/:id`, el resumen de la recogida y un mapa esquemático con marcadores V (voluntario) y D (donante). No hay GPS, Google Maps ni asignación automática. La futura integración deberá reemplazar el catálogo local, la asignación y las coordenadas con datos reales.
+Desde Donación publicada, «Ver voluntario asignado (demo)» abre `/donante/voluntario-asignado`; como ese flujo aún no publica la donación, llega sin `id` y muestra un estado vacío. Con el `id` de la donación muestra el voluntario asignado según `GET /donaciones/:id`, el resumen de la recogida y un mapa de Google con el punto de recogida. La ubicación en vivo del voluntario sigue pendiente (API-06). La futura integración deberá reemplazar el catálogo local, la asignación y las coordenadas con datos reales.
 
 Las fechas siguen usando DD/MM/AAAA y las horas HH:mm en el modelo de presentación; un adaptador de backend deberá convertirlas al contrato acordado, incluida la zona horaria. No se implementaron reglas de disponibilidad o vencimiento.
 

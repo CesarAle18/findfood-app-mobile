@@ -12,6 +12,7 @@ describe("offerFromOferta", () => {
       summary: "45 kg · Refrigeración requerida",
       pickupWindow: "13/10/2026 · 16:00–18:00",
       address: "Calle 5 # 38-25, Cali · Muelle de carga",
+      point: { lat: 3.42, lng: -76.54 },
       distance: "2,8 km",
       expiresAt: "15:10",
       expiresAtIso: "2026-10-13T20:10:00Z",

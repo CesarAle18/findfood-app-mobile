@@ -6,9 +6,11 @@ import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Slot, useLocalSearchParams } from "expo-router";
 import { fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
+import * as Location from "expo-location";
 import { Alert, Text } from "react-native";
 
 import { api } from "@/api";
+import { supabase } from "@/auth/supabase";
 import type { OfertaDto } from "@/services/asignaciones";
 import type { RutaDetalleDto, RutaResumenDto } from "@/services/rutas";
 import { ActiveRouteScreen } from "@/screens/route";
@@ -229,6 +231,57 @@ describe("ActiveRouteScreen · route in progress", () => {
   const withStops = (...paradas: RutaDetalleDto["paradas"]) =>
     rutaDetalleFixture({ estado: "EN_CURSO", paradas });
   const [first, second, entrega] = rutaDetalleFixture().paradas;
+
+  it("asks to share the location to show the way to the next stop", async () => {
+    answerGets({ enCurso, detalle: withStops(first, second, entrega) });
+
+    await renderRoutes();
+
+    expect(
+      await screen.findByText(
+        "Activa tu ubicación para ver el camino y la hora de llegada a tu próxima parada.",
+      ),
+    ).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "Usar mi ubicación" })).toBeOnTheScreen();
+  });
+
+  it("with the location shows the way and the arrival time to the next stop", async () => {
+    const granted = { status: "granted", granted: true, canAskAgain: true, expires: "never" };
+    jest.mocked(Location.useForegroundPermissions).mockImplementation(() => [
+      granted as never,
+      jest.fn(async () => granted as never),
+      jest.fn(async () => granted as never),
+    ]);
+    // No Realtime server under Jest.
+    const channel = { subscribe: jest.fn(), send: jest.fn(async () => "ok") };
+    jest.spyOn(supabase!, "channel").mockReturnValue(channel as never);
+    jest.spyOn(supabase!, "removeChannel").mockResolvedValue("ok");
+    answerGets({ enCurso, detalle: withStops(first, second, entrega) });
+    const answer = mockApi.get.getMockImplementation()!;
+    mockApi.get.mockImplementation(async (path: string, options?: never) =>
+      path.endsWith("/seguimiento")
+        ? {
+            parada: { ...first, orden: 1 },
+            tramo: {
+              trayecto: { type: "LineString", coordinates: [[-76.54, 3.42], [-76.53, 3.43]] },
+              distancia_km: 2.84,
+              duracion_min: 11,
+              llegada_estimada: "2026-10-21T20:15:00Z",
+              proveedor: "GOOGLE",
+            },
+          }
+        : answer(path, options),
+    );
+
+    await renderRoutes();
+
+    expect(await screen.findByText("Llegas a la parada 1 hacia las 15:15")).toBeOnTheScreen();
+    expect(screen.getByText("11 min · 2,8 km")).toBeOnTheScreen();
+    // The map itself is covered in map.test.tsx (this build has no Maps key: placeholder).
+    expect(supabase!.channel).toHaveBeenCalledWith(expect.stringMatching(/^ruta:/), {
+      config: { private: true },
+    });
+  });
 
   it("registers the arrival at a pending pickup with the current position", async () => {
     mockGetCurrentFix.mockResolvedValue({ ubicacion: { lat: 3.42, lng: -76.54 }, precision_m: 12 });

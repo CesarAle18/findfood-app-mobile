@@ -162,6 +162,37 @@ export function getRuta(id: string, signal?: AbortSignal): Promise<RutaDetalleDt
   return api.get<RutaDetalleDto>(rutaPath(id), { signal });
 }
 
+/**
+ * `GET /rutas/:id/seguimiento`: the street path and arrival estimate from `posicion` (else
+ * the volunteer's recent `ultima_ubicacion`) to the next open stop. Google is asked at most
+ * every 2 min per route; `proveedor: "ESTIMADO"` is a straight line at urban speed.
+ */
+export interface SeguimientoDto {
+  ruta_id: string;
+  estado: EstadoRuta;
+  parada: Pick<ParadaDto, "id" | "orden" | "tipo" | "estado" | "direccion" | "lat" | "lng"> | null;
+  origen: (Coordenada & { fuente: "CONSULTA" | "ULTIMA_UBICACION" }) | null;
+  tramo: {
+    trayecto: GeometriaRutaDto;
+    distancia_km: number;
+    duracion_min: number;
+    /** ISO timestamp. */
+    llegada_estimada: string;
+    proveedor: "GOOGLE" | "ESTIMADO";
+  } | null;
+}
+
+export function getSeguimiento(
+  id: string,
+  posicion: Coordenada | null,
+  signal?: AbortSignal,
+): Promise<SeguimientoDto> {
+  return api.get<SeguimientoDto>(`${rutaPath(id)}/seguimiento`, {
+    query: { lat: posicion?.lat, lng: posicion?.lng },
+    signal,
+  });
+}
+
 export function crearRuta(body: CrearRutaBody): Promise<RutaDetalleDto> {
   return api.post<RutaDetalleDto>("/rutas", { body });
 }

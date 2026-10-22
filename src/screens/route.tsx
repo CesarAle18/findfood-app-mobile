@@ -10,16 +10,19 @@ import { ErrorState, LoadingState } from "@/components/findfood/feedback";
 import { RouteMapView } from "@/components/findfood/map";
 import { Badge, Button, Card, Copy, FormMessage, Row, Screen, Section } from "@/components/findfood/ui";
 import { colors } from "@/design/tokens";
-import { fromFechaVencimiento } from "@/domain/mappers/dates";
+import { fromFechaVencimiento, fromIsoToBogota } from "@/domain/mappers/dates";
 import { MappingError } from "@/domain/mappers/errors";
 import { formatKg } from "@/domain/mappers/profile";
 import { pickupWindowLabel } from "@/domain/mappers/routes";
 import { paradaStatus, rutaStatus, type StatusView } from "@/domain/mappers/statuses";
+import { useLiveRoute } from "@/location/live-route";
+import type { PermissionGate } from "@/platform/permissions";
 import {
   useCancelarRutaMutation,
   useIniciarRutaMutation,
   type ParadaRutaDto,
   type RutaDetalleDto,
+  type SeguimientoDto,
 } from "@/services/rutas";
 
 import { AcceptedPickups } from "./accepted-pickups";
@@ -89,6 +92,9 @@ function RouteDetail({
   onNotice: (message: string) => void;
 }) {
   const metrics = routeMetrics(ruta);
+  const enCurso = ruta.estado === "EN_CURSO";
+  const live = useLiveRoute(enCurso ? ruta.id : null);
+  const { gate, request } = live;
   return (
     <>
       <Card>
@@ -101,7 +107,19 @@ function RouteDetail({
         <Copy tone="secondary">{`${routeDate(ruta.fecha_programada)} · ${ruta.paradas.length} paradas`}</Copy>
         {metrics !== "" ? <Copy tone="secondary">{metrics}</Copy> : null}
       </Card>
-      <RouteMapView geometria={ruta.geometria} paradas={ruta.paradas} />
+      <RouteMapView
+        geometria={ruta.geometria}
+        paradas={ruta.paradas}
+        tramo={live.seguimiento?.tramo?.trayecto ?? null}
+        showsUserLocation={enCurso && gate === "granted"}
+      />
+      {enCurso ? (
+        <NextStopEta
+          seguimiento={live.seguimiento}
+          gate={gate}
+          onRequest={() => void request()}
+        />
+      ) : null}
       {ruta.estado === "PLANIFICADA" ? <PlannedActions rutaId={ruta.id} /> : null}
       {ruta.estado === "EN_CURSO" ? <NextStop ruta={ruta} onNotice={onNotice} /> : null}
       <Section title="Paradas">
@@ -112,6 +130,44 @@ function RouteDetail({
         </Card>
       </Section>
     </>
+  );
+}
+
+/**
+ * When the volunteer reaches the next stop, from their position (blue path on the map).
+ * Without location permission it offers to share it.
+ */
+function NextStopEta({
+  seguimiento,
+  gate,
+  onRequest,
+}: {
+  seguimiento: SeguimientoDto | null;
+  gate: PermissionGate;
+  onRequest: () => void;
+}) {
+  if (gate !== "granted") {
+    return (
+      <Card soft>
+        <Copy>Activa tu ubicación para ver el camino y la hora de llegada a tu próxima parada.</Copy>
+        <Button variant="outline" icon="pin" onPress={onRequest}>
+          Usar mi ubicación
+        </Button>
+      </Card>
+    );
+  }
+  const tramo = seguimiento?.tramo;
+  if (!seguimiento?.parada || !tramo) return null;
+  const km = String(Math.round(tramo.distancia_km * 10) / 10).replace(".", ",");
+  return (
+    <Card soft>
+      <Copy weight="medium">
+        {`Llegas a la parada ${seguimiento.parada.orden} hacia las ${fromIsoToBogota(tramo.llegada_estimada).time}`}
+      </Copy>
+      <Copy tone="secondary">
+        {`${tramo.duracion_min} min · ${km} km${tramo.proveedor === "ESTIMADO" ? " · estimado sin tráfico" : ""}`}
+      </Copy>
+    </Card>
   );
 }
 

@@ -38,3 +38,7 @@ export function Marker(_props: { children?: ReactNode }) {
 export function Polyline(_props: object) {
   return null;
 }
+
+export function Circle(_props: object) {
+  return null;
+}
