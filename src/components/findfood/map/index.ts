@@ -1,4 +1,5 @@
 /** Google Maps building blocks. One map per screen, never inside a list item. */
+export { DonorTrackingMap, type VolunteerMarker } from "./donor-tracking-map";
 export { FindFoodMap, type FindFoodMapProps } from "./find-food-map";
 export { LocationPicker } from "./location-picker";
 export { PointMap } from "./point-map";

@@ -57,7 +57,7 @@ Los formularios de nueva donación y de registro de voluntario mantienen sus dat
 
 El menú de tres puntos mide 32 unidades dentro del área táctil de 48. Nueva donación utiliza un catálogo de productos de ejemplo (`productOptions`), selección de unidades, calendario mensual y selector de hora de 24 horas. Cada producto se puede quitar mientras quede al menos uno. El borrador se mantiene en memoria entre las vistas; no hay persistencia ni envío.
 
-Desde Donación publicada, «Ver voluntario asignado (demo)» abre `/donante/voluntario-asignado`; como ese flujo aún no publica la donación, llega sin `id` y muestra un estado vacío. Con el `id` de la donación muestra el voluntario asignado según `GET /donaciones/:id`, el resumen de la recogida y un mapa de Google con el punto de recogida. La ubicación en vivo del voluntario sigue pendiente (API-06). La futura integración deberá reemplazar el catálogo local, la asignación y las coordenadas con datos reales.
+Desde Donación publicada, «Ver voluntario asignado (demo)» abre `/donante/voluntario-asignado`; como ese flujo aún no publica la donación, llega sin `id` y muestra un estado vacío. Con el `id` de la donación muestra el voluntario asignado según `GET /donaciones/:id`, el resumen de la recogida y un mapa de Google con el punto de recogida. La ubicación en vivo del voluntario se muestra en Seguimiento (ver «Seguimiento en vivo (API-06)»). La futura integración deberá reemplazar el catálogo local, la asignación y las coordenadas con datos reales.
 
 Las fechas siguen usando DD/MM/AAAA y las horas HH:mm en el modelo de presentación; un adaptador de backend deberá convertirlas al contrato acordado, incluida la zona horaria. No se implementaron reglas de disponibilidad o vencimiento.
 
@@ -77,3 +77,13 @@ Las fechas siguen usando DD/MM/AAAA y las horas HH:mm en el modelo de presentaci
 | Authentication → Providers → Google | Habilitar; *Client IDs*: primero el ID web y luego el de iOS; secreto del cliente web; activar *Skip nonce checks* | Inicio de sesión nativo con `signInWithIdToken`. |
 
 En Google Cloud se registran el cliente web, el cliente iOS y el cliente Android (paquete `co.findfood.app`) con las huellas SHA-1 del keystore de EAS y del certificado de firma de Google Play. La app usa la API original de `@react-native-google-signin/google-signin`, que no envía nonce; por eso *Skip nonce checks* debe seguir activo. Los pasos de la app (variables y build) están en la sección «Acceso con Google» del README.
+
+## Seguimiento en vivo (API-06)
+
+Seguimiento (`/donante/seguimiento?id=`) muestra la sección «En vivo» mientras la donación está ASIGNADA, EN_RECOLECCION o EN_TRANSITO y la API la reporta activa:
+
+- `GET /donaciones/:id/seguimiento` (`useDonationTracking`) da la fase (`HACIA_RECOGIDA` o `HACIA_BANCO`), el punto de recogida, el banco, la última ubicación guardada del voluntario (30 min como máximo), el tramo con la llegada estimada y `ruta_id`. Se consulta cada 30 s dentro de la ventana y cada 60 s antes de que la ruta arranque.
+- Con `ruta_id`, `useVolunteerLivePosition` escucha el canal privado de Supabase Realtime `ruta:<id>` (evento `posicion`, el mismo que emite `useLiveRoute`). La posición más reciente entre Realtime y la guardada mueve el marcador con `useGlide`.
+- `DonorTrackingMap` dibuja solo el voluntario, la recogida, el banco y el tramo; nunca las demás paradas de la ruta. Si hay paradas antes del destino del donante, la API solo da el número (`paradas_antes`) y no hay llegada estimada.
+- El donante ve los dos tramos hasta que se confirma la entrega en el banco; la política de Realtime y la API usan la misma ventana.
+- Camino al banco, mientras el voluntario tenga recogidas de otros donantes por hacer, la API responde `fase: HACIA_BANCO` sin `ruta_id`, posición ni tramo (su posición revelaría la dirección de esos donantes): el mapa muestra solo la recogida y el banco, con «Tiene N parada(s) antes del banco», y no se escucha el canal hasta que la posición vuelve.

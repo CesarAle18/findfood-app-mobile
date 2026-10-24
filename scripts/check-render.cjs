@@ -235,6 +235,12 @@ Module._load = function (name, parent, isMain) {
         request: async () => "unknown",
       }),
     };
+  // The donor's live position joins a Supabase Realtime channel: idle here.
+  if (name === "@/location/volunteer-live-position")
+    return {
+      useVolunteerLivePosition: () => ({ status: null, position: null }),
+      useGlide: (target) => target,
+    };
   // No requests leave this check: the query hooks are stubbed above.
   if (name === "@/api") return { api: {} };
   // Photo capture and upload need the native picker, manipulator and file system; the
@@ -267,6 +273,7 @@ Module._load = function (name, parent, isMain) {
     const mapStub = (label) => () =>
       React.createElement(native.View, { "aria-label": label });
     return {
+      DonorTrackingMap: mapStub("Mapa del recorrido del voluntario"),
       FindFoodMap: mapStub("Mapa"),
       LocationPicker: mapStub("Mapa para elegir el punto de recogida"),
       PointMap: mapStub("Mapa del punto de recogida"),
