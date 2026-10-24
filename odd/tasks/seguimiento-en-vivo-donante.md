@@ -38,11 +38,11 @@ The volunteer app already broadcasts its position on the private Supabase Realti
 | API06-3 | `seguimientoDonacion` + controller + module | delegated writer | [x] | `c9f2048` | same review |
 | API06-4 | e2e cases | delegated writer | [x] | `4fff3a1` | same review |
 | API06-5 | Docs (`arquitectura.md`, README) + Postman | delegated writer | [x] | `e7921b6` | same review |
-| MOV-1 | DTO, service, query key, `useDonationTracking` | delegated writer (2+ non-trivial files) | [x] | `56a210c` | pending assessment |
-| MOV-2 | `useVolunteerLivePosition` + `useGlide` + tests | delegated writer | [x] | `e24b71e` | pending assessment |
-| MOV-3 | `DonorTrackingMap` + tests | delegated writer | [x] | `4f3ac3b` | pending assessment |
-| MOV-4 | Integration in `Tracking` + screen tests (+ parent: 60 s idle poll, `check-render.cjs` stub) | delegated writer + parent inline fix | [x] | `3452181` | pending assessment |
-| MOV-5 | Docs (`integracion-backend.md`, `servicios-transversales.md`) | inline | [x] | this commit | pending assessment |
+| MOV-1 | DTO, service, query key, `useDonationTracking` | delegated writer (2+ non-trivial files) | [x] | `56a210c` | medium · granted · approved + acknowledged `review-5819cd0da6a7c773` (1 lens; follow-ups F6–F7) |
+| MOV-2 | `useVolunteerLivePosition` + `useGlide` + tests | delegated writer | [x] | `e24b71e` | medium · granted · approved + acknowledged `review-5819cd0da6a7c773` (1 lens; follow-ups F6–F7) |
+| MOV-3 | `DonorTrackingMap` + tests | delegated writer | [x] | `4f3ac3b` | medium · granted · approved + acknowledged `review-5819cd0da6a7c773` (1 lens; follow-ups F6–F7) |
+| MOV-4 | Integration in `Tracking` + screen tests (+ parent: 60 s idle poll, `check-render.cjs` stub) | delegated writer + parent inline fix | [x] | `3452181` | medium · granted · approved + acknowledged `review-5819cd0da6a7c773` (1 lens; follow-ups F6–F7) |
+| MOV-5 | Docs (`integracion-backend.md`, `servicios-transversales.md`) | inline | [x] | `0bbc1e0` | medium · granted · approved + acknowledged `review-5819cd0da6a7c773` (1 lens; follow-ups F6–F7) |
 
 ## Progress
 - 2026-10-23: plan approved; branches created; feature document created.
@@ -56,6 +56,8 @@ The volunteer app already broadcasts its position on the private Supabase Realti
 - F3 (R4, WARNING): donor polls refresh the shared per-route tramo cache from stored `ultima_ubicacion`; may alternate with volunteer live origin when >2 km apart, raising Google calls.
 - F4 (R3, WARNING): e2e Realtime probe issues BEGIN/SET LOCAL/SELECT as separate `ctx.sql.query` calls; nondeterministic if `ctx.sql` is a Pool. Parent checked: `ctx.sql` is a single `pg.Client` (`test/utilidades/app-de-pruebas.ts:192`), so no change needed.
 - F5 (R2-002/003, SUGGESTION): open-stop states hard-coded in 3 places; Postman test script for donation seguimiento reads `lista[0].id` on an object.
+- F6 (R3-1, app, WARNING): live section kept by cached `activo` after the detail left live states. Fixed in `788a866` (render also gated by `hasLiveTracking(dto.estado)`; tracking-screens 22/22, typecheck 0).
+- F7 (R3-2, app, SUGGESTION): `useGlide` resumed from the last drawn point after a null target. Fixed in `1de193a` (RED→GREEN test 'jumps straight to a target that comes back after a null'; 33/33, eslint clean, typecheck 0). These two fixes are post-review commits and are not covered by the acknowledged review.
 
 ## Next step
-RDD assessment of app commits; user: `supabase db push` of the API migration; device check of the volunteer marker.
+User decision on F1 (privacy on bank leg with other pickups pending); optional API alignment F2/F3/F5; user runs `supabase db push`; device check of the volunteer marker. Push/PR on request (chain strategy asked then).
