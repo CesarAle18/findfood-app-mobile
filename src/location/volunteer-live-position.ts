@@ -100,9 +100,15 @@ export function useGlide(target: Coordenada | null, ms = 1000): Coordenada | nul
   const from = useRef<Coordenada | null>(target);
   const lat = target?.lat;
   const lng = target?.lng;
+  // Adjusted during render (not in the effect) so the stale point is never drawn again.
+  if (!target && shown !== null) setShown(null);
 
   useEffect(() => {
-    if (lat === undefined || lng === undefined) return;
+    if (lat === undefined || lng === undefined) {
+      // Forget the last point so a target that comes back appears where it is.
+      from.current = null;
+      return;
+    }
     const start = from.current ?? { lat, lng };
     // Date.now rather than the frame's timestamp: Jest's frames report a different clock.
     const startedAt = Date.now();

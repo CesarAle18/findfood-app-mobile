@@ -186,6 +186,23 @@ describe("useGlide", () => {
     expect(result.current).toEqual({ lat: 4.7, lng: -74.1 });
   });
 
+  it("jumps straight to a target that comes back after a null", async () => {
+    jest.useFakeTimers();
+    const { result, rerender } = await renderHook(
+      ({ target }: { target: { lat: number; lng: number } | null }) => useGlide(target, 1000),
+      { initialProps: { target: { lat: 4.6, lng: -74.0 } as { lat: number; lng: number } | null } },
+    );
+    await rerender({ target: null });
+    expect(result.current).toBeNull();
+
+    await rerender({ target: { lat: 4.9, lng: -74.3 } });
+    expect(result.current).toEqual({ lat: 4.9, lng: -74.3 });
+    await act(async () => {
+      jest.advanceTimersByTime(500);
+    });
+    expect(result.current).toEqual({ lat: 4.9, lng: -74.3 });
+  });
+
   it("shows nothing without a target, and stops animating on unmount", async () => {
     jest.useFakeTimers();
     const request = jest.spyOn(globalThis, "requestAnimationFrame");
