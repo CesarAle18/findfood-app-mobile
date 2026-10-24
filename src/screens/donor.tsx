@@ -15,7 +15,7 @@ import {
 } from "@/components/findfood/feedback";
 import { DonationTimeline } from "@/components/findfood/donation-timeline";
 import { Icon } from "@/components/findfood/icon";
-import { PointMap } from "@/components/findfood/map";
+import { DonorTrackingMap, PointMap } from "@/components/findfood/map";
 import { Pressing } from "@/components/findfood/motion";
 import {
   Badge,
@@ -45,6 +45,12 @@ import {
   type DonationView,
 } from "@/domain/mappers/donations";
 import { formatKg } from "@/domain/mappers/profile";
+import type { LivePosition } from "@/location/live-route";
+import {
+  useGlide,
+  useVolunteerLivePosition,
+  type LiveStatus,
+} from "@/location/volunteer-live-position";
 import { relativeTime } from "@/notifications/relative-time";
 import {
   useOpenNotification,
@@ -56,6 +62,7 @@ import {
   useCrearDonacionMutation,
   usePublicarDonacionMutation,
   type CrearDonacionBody,
+  type SeguimientoDonacionDto,
 } from "@/services/donaciones";
 import { notificacionesQuery, type BandejaPages } from "@/services/notificaciones";
 import { useImpacto } from "@/services/perfil";
@@ -66,11 +73,13 @@ import { ContactVolunteerButton } from "./assigned-volunteer";
 import {
   filterDonations,
   formatInstant,
+  formatTimeOfDay,
   isDelivered,
   isTracking,
   useDonationDetail,
   useDonationId,
   useDonationPages,
+  useDonationTracking,
   useLatestDonation,
   type DonationDetail,
   type DonationFilter,
@@ -399,8 +408,124 @@ function trackingSteps(
   ];
 }
 
+/** The volunteer's position on the live map. */
+interface ShownPosition {
+  lat: number;
+  lng: number;
+  rumbo: number | null;
+  at: string;
+  /** Only the last stored sample (`ultima_ubicacion`, from the poll), not Realtime. */
+  stored: boolean;
+}
+
+/** The newer of the Realtime position and the stored sample; Realtime wins a tie. */
+function newestPosition(
+  live: LivePosition | null,
+  stored: SeguimientoDonacionDto["voluntario_posicion"],
+): ShownPosition | null {
+  const fromLive = live && {
+    lat: live.lat,
+    lng: live.lng,
+    rumbo: live.rumbo,
+    at: live.at,
+    stored: false,
+  };
+  const fromStored = stored && {
+    lat: stored.lat,
+    lng: stored.lng,
+    rumbo: null,
+    at: stored.at,
+    stored: true,
+  };
+  if (!fromLive || !fromStored) return fromLive ?? fromStored ?? null;
+  return Date.parse(fromStored.at) > Date.parse(fromLive.at) ? fromStored : fromLive;
+}
+
+const WAITING_POSITION = "Esperando la ubicación del voluntario";
+
+/** Where the volunteer is headed and when they arrive; never which other stops come first. */
+function liveHeadline(s: SeguimientoDonacionDto, located: boolean): string {
+  const toBank = s.fase === "HACIA_BANCO";
+  const bank = s.banco?.nombre ?? "el banco";
+  if (s.paradas_antes > 0) {
+    const stops = s.paradas_antes === 1 ? "1 parada" : `${s.paradas_antes} paradas`;
+    return `Tiene ${stops} antes de ${toBank ? "el banco" : "tu punto"}`;
+  }
+  const hora = s.tramo ? formatTimeOfDay(s.tramo.llegada_estimada) : null;
+  if (s.tramo && hora) {
+    const approx = s.tramo.proveedor === "ESTIMADO" ? " aprox." : "";
+    const when = `hacia las ${hora}${approx} (~${Math.round(s.tramo.duracion_min)} min)`;
+    return toBank
+      ? `Lleva tu donación a ${bank} · llega ${when}`
+      : `Llega a tu punto de recogida ${when}`;
+  }
+  if (!located) return WAITING_POSITION;
+  return toBank ? `Lleva tu donación a ${bank}` : "Va en camino a tu punto de recogida";
+}
+
+/** How old the stored sample was when the tracking was last fetched. */
+function storedAge(at: string, fetchedAt: number): string {
+  const minutes = Math.floor(Math.max(0, fetchedAt - Date.parse(at)) / 60_000);
+  return minutes < 1
+    ? "Última ubicación hace menos de 1 min"
+    : `Última ubicación hace ${minutes} min`;
+}
+
+function liveNotes(
+  headline: string,
+  shown: ShownPosition | null,
+  status: LiveStatus | null,
+  fetchedAt: number,
+): string[] {
+  const notes: string[] = [];
+  if (!shown && headline !== WAITING_POSITION) notes.push(WAITING_POSITION);
+  if (shown?.stored) notes.push(storedAge(shown.at, fetchedAt));
+  // The poll keeps going: the donor only loses the second-by-second movement.
+  if (status === "sin-permiso" || status === "error") {
+    notes.push("La ubicación en vivo no está disponible por ahora; se actualiza cada 30 s.");
+  }
+  return notes;
+}
+
+/**
+ * "En vivo" (API-06): the volunteer on the map, gliding between positions, with where they
+ * are headed and when they arrive. Mounted only inside the live window, so it joins the
+ * route's Realtime channel then and leaves it when the window closes.
+ */
+function LiveTracking({
+  seguimiento: s,
+  fetchedAt,
+}: {
+  seguimiento: SeguimientoDonacionDto;
+  fetchedAt: number;
+}) {
+  const live = useVolunteerLivePosition(s.ruta_id);
+  const shown = newestPosition(live.position, s.voluntario_posicion);
+  const glided = useGlide(shown);
+  const headline = liveHeadline(s, shown !== null);
+  return (
+    <Section title="En vivo">
+      <DonorTrackingMap
+        recogida={s.recogida}
+        banco={s.banco}
+        voluntario={glided && shown ? { ...glided, rumbo: shown.rumbo } : null}
+        tramo={s.tramo?.trayecto ?? null}
+      />
+      <Card soft>
+        <Copy weight="semibold">{headline}</Copy>
+        {liveNotes(headline, shown, live.status, fetchedAt).map((note) => (
+          <Copy key={note} tone="secondary">
+            {note}
+          </Copy>
+        ))}
+      </Card>
+    </Section>
+  );
+}
+
 function Tracking({ detail: { dto, view: d } }: { detail: DonationDetail }) {
   const volunteer = assignedVolunteerFromDetalle(dto);
+  const tracking = useDonationTracking(dto.id, dto.estado);
   return (
     <>
       <Row style={styles.spread}>
@@ -418,6 +543,9 @@ function Tracking({ detail: { dto, view: d } }: { detail: DonationDetail }) {
         <Copy weight="semibold">Estado actual</Copy>
         <Copy>{CURRENT_STATE[d.estado] ?? d.status}</Copy>
       </Card>
+      {tracking.data?.activo ? (
+        <LiveTracking seguimiento={tracking.data} fetchedAt={tracking.dataUpdatedAt} />
+      ) : null}
       <Section title="Proceso del envío">
         <Stack gap={22}>
           {trackingSteps(dto, volunteer).map(([label, at]) => (

@@ -283,16 +283,23 @@ export const hasLiveTracking = (estado: EstadoDonacion) => LIVE_TRACKING_STATES.
 /** How often the live tracking is fetched again while the volunteer is on the way. */
 export const TRACKING_POLL_MS = 30_000;
 
-/** `refetchInterval` of the live tracking: poll only inside the live window. */
+/** How often it is fetched while the window is still closed (the route has not started). */
+export const TRACKING_IDLE_POLL_MS = 60_000;
+
+/**
+ * `refetchInterval` of the live tracking: fast inside the live window, slow until the
+ * volunteer starts the route. `enabled` stops it once the donation leaves the live states.
+ */
 export function pollWhileActive(query: {
   state: { data?: Pick<SeguimientoDonacionDto, "activo"> };
-}): number | false {
-  return query.state.data?.activo ? TRACKING_POLL_MS : false;
+}): number {
+  return query.state.data?.activo ? TRACKING_POLL_MS : TRACKING_IDLE_POLL_MS;
 }
 
 /**
  * `GET /donaciones/:id/seguimiento` while a volunteer holds the donation (`estado` is the
- * detail's). It polls every 30 s inside the live window, only in the foreground. When the
+ * detail's). It polls every 30 s inside the live window (60 s before the route starts), only
+ * in the foreground. When the
  * window closes (delivered) or the tracking reports a state the detail does not show yet
  * (picked up), the detail and its history are refreshed, so the rest of Seguimiento follows.
  */
