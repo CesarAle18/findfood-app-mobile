@@ -71,6 +71,20 @@ afterEach(() => {
 const region = { latitude: 4.7, longitude: -74.1, latitudeDelta: 0.01, longitudeDelta: 0.01 };
 
 describe("LocationPicker", () => {
+  it("marks the map's center with Google's native marker, which follows the map", async () => {
+    await render(<LocationPicker value={null} onChange={jest.fn()} />);
+
+    const pin = () => screen.getByTestId("location-picker-pin");
+    expect(pin().props.image).toBeUndefined();
+    expect(pin().props.children).toBeUndefined();
+
+    await act(async () => {
+      fireEvent(screen.getByTestId("location-picker-map"), "regionChange", region);
+    });
+
+    expect(pin().props.coordinate).toEqual({ latitude: 4.7, longitude: -74.1 });
+  });
+
   it("emits {lat,lng} when the donor finishes moving the map", async () => {
     const onChange = jest.fn();
     await render(<LocationPicker value={null} onChange={onChange} />);

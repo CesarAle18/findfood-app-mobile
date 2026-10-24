@@ -34,9 +34,8 @@ import { Icon } from "../icon";
 import { PermissionNotice } from "../permission-notice";
 import { Button, Card, Copy, Stack } from "../ui";
 import { FindFoodMap } from "./find-food-map";
-import { Circle } from "./maps";
+import { Circle, Marker } from "./maps";
 
-const PIN_SIZE = 40;
 /** Pause in typing before asking for suggestions. */
 export const AUTOCOMPLETE_DELAY_MS = 300;
 /** Pause after the last map move before suggesting its address: each lookup is billed. */
@@ -48,8 +47,9 @@ export const APPROXIMATE_NOTICE =
   "Ubicamos la zona, no la puerta exacta. Mueve el mapa hasta el punto de recogida.";
 
 /**
- * Center-pin picker: the donor moves the map under a fixed pin. The region lives in a ref
- * (no render per frame) and the point is emitted once a move ends. "Usar mi ubicación"
+ * Center-pin picker: the donor moves the map and Google's native marker follows its center.
+ * The region lives in a ref, the marker in state (it re-renders while the map moves), and the
+ * point is emitted once a move ends. "Usar mi ubicación"
  * centers the map on the device's position. The emitted point is always the pin: a lookup
  * only moves the map, and an approximate one asks to adjust it, since that point decides
  * which volunteers the hard filters keep.
@@ -88,6 +88,7 @@ export function LocationPicker({
   // Read once: later moves update the ref, never the map's props.
   const [initialRegion] = useState(() => regionForPoints(value ? [toLatLng(value)] : []));
   const regionRef = useRef<Region>(initialRegion);
+  const [pin, setPin] = useState<LatLng>(() => centerOf(initialRegion));
   const [locating, setLocating] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,8 +167,11 @@ export function LocationPicker({
     mapRef.current?.animateToRegion(region, 400);
   };
 
+  const onRegionChange = (region: Region) => setPin(centerOf(region));
+
   const onRegionChangeComplete = (region: Region, details?: Details) => {
     regionRef.current = region;
+    setPin(centerOf(region));
     // Google Maps reports the initial layout and our own animations as non-gestures; the
     // donor only chose a point when they moved the map (or used their location below).
     if (details?.isGesture === false) return;
@@ -282,6 +286,7 @@ export function LocationPicker({
           testID="location-picker-map"
           height={height}
           initialRegion={initialRegion}
+          onRegionChange={onRegionChange}
           onRegionChangeComplete={onRegionChangeComplete}
           showsUserLocation={gate === "granted"}
           showsMyLocationButton={false}
@@ -296,12 +301,8 @@ export function LocationPicker({
               fillColor="rgba(31, 122, 90, 0.12)"
             />
           ) : null}
+          <Marker testID="location-picker-pin" coordinate={pin} />
         </FindFoodMap>
-        <View style={styles.pinLayer} pointerEvents="none">
-          <View style={styles.pin}>
-            <Icon name="pin" size={PIN_SIZE} />
-          </View>
-        </View>
       </View>
       {notice ? <Copy tone="secondary">{notice}</Copy> : null}
       {canGeocode ? (
@@ -326,17 +327,10 @@ export function LocationPicker({
 }
 
 const styles = StyleSheet.create({
-  pinLayer: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  // The pin's tip, not its middle, marks the center.
-  pin: { transform: [{ translateY: -PIN_SIZE / 2 }] },
   suggestions: { paddingVertical: 4, gap: 0 },
   suggestion: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10 },
 });
+
+function centerOf(region: Region): LatLng {
+  return { latitude: region.latitude, longitude: region.longitude };
+}

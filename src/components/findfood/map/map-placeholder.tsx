@@ -4,8 +4,8 @@ import { colors, fonts } from "@/design/tokens";
 
 /**
  * Stands in for a map that cannot load (web, or a build without a Maps key). Keeps the
- * map's size, test id and label; bottom-aligned because the location picker draws its pin in
- * the middle.
+ * map's size, test id and label; bottom-aligned so the message stays clear of the map's
+ * center.
  */
 export function MapPlaceholder({
   message,
