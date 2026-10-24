@@ -12,7 +12,7 @@ The data layer exists (`src/services/{catalogos,evidencias,notificaciones,perfil
 
 ## Scope / constraints
 - User decisions: background location (foreground fallback); "Importantes" = `ASIGNACION_OFRECIDA, DONACION_CANCELADA, DONACION_EXPIRADA, DONACION_RECHAZADA, VERIFICACION_RECHAZADA` (client filter); catalogs cached in memory + prefetched on entering the app (no persister); delivery `feature-branch-chain`.
-- API facts: `GET /catalogos` has no ETag; duplicate evidence `id` → 201 existing; push `data` = `{tipo, donacion_id?, asignacion_id?, notificacion_id}` with no URL, Android channel `default`; inbox is offset-paged with `no_leidas`; `POST /voluntario/ubicacion` accepts only `{lat,lng}`; toggle is `PATCH /voluntario/estado`; no GET for availability (use `/me`); no live volunteer position for donors (API-06); profile metrics missing (API-07).
+- API facts: `GET /catalogos` has no ETag; duplicate evidence `id` → 201 existing; push `data` = `{tipo, donacion_id?, asignacion_id?, notificacion_id}` with no URL, Android channel `default`; inbox is offset-paged with `no_leidas`; `POST /voluntario/ubicacion` accepts only `{lat,lng}`; toggle is `PATCH /voluntario/estado`; no GET for availability (use `/me`); live volunteer position for donors done in `seguimiento-en-vivo-donante` (API-06); profile metrics missing (API-07).
 - Conventional commits, no AI attribution. Tests ship with code. Read Expo v57 docs before using each library.
 - Out of scope: Realtime live tracking, API-06/API-07 backend work, offline persistence of catalogs.
 
