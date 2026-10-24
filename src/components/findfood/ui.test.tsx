@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
+import { View } from "react-native";
 
 import { Button, Field } from "./ui";
 
@@ -123,6 +124,17 @@ describe("Button", () => {
     expect(button).toBeDisabled();
     await fireEvent.press(button);
     expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it("renders a custom icon element, such as a brand logo, before the label", async () => {
+    await render(
+      <Button onPress={jest.fn()} icon={<View testID="brand-logo" />}>
+        Continuar con Google
+      </Button>,
+    );
+
+    expect(screen.getByTestId("brand-logo")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "Continuar con Google" })).toBeEnabled();
   });
 
   it("shows a busy indicator and ignores presses while loading", async () => {

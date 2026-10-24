@@ -1,6 +1,6 @@
 import { colors, fonts } from "@/design/tokens";
 import { Link, router, type Href } from "expo-router";
-import { useState, type PropsWithChildren, type ReactNode } from "react";
+import { useState, type PropsWithChildren, type ReactElement, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -181,7 +181,8 @@ export function Button({
   disabled = false,
 }: PropsWithChildren<{
   variant?: "primary" | "outline" | "danger";
-  icon?: IconName;
+  /** A line icon by name, or an element for marks with their own colors (GoogleLogo). */
+  icon?: IconName | ReactElement;
   onPress?: () => void;
   loading?: boolean;
   disabled?: boolean;
@@ -198,13 +199,15 @@ export function Button({
           color={variant === "primary" ? colors.surface : colors.primary}
           size="small"
         />
-      ) : icon ? (
+      ) : typeof icon === "string" ? (
         <Icon
           name={icon}
           color={variant === "primary" ? colors.surface : colors.primary}
           size={19}
         />
-      ) : null}
+      ) : (
+        icon
+      )}
       <Copy
         weight="bold"
         style={[

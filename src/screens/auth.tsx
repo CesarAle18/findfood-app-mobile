@@ -23,7 +23,7 @@ import {
   Stack,
   TextLink,
 } from "@/components/findfood/ui";
-import { Icon } from "@/components/findfood/icon";
+import { GoogleLogo, Icon } from "@/components/findfood/icon";
 import { Pressing } from "@/components/findfood/motion";
 import { colors } from "@/design/tokens";
 import { forgotPasswordSchema, loginSchema, registerSchema } from "@/domain/validation/auth";
@@ -182,6 +182,7 @@ export function LoginScreen() {
         </Copy>
         <Button
           variant="outline"
+          icon={<GoogleLogo />}
           onPress={() => {
             setNotice(undefined);
             void google.start();
