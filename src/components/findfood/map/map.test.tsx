@@ -443,6 +443,12 @@ describe("PointMap", () => {
     expect(map.props.liteMode).toBe(true);
     expect(map.props.region).toMatchObject({ latitude: 4.65, longitude: -74.06 });
   });
+
+  it("stays light even when the phone is in dark mode", async () => {
+    await render(<PointMap point={{ lat: 4.65, lng: -74.06 }} title="Punto de recogida" />);
+
+    expect(screen.getByTestId("point-map").props.userInterfaceStyle).toBe("light");
+  });
 });
 
 describe("without a Maps key in the build", () => {

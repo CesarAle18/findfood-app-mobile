@@ -7,7 +7,10 @@ import { colors } from "@/design/tokens";
 import { MapPlaceholder } from "./map-placeholder";
 import { MapView, PROVIDER_GOOGLE, type MapViewProps } from "./maps";
 
-export type FindFoodMapProps = Omit<MapViewProps, "provider" | "style"> & {
+export type FindFoodMapProps = Omit<
+  MapViewProps,
+  "provider" | "style" | "userInterfaceStyle"
+> & {
   ref?: Ref<MapView>;
   /** Fixed height of the map card (the map never sizes from its content). */
   height?: number;
@@ -63,6 +66,8 @@ export function FindFoodMap({
         toolbarEnabled={false}
         {...fixed}
         {...props}
+        // The app has no dark theme: without this the map follows the phone's dark mode.
+        userInterfaceStyle="light"
       >
         {children}
       </MapView>
