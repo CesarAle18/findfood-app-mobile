@@ -450,7 +450,7 @@ function liveHeadline(s: SeguimientoDonacionDto, located: boolean): string {
   const bank = s.banco?.nombre ?? "el banco";
   if (s.paradas_antes > 0) {
     const stops = s.paradas_antes === 1 ? "1 parada" : `${s.paradas_antes} paradas`;
-    return `Tiene ${stops} antes de ${toBank ? "el banco" : "tu punto"}`;
+    return `Tiene ${stops} antes ${toBank ? "del banco" : "de tu punto"}`;
   }
   const hora = s.tramo ? formatTimeOfDay(s.tramo.llegada_estimada) : null;
   if (s.tramo && hora) {
@@ -472,12 +472,23 @@ function storedAge(at: string, fetchedAt: number): string {
     : `Última ubicación hace ${minutes} min`;
 }
 
+/**
+ * On the way to the bank the API hides the route and the volunteer's position while other
+ * donors' pickups remain open: being at one of them would reveal that donor's address.
+ */
+function positionHidden(s: SeguimientoDonacionDto): boolean {
+  return s.fase === "HACIA_BANCO" && s.ruta_id === null;
+}
+
 function liveNotes(
   headline: string,
   shown: ShownPosition | null,
   status: LiveStatus | null,
   fetchedAt: number,
+  hidden: boolean,
 ): string[] {
+  // Nothing to wait for: the position comes back once the other pickups are done.
+  if (hidden) return [];
   const notes: string[] = [];
   if (!shown && headline !== WAITING_POSITION) notes.push(WAITING_POSITION);
   if (shown?.stored) notes.push(storedAge(shown.at, fetchedAt));
@@ -501,7 +512,8 @@ function LiveTracking({
   fetchedAt: number;
 }) {
   const live = useVolunteerLivePosition(s.ruta_id);
-  const shown = newestPosition(live.position, s.voluntario_posicion);
+  const hidden = positionHidden(s);
+  const shown = hidden ? null : newestPosition(live.position, s.voluntario_posicion);
   const glided = useGlide(shown);
   const headline = liveHeadline(s, shown !== null);
   return (
@@ -514,7 +526,7 @@ function LiveTracking({
       />
       <Card soft>
         <Copy weight="semibold">{headline}</Copy>
-        {liveNotes(headline, shown, live.status, fetchedAt).map((note) => (
+        {liveNotes(headline, shown, live.status, fetchedAt, hidden).map((note) => (
           <Copy key={note} tone="secondary">
             {note}
           </Copy>

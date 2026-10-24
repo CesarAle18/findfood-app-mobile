@@ -273,6 +273,42 @@ describe("TrackingScreen · En vivo", () => {
     expect(screen.queryByTestId("donor-map-leg")).toBeNull();
   });
 
+  it.each([
+    [1, "Tiene 1 parada antes del banco"],
+    [3, "Tiene 3 paradas antes del banco"],
+  ])(
+    "hides the volunteer on the way to the bank while %i other pickup(s) remain",
+    async (paradas, headline) => {
+      // The API hides the route and the position: the volunteer may be at another donor's home.
+      const realtime = plugRealtime(() => {});
+      try {
+        answer(
+          detalleFixture({ estado: "EN_TRANSITO" }),
+          HISTORY,
+          live({
+            estado_donacion: "EN_TRANSITO",
+            fase: "HACIA_BANCO",
+            ruta_id: null,
+            paradas_antes: paradas,
+            voluntario_posicion: null,
+            tramo: null,
+          }),
+        );
+        await renderScreen(TrackingScreen);
+
+        expect(await screen.findByText(headline)).toBeOnTheScreen();
+        expect(screen.getByTestId("donor-map-pickup")).toBeOnTheScreen();
+        expect(screen.getByTestId("donor-map-bank")).toBeOnTheScreen();
+        expect(screen.queryByTestId("donor-map-volunteer")).toBeNull();
+        expect(screen.queryByTestId("donor-map-leg")).toBeNull();
+        expect(screen.queryByText("Esperando la ubicación del voluntario")).toBeNull();
+        expect(realtime.fake.channel).not.toHaveBeenCalled();
+      } finally {
+        realtime.restore();
+      }
+    },
+  );
+
   it("waits for the volunteer's position when there is none yet", async () => {
     answer(onTheWay, HISTORY, live({ voluntario_posicion: null, tramo: null }));
     await renderScreen(TrackingScreen);
