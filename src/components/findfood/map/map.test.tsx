@@ -19,6 +19,7 @@ import {
   LocationPicker,
   REVERSE_GEOCODE_DELAY_MS,
 } from "./location-picker";
+import { DonorTrackingMap } from "./donor-tracking-map";
 import { PointMap } from "./point-map";
 import { RouteMapView, type RouteStop } from "./route-map-view";
 
@@ -455,5 +456,95 @@ describe("without a Maps key in the build", () => {
     expect(
       screen.getByText("El mapa no está disponible en esta versión de la app."),
     ).toBeTruthy();
+  });
+});
+
+describe("DonorTrackingMap", () => {
+  const recogida = { lat: 4.65, lng: -74.06 };
+  const banco = { nombre: "Bodega Norte", lat: 4.69, lng: -74.08 };
+  const tramo: GeometriaRutaDto = {
+    type: "LineString",
+    coordinates: [
+      [-74.05, 4.67],
+      [-74.06, 4.65],
+    ],
+  };
+
+  it("shows the volunteer heading to the pickup, the bank and the leg, never route stops", async () => {
+    await render(
+      <DonorTrackingMap
+        recogida={recogida}
+        banco={banco}
+        voluntario={{ lat: 4.67, lng: -74.05, rumbo: 135 }}
+        tramo={tramo}
+      />,
+    );
+
+    const volunteer = screen.getByTestId("donor-map-volunteer");
+    expect(volunteer.props.coordinate).toEqual({ latitude: 4.67, longitude: -74.05 });
+    expect(volunteer.props.rotation).toBe(135);
+    expect(volunteer.props.flat).toBe(true);
+    expect(volunteer.props.tracksViewChanges).toBe(false);
+    expect(screen.getByTestId("donor-map-pickup").props.coordinate).toEqual({
+      latitude: 4.65,
+      longitude: -74.06,
+    });
+    expect(screen.getByTestId("donor-map-bank").props.title).toBe("Bodega Norte");
+    expect(screen.getByTestId("donor-map-leg").props.coordinates).toEqual([
+      { latitude: 4.67, longitude: -74.05 },
+      { latitude: 4.65, longitude: -74.06 },
+    ]);
+    expect(screen.queryByTestId("route-path")).toBeNull();
+  });
+
+  it("without a position, bank or leg shows the pickup alone", async () => {
+    await render(<DonorTrackingMap recogida={recogida} banco={null} voluntario={null} tramo={null} />);
+
+    expect(screen.getByTestId("donor-map-pickup")).toBeOnTheScreen();
+    expect(screen.queryByTestId("donor-map-volunteer")).toBeNull();
+    expect(screen.queryByTestId("donor-map-bank")).toBeNull();
+    expect(screen.queryByTestId("donor-map-leg")).toBeNull();
+  });
+
+  it("points the volunteer north when the phone reports no heading", async () => {
+    await render(
+      <DonorTrackingMap
+        recogida={recogida}
+        banco={null}
+        voluntario={{ lat: 4.67, lng: -74.05, rumbo: null }}
+        tramo={null}
+      />,
+    );
+
+    expect(screen.getByTestId("donor-map-volunteer").props.rotation).toBe(0);
+  });
+
+  it("opens framing what it knows, and keeps that frame while the volunteer moves", async () => {
+    const view = await render(
+      <DonorTrackingMap
+        recogida={recogida}
+        banco={banco}
+        voluntario={{ lat: 4.67, lng: -74.05, rumbo: 0 }}
+        tramo={null}
+      />,
+    );
+    const opened = screen.getByTestId("donor-map").props.initialRegion;
+    expect(opened.latitude).toBeCloseTo(4.67);
+    expect(opened.latitudeDelta).toBeGreaterThan(0.04);
+
+    await view.rerender(
+      <DonorTrackingMap
+        recogida={recogida}
+        banco={banco}
+        voluntario={{ lat: 4.5, lng: -74.2, rumbo: 0 }}
+        tramo={null}
+      />,
+    );
+
+    expect(screen.getByTestId("donor-map").props.initialRegion).toBe(opened);
+    expect(screen.getByTestId("donor-map-volunteer").props.coordinate).toEqual({
+      latitude: 4.5,
+      longitude: -74.2,
+    });
   });
 });
