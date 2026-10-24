@@ -68,6 +68,9 @@ jest.mock("@/components/findfood/photo-field", () => {
   };
 });
 
+/** The point the mocked map picks; a test may move it outside the service area. */
+let mockBasePoint = { lat: 4.65, lng: -74.06 };
+
 // react-native-maps needs its native module: a button picks the base point.
 jest.mock("@/components/findfood/map", () => {
   const { createElement } = jest.requireActual<typeof import("react")>("react");
@@ -77,7 +80,7 @@ jest.mock("@/components/findfood/map", () => {
     LocationPicker: ({ onChange }: { onChange: (point: { lat: number; lng: number }) => void }) =>
       createElement(
         Pressable,
-        { accessibilityRole: "button", onPress: () => onChange({ lat: 3.45, lng: -76.53 }) },
+        { accessibilityRole: "button", onPress: () => onChange(mockBasePoint) },
         createElement(RNText, null, "Elegir ubicación"),
       ),
   };
@@ -129,6 +132,7 @@ async function fillRequired() {
 }
 
 beforeEach(() => {
+  mockBasePoint = { lat: 4.65, lng: -74.06 };
   resetApiMock(mockApi);
   mockApi.get.mockImplementation(async (path: string) => {
     if (path === "/catalogos") return catalogosFixture;
@@ -172,7 +176,7 @@ describe("VolunteerRegistrationScreen", () => {
           tiene_refrigeracion: true,
           fecha_nacimiento: "1995-04-12",
           es_grupo: false,
-          ubicacion_base: { lat: 3.45, lng: -76.53 },
+          ubicacion_base: { lat: 4.65, lng: -74.06 },
           documento_frente: "DOCUMENTO_IDENTIDAD/Documento.jpg",
         },
       }),
@@ -191,6 +195,19 @@ describe("VolunteerRegistrationScreen", () => {
     expect(screen.getByText("Ingresa la placa del vehículo.")).toBeOnTheScreen();
     expect(screen.getByText("Sube la foto del vehículo.")).toBeOnTheScreen();
     expect(screen.getByText("Elige tu ubicación base en el mapa.")).toBeOnTheScreen();
+  });
+
+  it("does not send a base point outside Bogotá's service area", async () => {
+    mockBasePoint = { lat: 6.24, lng: -75.58 };
+    await renderRegistration(donor());
+    await fillRequired();
+
+    await press("Enviar solicitud");
+
+    expect(mockApi.post).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("Tu punto base debe estar en Bogotá o un municipio vecino."),
+    ).toBeOnTheScreen();
   });
 
   it("explains a plate that is already registered", async () => {

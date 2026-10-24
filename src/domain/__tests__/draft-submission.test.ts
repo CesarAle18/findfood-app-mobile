@@ -2,6 +2,7 @@ import {
   initialDonationDraft,
   newDonationDraft,
   parseQuantity,
+  PICKUP_POINT_OUTSIDE_AREA,
   PICKUP_POINT_REQUIRED,
   productErrorKey,
   toCrearDonacionBody,
@@ -214,5 +215,13 @@ describe("validateDraft", () => {
       direccion: "Ingresa una dirección de al menos 5 caracteres.",
       ubicacionRecogida: PICKUP_POINT_REQUIRED,
     });
+  });
+
+  it("refuses a pickup point outside Bogotá's service area and accepts a neighbouring town", () => {
+    const medellin = { ...ready, ubicacionRecogida: { lat: 6.24, lng: -75.58 } };
+    expect(validateDraft(medellin, NOW)?.ubicacionRecogida).toBe(PICKUP_POINT_OUTSIDE_AREA);
+
+    const chia = { ...ready, ubicacionRecogida: { lat: 4.86, lng: -74.05 } };
+    expect(validateDraft(chia, NOW)).toBeNull();
   });
 });

@@ -149,4 +149,13 @@ describe("volunteerRequestSchema", () => {
     expect(fields).not.toContain("documento_reverso");
     expect(fields).not.toContain("selfie");
   });
+
+  it("refuses a base point outside Bogotá's service area and accepts a neighbouring town", () => {
+    expect(errorOn(filled({ ubicacion_base: { lat: 6.24, lng: -75.58 } }), "ubicacion_base")).toBe(
+      "Tu punto base debe estar en Bogotá o un municipio vecino.",
+    );
+    expect(
+      errorOn(filled({ ubicacion_base: { lat: 4.86, lng: -74.05 } }), "ubicacion_base"),
+    ).toBeUndefined();
+  });
 });

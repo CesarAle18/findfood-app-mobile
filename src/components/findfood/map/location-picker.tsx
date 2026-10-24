@@ -42,7 +42,7 @@ export const AUTOCOMPLETE_DELAY_MS = 300;
 export const REVERSE_GEOCODE_DELAY_MS = 800;
 const MAX_SUGGESTIONS = 5;
 const NOT_FOUND =
-  "No pudimos ubicar esa dirección. Revísala, usa tu ubicación o mueve el mapa hasta tu punto de recogida.";
+  "No pudimos ubicar esa dirección en Bogotá o sus municipios vecinos. Revísala, usa tu ubicación o mueve el mapa hasta tu punto de recogida.";
 export const APPROXIMATE_NOTICE =
   "Ubicamos la zona, no la puerta exacta. Mueve el mapa hasta el punto de recogida.";
 
