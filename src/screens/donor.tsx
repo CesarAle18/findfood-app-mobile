@@ -75,6 +75,7 @@ import {
   formatInstant,
   formatTimeOfDay,
   isDelivered,
+  hasLiveTracking,
   isTracking,
   useDonationDetail,
   useDonationId,
@@ -543,7 +544,7 @@ function Tracking({ detail: { dto, view: d } }: { detail: DonationDetail }) {
         <Copy weight="semibold">Estado actual</Copy>
         <Copy>{CURRENT_STATE[d.estado] ?? d.status}</Copy>
       </Card>
-      {tracking.data?.activo ? (
+      {tracking.data?.activo && hasLiveTracking(dto.estado) ? (
         <LiveTracking seguimiento={tracking.data} fetchedAt={tracking.dataUpdatedAt} />
       ) : null}
       <Section title="Proceso del envío">
