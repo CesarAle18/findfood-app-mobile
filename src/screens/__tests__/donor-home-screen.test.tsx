@@ -184,6 +184,37 @@ describe("DonorHomeScreen", () => {
     expect(mockApi.post).toHaveBeenCalledWith("/me/notificaciones/n-0/leer");
   });
 
+  it("hides the volunteer invitation once the volunteer profile is approved", async () => {
+    answerGets({ donaciones: donations });
+
+    await renderHome();
+
+    expect(await screen.findByText("DON-1058")).toBeOnTheScreen();
+    expect(screen.queryByText("¿Quieres ser voluntario?")).toBeNull();
+  });
+
+  it.each(["PENDIENTE", "RECHAZADA"] as const)(
+    "invites to volunteer while the request is %s",
+    async (estado) => {
+      answerGets({ donaciones: donations });
+      const me = meFixture();
+      mockMe.data = { ...me, voluntario: { ...me.voluntario!, estado_verificacion: estado } };
+
+      await renderHome();
+
+      expect(await screen.findByText("¿Quieres ser voluntario?")).toBeOnTheScreen();
+    },
+  );
+
+  it("invites to volunteer without a volunteer profile", async () => {
+    answerGets({ donaciones: donations });
+    mockMe.data = meFixture({ roles: ["DONANTE"], voluntario: null });
+
+    await renderHome();
+
+    expect(await screen.findByText("¿Quieres ser voluntario?")).toBeOnTheScreen();
+  });
+
   it("invites to donate without donations nor activity", async () => {
     answerGets({ donaciones: pageFixture([]), bandeja: bandejaFixture([]) });
 

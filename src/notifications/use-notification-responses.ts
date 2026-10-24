@@ -57,10 +57,15 @@ export function donationKeysForPush(data: Record<string, unknown> | null | undef
 
 /**
  * What a received push leaves stale on the volunteer's side: a new offer refreshes the
- * offers; a cancelled donation can drop an accepted offer and a stop from a route.
+ * offers; a cancelled donation can drop an accepted offer and a stop from a route. A
+ * reviewed volunteer request changes `GET /me` (its state and, once approved, the
+ * VOLUNTARIO role), which nothing else would fetch again while the app stays open.
  */
 export function volunteerKeysForPush(data: Record<string, unknown> | null | undefined) {
   switch (optionalString(data?.tipo)) {
+    case "VERIFICACION_APROBADA":
+    case "VERIFICACION_RECHAZADA":
+      return [queryKeys.me];
     case "ASIGNACION_OFRECIDA":
       return [queryKeys.asignaciones.ofertas()];
     case "DONACION_CANCELADA":

@@ -1,4 +1,5 @@
 import { colors, fonts } from "@/design/tokens";
+import { useIsTabScreen } from "@/navigation/tab-screen";
 import { Link, router, type Href } from "expo-router";
 import { useState, type PropsWithChildren, type ReactElement, type ReactNode } from "react";
 import {
@@ -61,12 +62,12 @@ export function Copy({
  * Safe-area edges of the screen frame. On iOS the bottom edge is left to the scroll view
  * (`contentInsetAdjustmentBehavior`), so content scrolls behind the home indicator and the
  * translucent native tab bar. Android native tabs already lay their screens out above the
- * tab bar, where this edge measures nothing; on stack screens it clears the navigation bar.
+ * tab bar, yet the edge still measures the navigation bar and leaves a blank strip there;
+ * only stack screens keep it, to clear the navigation bar.
  */
-const SAFE_AREA_EDGES: Edges =
-  Platform.OS === "ios"
-    ? ["top", "left", "right"]
-    : ["top", "left", "right", "bottom"];
+const SAFE_AREA_EDGES: Edges = ["top", "left", "right"];
+const STACK_SAFE_AREA_EDGES: Edges =
+  Platform.OS === "ios" ? SAFE_AREA_EDGES : [...SAFE_AREA_EDGES, "bottom"];
 
 export function Screen({
   children,
@@ -88,6 +89,7 @@ export function Screen({
    */
   scroll?: boolean;
 }>) {
+  const isTabScreen = useIsTabScreen();
   const heading = title ? (
     <View style={styles.heading}>
       <View style={styles.headingText}>
@@ -104,7 +106,10 @@ export function Screen({
     </View>
   ) : null;
   return (
-    <SafeAreaView style={styles.safe} edges={SAFE_AREA_EDGES}>
+    <SafeAreaView
+      style={styles.safe}
+      edges={isTabScreen ? SAFE_AREA_EDGES : STACK_SAFE_AREA_EDGES}
+    >
       <View style={styles.frame}>
         <View style={styles.header}>
           {back ? (

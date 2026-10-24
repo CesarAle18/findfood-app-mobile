@@ -247,6 +247,8 @@ export function DonorHomeScreen() {
   // The account totals of `GET /me` while the impact loads (or fails).
   const impact = impacto.data?.donante;
   const totals = impact ?? me.data?.donante;
+  // An approved profile cannot apply again (the API answers `ya-es-voluntario`).
+  const isVolunteer = me.data?.voluntario?.estado_verificacion === "APROBADA";
   return (
     <Screen
       title="Inicio"
@@ -267,13 +269,15 @@ export function DonorHomeScreen() {
       <NavButton href="/donante/nueva-donacion" showArrow={false}>
         Realiza una donación
       </NavButton>
-      <NavButton
-        href="/donante/registro-voluntario"
-        variant="outline"
-        showArrow={false}
-      >
-        ¿Quieres ser voluntario?
-      </NavButton>
+      {isVolunteer ? null : (
+        <NavButton
+          href="/donante/registro-voluntario"
+          variant="outline"
+          showArrow={false}
+        >
+          ¿Quieres ser voluntario?
+        </NavButton>
+      )}
       <Section title="Tu última donación">
         <QueryContent query={latest} loadingLabel="Cargando tu última donación">
           {(donation) => (donation ? <DonationCard donation={donation} /> : <NoDonations />)}

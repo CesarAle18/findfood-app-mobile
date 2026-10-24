@@ -273,6 +273,13 @@ describe("volunteerKeysForPush", () => {
     ]);
   });
 
+  it.each(["VERIFICACION_APROBADA", "VERIFICACION_RECHAZADA"])(
+    "refreshes the account when the request is reviewed (%s)",
+    (tipo) => {
+      expect(volunteerKeysForPush({ tipo })).toEqual([queryKeys.me]);
+    },
+  );
+
   it.each([undefined, null, {}, { tipo: "ASIGNACION_ACEPTADA" }, { tipo: 7 }])(
     "is empty for other pushes (%p)",
     (data) => {
