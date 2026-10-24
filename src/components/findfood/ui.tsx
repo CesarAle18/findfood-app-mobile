@@ -351,9 +351,12 @@ export function Field({
   autoCapitalize,
   returnKeyType,
   maxLength,
+  action,
 }: {
   label: string;
   value: string;
+  /** An icon-only button at the end of the input, named for screen readers by `label`. */
+  action?: { icon: IconName; label: string; onPress: () => void; loading?: boolean };
   select?: boolean;
   secure?: boolean;
   multiline?: boolean;
@@ -437,6 +440,24 @@ export function Field({
               size={18}
               color={colors.secondary}
             />
+          </Pressing>
+        ) : action ? (
+          <Pressing
+            accessibilityRole="button"
+            accessibilityLabel={action.label}
+            accessibilityState={{ disabled: !!action.loading }}
+            aria-busy={action.loading}
+            disabled={action.loading}
+            hitSlop={8}
+            scale={0.9}
+            onPress={action.onPress}
+            surface={styles.revealButton}
+          >
+            {action.loading ? (
+              <ActivityIndicator color={colors.primary} size="small" />
+            ) : (
+              <Icon name={action.icon} size={20} color={colors.primary} />
+            )}
           </Pressing>
         ) : select ? (
           <Icon name="chevron" size={16} color={colors.secondary} />

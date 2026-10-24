@@ -1,6 +1,6 @@
 import { randomUUID } from "expo-crypto";
 import * as Location from "expo-location";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import type MapView from "react-native-maps";
 import type { Details, Region } from "react-native-maps";
@@ -57,7 +57,8 @@ export const APPROXIMATE_NOTICE =
  * `onAddressSuggestion` reverse-geocodes the chosen point; pass it only while the address
  * field is empty, and apply it without overwriting typed text (`suggestDireccion`).
  *
- * With `address`, "Ubicar dirección" locates that text: Google through the API first, the
+ * With `address`, `ref.locateAddress()` locates that text (the screen draws the search button
+ * next to its address field, see `canLocateAddress`): Google through the API first, the
  * phone geocoder when the API cannot search (not on web, which has none). A failed lookup
  * only explains itself: it never emits a guessed point. `onChange` says where each point
  * came from. With `onAddressChosen` too, typing the address lists Google suggestions;
@@ -65,7 +66,16 @@ export const APPROXIMATE_NOTICE =
  *
  * `coverageKm` draws the volunteer's coverage radius around the point.
  */
+export type LocationPickerHandle = {
+  /** Locates `address` and moves the pin there; resolves once the lookup ends. */
+  locateAddress: () => Promise<void>;
+};
+
+/** Whether `locateAddress` can search here: web has no geocoder. */
+export const canLocateAddress = Platform.OS !== "web";
+
 export function LocationPicker({
+  ref,
   value,
   onChange,
   onAddressSuggestion,
@@ -74,10 +84,11 @@ export function LocationPicker({
   coverageKm,
   height = 260,
 }: {
+  ref?: Ref<LocationPickerHandle>;
   value: Coordenada | null;
   onChange: (point: Coordenada, source: PickupPointSource) => void;
   onAddressSuggestion?: (address: string) => void;
-  /** The typed address "Ubicar dirección" locates; the button is hidden without it. */
+  /** The typed address `locateAddress` looks up; it does nothing without it. */
   address?: string;
   /** Receives the address of a picked suggestion; suggestions are hidden without it. */
   onAddressChosen?: (address: string) => void;
@@ -90,7 +101,6 @@ export function LocationPicker({
   const regionRef = useRef<Region>(initialRegion);
   const [pin, setPin] = useState<LatLng>(() => centerOf(initialRegion));
   const [locating, setLocating] = useState(false);
-  const [geocoding, setGeocoding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const { gate, request } = usePermissionGate(Location.useForegroundPermissions);
@@ -104,7 +114,7 @@ export function LocationPicker({
   // Off for the rest of the visit once the API says it cannot search.
   const [autocomplete, setAutocomplete] = useState(true);
 
-  const canGeocode = address !== undefined && Platform.OS !== "web";
+  const canGeocode = address !== undefined && canLocateAddress;
   const query = address?.trim() ?? "";
   const searchable = canGeocode && onAddressChosen !== undefined && autocomplete;
 
@@ -208,35 +218,33 @@ export function LocationPicker({
   };
 
   const locateAddress = async () => {
+    if (!canGeocode) return;
     setError(null);
     setNotice(null);
     if (!query) {
       setError("Escribe la dirección de recogida para ubicarla.");
       return;
     }
-    setGeocoding(true);
-    try {
-      let located: GeocodedPoint | null | undefined = await geocodeWithApi(query);
-      if (located === undefined) {
-        // The phone geocoder answers instead; on Android it needs the location permission.
-        if (Platform.OS === "android" && gate !== "granted" && (await request()) !== "granted") {
-          setError("Permite el acceso a tu ubicación para ubicar la dirección, o mueve el mapa.");
-          return;
-        }
-        const point = await geocodeAddress(query);
-        located = point ? { point, approximate: false } : null;
-      }
-      if (!located) {
-        setError(NOT_FOUND);
+    let located: GeocodedPoint | null | undefined = await geocodeWithApi(query);
+    if (located === undefined) {
+      // The phone geocoder answers instead; on Android it needs the location permission.
+      if (Platform.OS === "android" && gate !== "granted" && (await request()) !== "granted") {
+        setError("Permite el acceso a tu ubicación para ubicar la dirección, o mueve el mapa.");
         return;
       }
-      moveTo(located.point);
-      onChange(located.point, "address");
-      if (located.approximate) setNotice(APPROXIMATE_NOTICE);
-    } finally {
-      setGeocoding(false);
+      const point = await geocodeAddress(query);
+      located = point ? { point, approximate: false } : null;
     }
+    if (!located) {
+      setError(NOT_FOUND);
+      return;
+    }
+    moveTo(located.point);
+    onChange(located.point, "address");
+    if (located.approximate) setNotice(APPROXIMATE_NOTICE);
   };
+
+  useImperativeHandle(ref, () => ({ locateAddress }));
 
   const choose = async (suggestion: SugerenciaDto) => {
     setError(null);
@@ -244,7 +252,6 @@ export function LocationPicker({
     // Picking closes the billing session; the next search starts another one.
     const sesion = sessionRef.current ?? randomUUID();
     sessionRef.current = null;
-    setGeocoding(true);
     try {
       const lugar = await getLugar(suggestion.place_id, sesion);
       setChosen(lugar.direccion.trim());
@@ -254,8 +261,6 @@ export function LocationPicker({
       onChange(lugar.ubicacion, "address");
     } catch {
       setError(NOT_FOUND);
-    } finally {
-      setGeocoding(false);
     }
   };
 
@@ -305,11 +310,6 @@ export function LocationPicker({
         </FindFoodMap>
       </View>
       {notice ? <Copy tone="secondary">{notice}</Copy> : null}
-      {canGeocode ? (
-        <Button variant="outline" icon="search" loading={geocoding} onPress={locateAddress}>
-          Ubicar dirección
-        </Button>
-      ) : null}
       <Button variant="outline" icon="pin" loading={locating} onPress={locateMe}>
         Usar mi ubicación
       </Button>

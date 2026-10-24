@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { createRef } from "react";
 import * as Location from "expo-location";
 import { Platform } from "react-native";
 
@@ -17,6 +18,7 @@ import {
   APPROXIMATE_NOTICE,
   AUTOCOMPLETE_DELAY_MS,
   LocationPicker,
+  type LocationPickerHandle,
   REVERSE_GEOCODE_DELAY_MS,
 } from "./location-picker";
 import { DonorTrackingMap } from "./donor-tracking-map";
@@ -68,11 +70,13 @@ afterEach(() => {
   jest.mocked(hasGoogleMapsKey).mockReturnValue(true);
 });
 
+const picker = createRef<LocationPickerHandle>();
+
 const region = { latitude: 4.7, longitude: -74.1, latitudeDelta: 0.01, longitudeDelta: 0.01 };
 
 describe("LocationPicker", () => {
   it("marks the map's center with Google's native marker, which follows the map", async () => {
-    await render(<LocationPicker value={null} onChange={jest.fn()} />);
+    await render(<LocationPicker ref={picker} value={null} onChange={jest.fn()} />);
 
     const pin = () => screen.getByTestId("location-picker-pin");
     expect(pin().props.image).toBeUndefined();
@@ -87,7 +91,7 @@ describe("LocationPicker", () => {
 
   it("emits {lat,lng} when the donor finishes moving the map", async () => {
     const onChange = jest.fn();
-    await render(<LocationPicker value={null} onChange={onChange} />);
+    await render(<LocationPicker ref={picker} value={null} onChange={onChange} />);
 
     await act(async () => {
       fireEvent(screen.getByTestId("location-picker-map"), "regionChangeComplete", region, {
@@ -101,7 +105,7 @@ describe("LocationPicker", () => {
 
   it("ignores moves the donor did not make (initial layout, animations)", async () => {
     const onChange = jest.fn();
-    await render(<LocationPicker value={null} onChange={onChange} />);
+    await render(<LocationPicker ref={picker} value={null} onChange={onChange} />);
 
     await act(async () => {
       fireEvent(screen.getByTestId("location-picker-map"), "regionChangeComplete", region, {
@@ -120,7 +124,7 @@ describe("LocationPicker", () => {
     const onChange = jest.fn();
     const onAddressSuggestion = jest.fn();
     await render(
-      <LocationPicker value={null} onChange={onChange} onAddressSuggestion={onAddressSuggestion} />,
+      <LocationPicker ref={picker} value={null} onChange={onChange} onAddressSuggestion={onAddressSuggestion} />,
     );
 
     await act(async () => {
@@ -136,7 +140,7 @@ describe("LocationPicker", () => {
 
   it("does not geocode when the parent already has an address (no suggestion handler)", async () => {
     mockForegroundPermission(permission(true, true));
-    await render(<LocationPicker value={{ lat: 4.6, lng: -74.0 }} onChange={jest.fn()} />);
+    await render(<LocationPicker ref={picker} value={{ lat: 4.6, lng: -74.0 }} onChange={jest.fn()} />);
 
     await act(async () => {
       fireEvent(screen.getByTestId("location-picker-map"), "regionChangeComplete", region, {
@@ -149,7 +153,7 @@ describe("LocationPicker", () => {
 
   it("explains how to enable location once the OS stops asking", async () => {
     mockForegroundPermission(permission(false, false));
-    await render(<LocationPicker value={null} onChange={jest.fn()} />);
+    await render(<LocationPicker ref={picker} value={null} onChange={jest.fn()} />);
 
     await act(async () => {
       fireEvent.press(screen.getByRole("button", { name: "Usar mi ubicación" }));
@@ -164,15 +168,18 @@ describe("LocationPicker", () => {
       (Location.geocodeAsync as Partial<jest.Mock>).mockRestore?.();
     });
 
-    const locate = () =>
-      act(async () => {
-        fireEvent.press(screen.getByRole("button", { name: "Ubicar dirección" }));
-      });
+    const locate = () => act(() => picker.current!.locateAddress());
 
-    it("is only offered when the parent passes an address", async () => {
-      await render(<LocationPicker value={null} onChange={jest.fn()} />);
+    it("does nothing when the parent passes no address", async () => {
+      const geocode = jest.spyOn(Location, "geocodeAsync");
+      const onChange = jest.fn();
+      await render(<LocationPicker ref={picker} value={null} onChange={onChange} />);
 
-      expect(screen.queryByRole("button", { name: "Ubicar dirección" })).toBeNull();
+      await locate();
+
+      expect(geocode).not.toHaveBeenCalled();
+      expect(onChange).not.toHaveBeenCalled();
+      expect(screen.queryByText("Escribe la dirección de recogida para ubicarla.")).toBeNull();
     });
 
     it("locates the typed address in Colombia and emits it as an address point", async () => {
@@ -180,7 +187,7 @@ describe("LocationPicker", () => {
         .spyOn(Location, "geocodeAsync")
         .mockResolvedValue([{ latitude: 4.61, longitude: -74.07 }]);
       const onChange = jest.fn();
-      await render(<LocationPicker value={null} onChange={onChange} address="Cra 45 #12-30" />);
+      await render(<LocationPicker ref={picker} value={null} onChange={onChange} address="Cra 45 #12-30" />);
 
       await locate();
 
@@ -191,7 +198,7 @@ describe("LocationPicker", () => {
     it("explains a failed lookup and never emits a guessed point", async () => {
       jest.spyOn(Location, "geocodeAsync").mockResolvedValue([]);
       const onChange = jest.fn();
-      await render(<LocationPicker value={null} onChange={onChange} address="Dirección rara" />);
+      await render(<LocationPicker ref={picker} value={null} onChange={onChange} address="Dirección rara" />);
 
       await locate();
 
@@ -202,7 +209,7 @@ describe("LocationPicker", () => {
 
     it("asks for the address before looking it up", async () => {
       const geocode = jest.spyOn(Location, "geocodeAsync");
-      await render(<LocationPicker value={null} onChange={jest.fn()} address="  " />);
+      await render(<LocationPicker ref={picker} value={null} onChange={jest.fn()} address="  " />);
 
       await locate();
 
@@ -216,7 +223,7 @@ describe("LocationPicker", () => {
         mockForegroundPermission(permission(false, true));
         const geocode = jest.spyOn(Location, "geocodeAsync");
         const onChange = jest.fn();
-        await render(<LocationPicker value={null} onChange={onChange} address="Cra 45 #12-30" />);
+        await render(<LocationPicker ref={picker} value={null} onChange={onChange} address="Cra 45 #12-30" />);
 
         await locate();
 
@@ -236,10 +243,7 @@ describe("LocationPicker with Google through the API", () => {
     (Location.geocodeAsync as Partial<jest.Mock>).mockRestore?.();
   });
 
-  const locate = () =>
-    act(async () => {
-      fireEvent.press(screen.getByRole("button", { name: "Ubicar dirección" }));
-    });
+  const locate = () => act(() => picker.current!.locateAddress());
 
   it("locates with Google first, without the phone geocoder or its Android permission", async () => {
     const os = jest.replaceProperty(Platform, "OS", "android");
@@ -252,7 +256,7 @@ describe("LocationPicker with Google through the API", () => {
       });
       const geocode = jest.spyOn(Location, "geocodeAsync");
       const onChange = jest.fn();
-      await render(<LocationPicker value={null} onChange={onChange} address=" Cra 45 #12-30 " />);
+      await render(<LocationPicker ref={picker} value={null} onChange={onChange} address=" Cra 45 #12-30 " />);
 
       await locate();
 
@@ -271,7 +275,7 @@ describe("LocationPicker with Google through the API", () => {
       ubicacion: { lat: 4.64, lng: -74.06 },
       precision: "APPROXIMATE",
     });
-    await render(<LocationPicker value={null} onChange={jest.fn()} address="Chapinero" />);
+    await render(<LocationPicker ref={picker} value={null} onChange={jest.fn()} address="Chapinero" />);
 
     await locate();
 
@@ -284,7 +288,7 @@ describe("LocationPicker with Google through the API", () => {
       .mockRejectedValue(new ApiError({ type: "no-encontrado", status: 404, title: "No" }));
     const geocode = jest.spyOn(Location, "geocodeAsync");
     const onChange = jest.fn();
-    await render(<LocationPicker value={null} onChange={onChange} address="Dirección rara" />);
+    await render(<LocationPicker ref={picker} value={null} onChange={onChange} address="Dirección rara" />);
 
     await locate();
 
@@ -307,7 +311,7 @@ describe("LocationPicker with Google through the API", () => {
     const onChange = jest.fn(() => calls.push("point"));
     const onAddressChosen = jest.fn(() => calls.push("address"));
     const view = await render(
-      <LocationPicker
+      <LocationPicker ref={picker}
         value={null}
         onChange={onChange}
         address="Calle 7"
@@ -315,7 +319,7 @@ describe("LocationPicker with Google through the API", () => {
       />,
     );
     await view.rerender(
-      <LocationPicker
+      <LocationPicker ref={picker}
         value={null}
         onChange={onChange}
         address="Calle 72"
@@ -346,13 +350,13 @@ describe("LocationPicker with Google through the API", () => {
     jest.useFakeTimers();
     const onAddressChosen = jest.fn();
     const view = await render(
-      <LocationPicker value={null} onChange={jest.fn()} address="Calle 72" onAddressChosen={onAddressChosen} />,
+      <LocationPicker ref={picker} value={null} onChange={jest.fn()} address="Calle 72" onAddressChosen={onAddressChosen} />,
     );
     await act(async () => {
       jest.advanceTimersByTime(AUTOCOMPLETE_DELAY_MS);
     });
     await view.rerender(
-      <LocationPicker value={null} onChange={jest.fn()} address="Calle 72 #1" onAddressChosen={onAddressChosen} />,
+      <LocationPicker ref={picker} value={null} onChange={jest.fn()} address="Calle 72 #1" onAddressChosen={onAddressChosen} />,
     );
     await act(async () => {
       jest.advanceTimersByTime(AUTOCOMPLETE_DELAY_MS);
@@ -366,7 +370,7 @@ describe("LocationPicker with Google through the API", () => {
     jest.mocked(geocodificarInversa).mockResolvedValue({ direccion: "Calle 76 #15-20, Bogotá" });
     const onAddressSuggestion = jest.fn();
     await render(
-      <LocationPicker value={null} onChange={jest.fn()} onAddressSuggestion={onAddressSuggestion} />,
+      <LocationPicker ref={picker} value={null} onChange={jest.fn()} onAddressSuggestion={onAddressSuggestion} />,
     );
     const map = screen.getByTestId("location-picker-map");
 
@@ -388,7 +392,7 @@ describe("LocationPicker with Google through the API", () => {
 
   it("draws the coverage radius around the chosen point", async () => {
     await render(
-      <LocationPicker value={{ lat: 4.65, lng: -74.06 }} onChange={jest.fn()} coverageKm={12} />,
+      <LocationPicker ref={picker} value={{ lat: 4.65, lng: -74.06 }} onChange={jest.fn()} coverageKm={12} />,
     );
 
     const circle = screen.getByTestId("location-picker-coverage");

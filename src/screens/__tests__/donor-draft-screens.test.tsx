@@ -146,7 +146,7 @@ describe("NewDonationScreen", () => {
     jest.spyOn(Location, "geocodeAsync").mockResolvedValue([{ latitude: 4.61, longitude: -74.07 }]);
     await renderScreen(NewDonationScreen, { ...readyDraft, ubicacionRecogida: null });
 
-    await fireEvent.press(await screen.findByText("Ubicar dirección"));
+    await fireEvent.press(await screen.findByRole("button", { name: "Ubicar dirección" }));
     expect(await screen.findByText(/Punto elegido/)).toBeOnTheScreen();
 
     await fireEvent.changeText(screen.getByDisplayValue("Cra 45 #12-30"), "Cra 45 #12-31");
