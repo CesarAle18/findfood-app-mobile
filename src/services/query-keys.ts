@@ -12,6 +12,7 @@
  *   ["donaciones", "detail", id]                detail(id)
  *   ["donaciones", "historial"]                 historiales()
  *   ["donaciones", "historial", id]             historial(id)
+ *   ["donaciones", "seguimiento", id]           seguimiento(id)
  *
  * Roots never nest: `me` (GET /me) does not reach `perfil` (impact) or `notificaciones`,
  * although their routes live under /me.
@@ -55,6 +56,8 @@ export const queryKeys = {
     /** Every donation history, for changes whose response does not name the donation. */
     historiales: () => ["donaciones", "historial"] as const,
     historial: (id: string) => ["donaciones", "historial", id] as const,
+    /** The live tracking of one donation (`GET /donaciones/:id/seguimiento`). */
+    seguimiento: (id: string) => ["donaciones", "seguimiento", id] as const,
   },
   asignaciones: {
     all: ["asignaciones"] as const,

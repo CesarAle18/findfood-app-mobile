@@ -4,18 +4,31 @@
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { act, renderHook } from "@testing-library/react-native";
 import { Slot } from "expo-router";
 import { fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
 import { Linking } from "react-native";
 
 import { api } from "@/api";
+import type { EstadoDonacion } from "@/api/types";
 import { AssignedVolunteerScreen } from "@/screens/assigned-volunteer";
+import {
+  TRACKING_POLL_MS,
+  pollWhileActive,
+  useDonationTracking,
+} from "@/screens/donation-queries";
 import { DonationDetailScreen, TrackingScreen } from "@/screens/donor";
-import type { DonacionDetalleDto, HistorialEstadoDto } from "@/services/donaciones";
+import type {
+  DonacionDetalleDto,
+  HistorialEstadoDto,
+  SeguimientoDonacionDto,
+} from "@/services/donaciones";
+import { queryKeys } from "@/services/query-keys";
 import { MobileProvider } from "@/state/mobile-context";
 import type { ApiMock } from "@/test-utils/api";
 import { DONATION_ID, asignacionFixture, detalleFixture } from "@/test-utils/fixtures";
-import { createTestQueryClient } from "@/test-utils/query";
+import { seguimientoDonacionFixture } from "@/test-utils/fixtures/seguimiento";
+import { createQueryWrapper, createTestQueryClient } from "@/test-utils/query";
 
 jest.mock("@/api", () => ({
   api: jest.requireActual<typeof import("@/test-utils/api")>("@/test-utils/api").createApiMock(),
@@ -191,5 +204,89 @@ describe("AssignedVolunteerScreen", () => {
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Contactar voluntario" })).toBeNull(),
     );
+  });
+});
+
+describe("useDonationTracking", () => {
+  const trackingPath = `${detailPath}/seguimiento`;
+
+  function answerTracking(...answers: SeguimientoDonacionDto[]) {
+    const queue = [...answers];
+    mockApi.get.mockReset().mockImplementation(async (path: string) => {
+      if (path === trackingPath) return queue.length > 1 ? queue.shift() : queue[0];
+      throw new Error(`unexpected GET ${path}`);
+    });
+  }
+
+  async function renderTracking(estado: EstadoDonacion) {
+    client = createTestQueryClient();
+    const invalidate = jest.spyOn(client, "invalidateQueries");
+    const view = await renderHook(() => useDonationTracking(DONATION_ID, estado), {
+      wrapper: createQueryWrapper(client),
+    });
+    return { ...view, invalidate };
+  }
+
+  it.each<EstadoDonacion>(["PUBLICADA", "ENTREGADA", "CANCELADA"])(
+    "asks nothing while %s: no volunteer is on the way",
+    async (estado) => {
+      answerTracking(seguimientoDonacionFixture());
+      const { result } = await renderTracking(estado);
+
+      expect(result.current.fetchStatus).toBe("idle");
+      expect(mockApi.get).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refreshes the detail and the history once the live window closes", async () => {
+    answerTracking(
+      seguimientoDonacionFixture(),
+      seguimientoDonacionFixture({ activo: false, estado_donacion: "ENTREGADA", fase: null, ruta_id: null }),
+    );
+    const { result, invalidate } = await renderTracking("EN_RECOLECCION");
+    await waitFor(() => expect(result.current.data?.activo).toBe(true));
+    expect(mockApi.get).toHaveBeenCalledWith(trackingPath, { signal: expect.anything() });
+    expect(invalidate).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.refetch();
+    });
+
+    await waitFor(() =>
+      expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
+        queryKeys.donaciones.detail(DONATION_ID),
+        queryKeys.donaciones.historial(DONATION_ID),
+      ]),
+    );
+  });
+
+  it("refreshes the detail when the volunteer picks the donation up (new state, still live)", async () => {
+    answerTracking(
+      seguimientoDonacionFixture(),
+      seguimientoDonacionFixture({ estado_donacion: "EN_TRANSITO", fase: "HACIA_BANCO" }),
+    );
+    const { result, invalidate } = await renderTracking("EN_RECOLECCION");
+    await waitFor(() => expect(result.current.data?.fase).toBe("HACIA_RECOGIDA"));
+
+    await act(async () => {
+      await result.current.refetch();
+    });
+
+    await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(2));
+    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
+      queryKeys.donaciones.detail(DONATION_ID),
+      queryKeys.donaciones.historial(DONATION_ID),
+    ]);
+  });
+
+  it("polls every 30 s only while active", () => {
+    const poll = (activo?: boolean) =>
+      pollWhileActive({
+        state: { data: activo === undefined ? undefined : seguimientoDonacionFixture({ activo }) },
+      });
+    expect(TRACKING_POLL_MS).toBe(30_000);
+    expect(poll(true)).toBe(TRACKING_POLL_MS);
+    expect(poll(false)).toBe(false);
+    expect(poll()).toBe(false);
   });
 });

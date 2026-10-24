@@ -16,6 +16,7 @@ import type {
 } from "@/api/types";
 
 import { invalidateOnSuccess, queryKeys, type Invalidation } from "./query-keys";
+import type { SeguimientoDto } from "./rutas";
 
 // --- DTOs ------------------------------------------------------------------------------
 
@@ -198,6 +199,32 @@ export interface HistorialEstadoDto {
   lng: number | null;
 }
 
+/** Where the volunteer carries the donation: to its pickup point, then to the bank. */
+export type FaseSeguimiento = "HACIA_RECOGIDA" | "HACIA_BANCO";
+
+/**
+ * `GET /donaciones/:id/seguimiento` (API-06): the volunteer on the way to the donor's pickup
+ * and then to the bank, until delivery. It never names the route's other stops, only how
+ * many come first.
+ */
+export interface SeguimientoDonacionDto {
+  donacion_id: string;
+  estado_donacion: EstadoDonacion;
+  /** Inside the live window: the route is in progress and the donation not delivered yet. */
+  activo: boolean;
+  fase: FaseSeguimiento | null;
+  /** Only while `activo`: the private Realtime channel `ruta:<id>` the donor may listen to. */
+  ruta_id: string | null;
+  /** Open stops the volunteer visits before the donor's target (pickup or bank). */
+  paradas_antes: number;
+  recogida: Coordenada & { direccion: string };
+  banco: (Coordenada & { id: string; nombre: string; direccion: string }) | null;
+  /** The volunteer's last stored sample (`ultima_ubicacion`, at most 30 min old). */
+  voluntario_posicion: (Coordenada & { at: string; fuente: "ULTIMA_UBICACION" }) | null;
+  /** Path and arrival estimate to the target, only when it is the volunteer's next stop. */
+  tramo: NonNullable<SeguimientoDto["tramo"]> | null;
+}
+
 // --- Requests ----------------------------------------------------------------------------
 
 const donacionPath = (id: string) => `/donaciones/${encodeURIComponent(id)}`;
@@ -218,6 +245,13 @@ export function getHistorialDonacion(
   signal?: AbortSignal,
 ): Promise<HistorialEstadoDto[]> {
   return api.get<HistorialEstadoDto[]>(`${donacionPath(id)}/historial`, { signal });
+}
+
+export function getSeguimientoDonacion(
+  id: string,
+  signal?: AbortSignal,
+): Promise<SeguimientoDonacionDto> {
+  return api.get<SeguimientoDonacionDto>(`${donacionPath(id)}/seguimiento`, { signal });
 }
 
 export function crearDonacion(body: CrearDonacionBody): Promise<DonacionDetalleDto> {
@@ -262,6 +296,13 @@ export function historialDonacionQuery(id: string) {
   return queryOptions({
     queryKey: queryKeys.donaciones.historial(id),
     queryFn: ({ signal }) => getHistorialDonacion(id, signal),
+  });
+}
+
+export function seguimientoDonacionQuery(id: string) {
+  return queryOptions({
+    queryKey: queryKeys.donaciones.seguimiento(id),
+    queryFn: ({ signal }) => getSeguimientoDonacion(id, signal),
   });
 }
 

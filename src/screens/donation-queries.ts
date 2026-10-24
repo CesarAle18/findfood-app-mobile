@@ -5,8 +5,14 @@
  * any other mapping failure surfaces as the query's error (ErrorState) instead of crashing
  * the screen.
  */
-import { useInfiniteQuery, useQuery, type InfiniteData } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+} from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
+import { useEffect, useRef } from "react";
 
 import type { EstadoDonacion, Paged } from "@/api/types";
 import { fromIsoToBogota } from "@/domain/mappers/dates";
@@ -21,11 +27,13 @@ import {
   donacionQuery,
   getDonaciones,
   historialDonacionQuery,
+  seguimientoDonacionQuery,
   type DonacionDetalleDto,
   type DonacionResumenDto,
   type HistorialEstadoDto,
+  type SeguimientoDonacionDto,
 } from "@/services/donaciones";
-import { queryKeys } from "@/services/query-keys";
+import { invalidateKeys, queryKeys } from "@/services/query-keys";
 
 export const DONATIONS_PAGE_SIZE = 20;
 
@@ -261,4 +269,51 @@ export function useDonationHistory(id: string | undefined, refetchInterval: numb
     refetchInterval,
     refetchIntervalInBackground: false,
   });
+}
+
+/** States in which a volunteer holds the donation and may be on the way with it. */
+const LIVE_TRACKING_STATES: ReadonlySet<EstadoDonacion> = new Set<EstadoDonacion>([
+  "ASIGNADA",
+  "EN_RECOLECCION",
+  "EN_TRANSITO",
+]);
+
+export const hasLiveTracking = (estado: EstadoDonacion) => LIVE_TRACKING_STATES.has(estado);
+
+/** How often the live tracking is fetched again while the volunteer is on the way. */
+export const TRACKING_POLL_MS = 30_000;
+
+/** `refetchInterval` of the live tracking: poll only inside the live window. */
+export function pollWhileActive(query: {
+  state: { data?: Pick<SeguimientoDonacionDto, "activo"> };
+}): number | false {
+  return query.state.data?.activo ? TRACKING_POLL_MS : false;
+}
+
+/**
+ * `GET /donaciones/:id/seguimiento` while a volunteer holds the donation (`estado` is the
+ * detail's). It polls every 30 s inside the live window, only in the foreground. When the
+ * window closes (delivered) or the tracking reports a state the detail does not show yet
+ * (picked up), the detail and its history are refreshed, so the rest of Seguimiento follows.
+ */
+export function useDonationTracking(id: string | undefined, estado: EstadoDonacion | undefined) {
+  const client = useQueryClient();
+  const tracking = useQuery({
+    ...seguimientoDonacionQuery(id ?? ""),
+    enabled: Boolean(id) && estado !== undefined && hasLiveTracking(estado),
+    refetchInterval: pollWhileActive,
+    refetchIntervalInBackground: false,
+  });
+  const activo = tracking.data?.activo;
+  const estadoSeguido = tracking.data?.estado_donacion;
+  const wasActive = useRef(false);
+  useEffect(() => {
+    if (!id || activo === undefined) return;
+    const closed = wasActive.current && !activo;
+    wasActive.current = activo;
+    if (closed || estadoSeguido !== estado) {
+      invalidateKeys(client, [queryKeys.donaciones.detail(id), queryKeys.donaciones.historial(id)]);
+    }
+  }, [activo, estadoSeguido, estado, client, id]);
+  return tracking;
 }
