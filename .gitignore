@@ -41,3 +41,8 @@ example
 # generated native folders
 /ios
 /android
+
+# AI agent skills (local tooling, not part of the app)
+.agents/
+.claude/skills/
+skills-lock.json
