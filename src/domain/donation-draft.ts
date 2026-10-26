@@ -10,6 +10,7 @@ import {
   toPickupWindow,
 } from "@/domain/mappers/dates";
 import { MappingError } from "@/domain/mappers/errors";
+import { isInServiceArea } from "@/domain/mappers/geo";
 import {
   fromRequiereRefrigeracion,
   toRequiereRefrigeracion,
@@ -215,6 +216,10 @@ export function suggestDireccion(draft: DonationDraft, suggestion: string): Dona
 export const PICKUP_POINT_REQUIRED =
   "Ubica la dirección, usa tu ubicación o mueve el mapa para elegir el punto de recogida.";
 
+/** Shown when the pickup point lies outside Bogotá and its neighbouring municipalities. */
+export const PICKUP_POINT_OUTSIDE_AREA =
+  "El punto de recogida debe estar en Bogotá o un municipio vecino.";
+
 /** `items` bounds of `POST /donaciones`. */
 const MAX_PRODUCTS = 30;
 /** `cantidad` and `peso_estimado_kg` bounds of the API (2 decimals). */
@@ -341,7 +346,8 @@ function draftSchema(now: number) {
       ubicacionRecogida: z
         .object({ lat: z.number(), lng: z.number() })
         .nullable()
-        .refine((point) => point !== null, PICKUP_POINT_REQUIRED),
+        .refine((point) => point !== null, PICKUP_POINT_REQUIRED)
+        .refine((point) => point === null || isInServiceArea(point), PICKUP_POINT_OUTSIDE_AREA),
     })
     .superRefine((draft, ctx) => {
       if (!isDate(draft.pickupDate)) return;

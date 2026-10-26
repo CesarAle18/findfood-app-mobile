@@ -13,6 +13,7 @@ import { api } from "@/api";
 import { ApiError } from "@/api/errors";
 import {
   initialDonationDraft,
+  PICKUP_POINT_OUTSIDE_AREA,
   PICKUP_POINT_REQUIRED,
   type DonationDraft,
 } from "@/domain/donation-draft";
@@ -133,6 +134,18 @@ describe("NewDonationScreen", () => {
     ).toBeOnTheScreen();
   });
 
+  it("refuses a pickup point outside Bogotá's service area", async () => {
+    await renderScreen(NewDonationScreen, {
+      ...readyDraft,
+      ubicacionRecogida: { lat: 6.24, lng: -75.58 },
+    });
+
+    await fireEvent.press(await screen.findByText("Continuar"));
+
+    expect(screen.getByText(PICKUP_POINT_OUTSIDE_AREA)).toBeOnTheScreen();
+    expect(screen.queryByText("Revisión")).toBeNull();
+  });
+
   it("opens the review when the draft is valid", async () => {
     await renderScreen(NewDonationScreen, readyDraft);
 
@@ -146,7 +159,7 @@ describe("NewDonationScreen", () => {
     jest.spyOn(Location, "geocodeAsync").mockResolvedValue([{ latitude: 4.61, longitude: -74.07 }]);
     await renderScreen(NewDonationScreen, { ...readyDraft, ubicacionRecogida: null });
 
-    await fireEvent.press(await screen.findByText("Ubicar dirección"));
+    await fireEvent.press(await screen.findByRole("button", { name: "Ubicar dirección" }));
     expect(await screen.findByText(/Punto elegido/)).toBeOnTheScreen();
 
     await fireEvent.changeText(screen.getByDisplayValue("Cra 45 #12-30"), "Cra 45 #12-31");

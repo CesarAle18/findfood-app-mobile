@@ -9,6 +9,7 @@ import * as Location from "expo-location";
 
 import { ApiError } from "@/api/errors";
 import type { Coordenada } from "@/api/types";
+import { isInServiceArea } from "@/domain/mappers/geo";
 import { geocodificar, geocodificarInversa, isApproximate } from "@/services/geo";
 
 export interface GeocodedPoint {
@@ -39,11 +40,13 @@ export async function geocodeWithApi(
   }
 }
 
-/** The phone's geocoder. */
+/** The phone's geocoder. A match outside the service area counts as not found. */
 export async function geocodeAddress(direccion: string): Promise<Coordenada | null> {
   try {
     const [found] = await Location.geocodeAsync(addressQuery(direccion));
-    return found ? { lat: found.latitude, lng: found.longitude } : null;
+    if (!found) return null;
+    const point = { lat: found.latitude, lng: found.longitude };
+    return isInServiceArea(point) ? point : null;
   } catch {
     return null;
   }

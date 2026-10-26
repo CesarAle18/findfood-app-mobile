@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { router } from "expo-router";
 
 import { messageFor } from "@/api/problem-messages";
@@ -7,7 +7,11 @@ import { DateTimeField } from "@/components/findfood/date-time-field";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import { PhotoField } from "@/components/findfood/photo-field";
 import { Icon, type IconName } from "@/components/findfood/icon";
-import { LocationPicker } from "@/components/findfood/map";
+import {
+  canLocateAddress,
+  LocationPicker,
+  type LocationPickerHandle,
+} from "@/components/findfood/map";
 import {
   MotivoField,
   motivoBody,
@@ -114,6 +118,16 @@ export function NewDonationScreen() {
   const { data: unidades = NO_UNIDADES } = useUnidades();
   /** When the donor last tried to continue; errors show from then on. */
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
+  const picker = useRef<LocationPickerHandle>(null);
+  const [locating, setLocating] = useState(false);
+  const locateAddress = async () => {
+    setLocating(true);
+    try {
+      await picker.current?.locateAddress();
+    } finally {
+      setLocating(false);
+    }
+  };
   const errors = checkedAt === null ? null : validateDraft(draft, checkedAt);
   const productError = (id: number, field: Parameters<typeof productErrorKey>[1]) =>
     errors?.[productErrorKey(id, field)];
@@ -295,6 +309,16 @@ export function NewDonationScreen() {
           maxLength={255}
           onChangeText={(direccion) => setDraft((current) => setDireccion(current, direccion))}
           error={errors?.direccion}
+          action={
+            canLocateAddress
+              ? {
+                  icon: "search",
+                  label: "Ubicar dirección",
+                  onPress: () => void locateAddress(),
+                  loading: locating,
+                }
+              : undefined
+          }
         />
         <Field
           label="Referencia (opcional)"
@@ -306,6 +330,7 @@ export function NewDonationScreen() {
           }
         />
         <LocationPicker
+          ref={picker}
           value={draft.ubicacionRecogida}
           address={draft.direccion}
           onAddressChosen={(direccion) =>

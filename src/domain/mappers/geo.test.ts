@@ -3,6 +3,7 @@ import {
   formatCoordenada,
   formatGeocodedAddress,
   fromLatLng,
+  isInServiceArea,
   lineStringToLatLngs,
   regionForPoints,
   toLatLng,
@@ -106,5 +107,24 @@ describe("formatGeocodedAddress", () => {
 describe("formatCoordenada", () => {
   it("shows a point with 5 decimals (about a metre)", () => {
     expect(formatCoordenada({ lat: 4.65, lng: -74.061234 })).toBe("4.65000, -74.06123");
+  });
+});
+
+describe("isInServiceArea", () => {
+  it("accepts Bogotá and its neighbouring municipalities", () => {
+    expect(isInServiceArea({ lat: 4.65, lng: -74.06 })).toBe(true); // Bogotá
+    expect(isInServiceArea({ lat: 4.86, lng: -74.05 })).toBe(true); // Chía
+    expect(isInServiceArea({ lat: 4.58, lng: -74.22 })).toBe(true); // Soacha
+  });
+
+  it("refuses other cities", () => {
+    expect(isInServiceArea({ lat: 6.24, lng: -75.58 })).toBe(false); // Medellín
+    expect(isInServiceArea({ lat: 4.3, lng: -74.8 })).toBe(false); // Girardot
+  });
+
+  it("includes the edges of the area", () => {
+    expect(isInServiceArea({ lat: 4.44, lng: -74.3 })).toBe(true);
+    expect(isInServiceArea({ lat: 5.0, lng: -73.95 })).toBe(true);
+    expect(isInServiceArea({ lat: 5.0001, lng: -74.0 })).toBe(false);
   });
 });

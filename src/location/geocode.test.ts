@@ -53,6 +53,12 @@ describe("geocodeAddress", () => {
     geocode.mockRejectedValue(new Error("geocoder unavailable"));
     await expect(geocodeAddress("Cra 45 #12-30")).resolves.toBeNull();
   });
+
+  it("answers null when the match is outside Bogotá's service area", async () => {
+    jest.spyOn(Location, "geocodeAsync").mockResolvedValue([{ latitude: 6.24, longitude: -75.58 }]);
+
+    await expect(geocodeAddress("Cra 45 #12-30")).resolves.toBeNull();
+  });
 });
 
 describe("geocodeWithApi", () => {

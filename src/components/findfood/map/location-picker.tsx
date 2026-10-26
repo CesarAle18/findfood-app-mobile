@@ -1,6 +1,6 @@
 import { randomUUID } from "expo-crypto";
 import * as Location from "expo-location";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import type MapView from "react-native-maps";
 import type { Details, Region } from "react-native-maps";
@@ -34,22 +34,22 @@ import { Icon } from "../icon";
 import { PermissionNotice } from "../permission-notice";
 import { Button, Card, Copy, Stack } from "../ui";
 import { FindFoodMap } from "./find-food-map";
-import { Circle } from "./maps";
+import { Circle, Marker } from "./maps";
 
-const PIN_SIZE = 40;
 /** Pause in typing before asking for suggestions. */
 export const AUTOCOMPLETE_DELAY_MS = 300;
 /** Pause after the last map move before suggesting its address: each lookup is billed. */
 export const REVERSE_GEOCODE_DELAY_MS = 800;
 const MAX_SUGGESTIONS = 5;
 const NOT_FOUND =
-  "No pudimos ubicar esa dirección. Revísala, usa tu ubicación o mueve el mapa hasta tu punto de recogida.";
+  "No pudimos ubicar esa dirección en Bogotá o sus municipios vecinos. Revísala, usa tu ubicación o mueve el mapa hasta tu punto de recogida.";
 export const APPROXIMATE_NOTICE =
   "Ubicamos la zona, no la puerta exacta. Mueve el mapa hasta el punto de recogida.";
 
 /**
- * Center-pin picker: the donor moves the map under a fixed pin. The region lives in a ref
- * (no render per frame) and the point is emitted once a move ends. "Usar mi ubicación"
+ * Center-pin picker: the donor moves the map and Google's native marker follows its center.
+ * The region lives in a ref, the marker in state (it re-renders while the map moves), and the
+ * point is emitted once a move ends. "Usar mi ubicación"
  * centers the map on the device's position. The emitted point is always the pin: a lookup
  * only moves the map, and an approximate one asks to adjust it, since that point decides
  * which volunteers the hard filters keep.
@@ -57,7 +57,8 @@ export const APPROXIMATE_NOTICE =
  * `onAddressSuggestion` reverse-geocodes the chosen point; pass it only while the address
  * field is empty, and apply it without overwriting typed text (`suggestDireccion`).
  *
- * With `address`, "Ubicar dirección" locates that text: Google through the API first, the
+ * With `address`, `ref.locateAddress()` locates that text (the screen draws the search button
+ * next to its address field, see `canLocateAddress`): Google through the API first, the
  * phone geocoder when the API cannot search (not on web, which has none). A failed lookup
  * only explains itself: it never emits a guessed point. `onChange` says where each point
  * came from. With `onAddressChosen` too, typing the address lists Google suggestions;
@@ -65,7 +66,16 @@ export const APPROXIMATE_NOTICE =
  *
  * `coverageKm` draws the volunteer's coverage radius around the point.
  */
+export type LocationPickerHandle = {
+  /** Locates `address` and moves the pin there; resolves once the lookup ends. */
+  locateAddress: () => Promise<void>;
+};
+
+/** Whether `locateAddress` can search here: web has no geocoder. */
+export const canLocateAddress = Platform.OS !== "web";
+
 export function LocationPicker({
+  ref,
   value,
   onChange,
   onAddressSuggestion,
@@ -74,10 +84,11 @@ export function LocationPicker({
   coverageKm,
   height = 260,
 }: {
+  ref?: Ref<LocationPickerHandle>;
   value: Coordenada | null;
   onChange: (point: Coordenada, source: PickupPointSource) => void;
   onAddressSuggestion?: (address: string) => void;
-  /** The typed address "Ubicar dirección" locates; the button is hidden without it. */
+  /** The typed address `locateAddress` looks up; it does nothing without it. */
   address?: string;
   /** Receives the address of a picked suggestion; suggestions are hidden without it. */
   onAddressChosen?: (address: string) => void;
@@ -88,8 +99,8 @@ export function LocationPicker({
   // Read once: later moves update the ref, never the map's props.
   const [initialRegion] = useState(() => regionForPoints(value ? [toLatLng(value)] : []));
   const regionRef = useRef<Region>(initialRegion);
+  const [pin, setPin] = useState<LatLng>(() => centerOf(initialRegion));
   const [locating, setLocating] = useState(false);
-  const [geocoding, setGeocoding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const { gate, request } = usePermissionGate(Location.useForegroundPermissions);
@@ -103,7 +114,7 @@ export function LocationPicker({
   // Off for the rest of the visit once the API says it cannot search.
   const [autocomplete, setAutocomplete] = useState(true);
 
-  const canGeocode = address !== undefined && Platform.OS !== "web";
+  const canGeocode = address !== undefined && canLocateAddress;
   const query = address?.trim() ?? "";
   const searchable = canGeocode && onAddressChosen !== undefined && autocomplete;
 
@@ -166,8 +177,11 @@ export function LocationPicker({
     mapRef.current?.animateToRegion(region, 400);
   };
 
+  const onRegionChange = (region: Region) => setPin(centerOf(region));
+
   const onRegionChangeComplete = (region: Region, details?: Details) => {
     regionRef.current = region;
+    setPin(centerOf(region));
     // Google Maps reports the initial layout and our own animations as non-gestures; the
     // donor only chose a point when they moved the map (or used their location below).
     if (details?.isGesture === false) return;
@@ -204,35 +218,33 @@ export function LocationPicker({
   };
 
   const locateAddress = async () => {
+    if (!canGeocode) return;
     setError(null);
     setNotice(null);
     if (!query) {
       setError("Escribe la dirección de recogida para ubicarla.");
       return;
     }
-    setGeocoding(true);
-    try {
-      let located: GeocodedPoint | null | undefined = await geocodeWithApi(query);
-      if (located === undefined) {
-        // The phone geocoder answers instead; on Android it needs the location permission.
-        if (Platform.OS === "android" && gate !== "granted" && (await request()) !== "granted") {
-          setError("Permite el acceso a tu ubicación para ubicar la dirección, o mueve el mapa.");
-          return;
-        }
-        const point = await geocodeAddress(query);
-        located = point ? { point, approximate: false } : null;
-      }
-      if (!located) {
-        setError(NOT_FOUND);
+    let located: GeocodedPoint | null | undefined = await geocodeWithApi(query);
+    if (located === undefined) {
+      // The phone geocoder answers instead; on Android it needs the location permission.
+      if (Platform.OS === "android" && gate !== "granted" && (await request()) !== "granted") {
+        setError("Permite el acceso a tu ubicación para ubicar la dirección, o mueve el mapa.");
         return;
       }
-      moveTo(located.point);
-      onChange(located.point, "address");
-      if (located.approximate) setNotice(APPROXIMATE_NOTICE);
-    } finally {
-      setGeocoding(false);
+      const point = await geocodeAddress(query);
+      located = point ? { point, approximate: false } : null;
     }
+    if (!located) {
+      setError(NOT_FOUND);
+      return;
+    }
+    moveTo(located.point);
+    onChange(located.point, "address");
+    if (located.approximate) setNotice(APPROXIMATE_NOTICE);
   };
+
+  useImperativeHandle(ref, () => ({ locateAddress }));
 
   const choose = async (suggestion: SugerenciaDto) => {
     setError(null);
@@ -240,7 +252,6 @@ export function LocationPicker({
     // Picking closes the billing session; the next search starts another one.
     const sesion = sessionRef.current ?? randomUUID();
     sessionRef.current = null;
-    setGeocoding(true);
     try {
       const lugar = await getLugar(suggestion.place_id, sesion);
       setChosen(lugar.direccion.trim());
@@ -250,8 +261,6 @@ export function LocationPicker({
       onChange(lugar.ubicacion, "address");
     } catch {
       setError(NOT_FOUND);
-    } finally {
-      setGeocoding(false);
     }
   };
 
@@ -282,6 +291,7 @@ export function LocationPicker({
           testID="location-picker-map"
           height={height}
           initialRegion={initialRegion}
+          onRegionChange={onRegionChange}
           onRegionChangeComplete={onRegionChangeComplete}
           showsUserLocation={gate === "granted"}
           showsMyLocationButton={false}
@@ -296,19 +306,10 @@ export function LocationPicker({
               fillColor="rgba(31, 122, 90, 0.12)"
             />
           ) : null}
+          <Marker testID="location-picker-pin" coordinate={pin} />
         </FindFoodMap>
-        <View style={styles.pinLayer} pointerEvents="none">
-          <View style={styles.pin}>
-            <Icon name="pin" size={PIN_SIZE} />
-          </View>
-        </View>
       </View>
       {notice ? <Copy tone="secondary">{notice}</Copy> : null}
-      {canGeocode ? (
-        <Button variant="outline" icon="search" loading={geocoding} onPress={locateAddress}>
-          Ubicar dirección
-        </Button>
-      ) : null}
       <Button variant="outline" icon="pin" loading={locating} onPress={locateMe}>
         Usar mi ubicación
       </Button>
@@ -326,17 +327,10 @@ export function LocationPicker({
 }
 
 const styles = StyleSheet.create({
-  pinLayer: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  // The pin's tip, not its middle, marks the center.
-  pin: { transform: [{ translateY: -PIN_SIZE / 2 }] },
   suggestions: { paddingVertical: 4, gap: 0 },
   suggestion: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10 },
 });
+
+function centerOf(region: Region): LatLng {
+  return { latitude: region.latitude, longitude: region.longitude };
+}

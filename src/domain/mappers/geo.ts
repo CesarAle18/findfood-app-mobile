@@ -23,6 +23,22 @@ export interface LineStringGeometry {
 
 /** Plaza de Bolívar: where maps open when there is nothing to show yet. */
 export const BOGOTA_CENTER: LatLng = { latitude: 4.5981, longitude: -74.0761 };
+/**
+ * Where FindFood works: Bogotá and its neighbouring municipalities (Soacha, Chía, Cota,
+ * Funza, Mosquera, La Calera…). Must match findfood-api's `ZONA_SERVICIO`.
+ */
+export const SERVICE_AREA = { south: 4.44, north: 5.0, west: -74.3, east: -73.95 } as const;
+
+/** Whether a point lies inside `SERVICE_AREA` (edges included). */
+export function isInServiceArea({ lat, lng }: Coordenada): boolean {
+  return (
+    lat >= SERVICE_AREA.south &&
+    lat <= SERVICE_AREA.north &&
+    lng >= SERVICE_AREA.west &&
+    lng <= SERVICE_AREA.east
+  );
+}
+
 /** Roughly a neighbourhood: close enough to place a pickup pin. */
 const MIN_DELTA = 0.01;
 /** Roughly the city, for the fallback region. */

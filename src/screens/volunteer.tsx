@@ -306,16 +306,15 @@ function VolunteerRequestFormView({ onSent }: { onSent: () => void }) {
             selected={values.tiene_refrigeracion ? 0 : 1}
             onChange={(index) => form.setValue("tiene_refrigeracion", index === 0)}
           />
-          <Section title="Foto vehículo *">
-            <PhotoField
-              label="Vehículo"
-              mode="file"
-              proposito="VEHICULO"
-              compact
-              onUploaded={setPhoto("url_foto_vehiculo")}
-            />
-            <FormMessage message={errors.url_foto_vehiculo} />
-          </Section>
+          <PhotoField
+            label="Foto del vehículo *"
+            mode="file"
+            proposito="VEHICULO"
+            compact
+            showLabel
+            onUploaded={setPhoto("url_foto_vehiculo")}
+          />
+          <FormMessage message={errors.url_foto_vehiculo} />
         </Stack>
       </Section>
       <Section title="Datos personales">
@@ -369,19 +368,21 @@ function VolunteerRequestFormView({ onSent }: { onSent: () => void }) {
           <Row style={{ alignItems: "flex-start" }}>
             <View style={{ flex: 1 }}>
               <PhotoField
-                label="Documento (frente) *"
+                label="Foto del documento (frente) *"
                 mode="file"
                 proposito="DOCUMENTO_IDENTIDAD"
                 compact
+                showLabel
                 onUploaded={setPhoto("documento_frente")}
               />
             </View>
             <View style={{ flex: 1 }}>
               <PhotoField
-                label="Documento (reverso)"
+                label="Foto del documento (reverso)"
                 mode="file"
                 proposito="DOCUMENTO_IDENTIDAD"
                 compact
+                showLabel
                 onUploaded={setPhoto("documento_reverso")}
               />
             </View>
@@ -392,6 +393,7 @@ function VolunteerRequestFormView({ onSent }: { onSent: () => void }) {
             mode="file"
             proposito="DOCUMENTO_IDENTIDAD"
             compact
+            showLabel
             onUploaded={setPhoto("selfie")}
           />
           <FormMessage message={errors.selfie} />

@@ -10,6 +10,7 @@ import { z } from "zod";
 
 import type { Coordenada } from "@/api/types";
 import { parseDate, todayInBogota, toFechaVencimiento } from "@/domain/mappers/dates";
+import { isInServiceArea } from "@/domain/mappers/geo";
 import type { SolicitudVoluntarioBody } from "@/services/perfil";
 
 export type VolunteerRequestForm = {
@@ -134,10 +135,12 @@ export function volunteerRequestSchema(now: number) {
         .transform(toFechaVencimiento),
       es_grupo: z.boolean(),
       organizacion: z.string().trim(),
-      ubicacion_base: z.custom<Coordenada>(
-        (value) => value !== null && typeof value === "object",
-        "Elige tu ubicación base en el mapa.",
-      ),
+      ubicacion_base: z
+        .custom<Coordenada>(
+          (value) => value !== null && typeof value === "object",
+          "Elige tu ubicación base en el mapa.",
+        )
+        .refine(isInServiceArea, "Tu punto base debe estar en Bogotá o un municipio vecino."),
       radio_cobertura_km: optionalNumber(1, 100, "El radio debe estar entre 1 y 100 km."),
       documento_frente: photo("Sube la foto del frente de tu documento."),
       documento_reverso: optionalPhoto,
