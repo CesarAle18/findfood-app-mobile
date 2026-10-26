@@ -56,6 +56,14 @@ afterEach(() => {
 });
 
 describe("PhotoField", () => {
+  it("names the field on screen only when asked to", async () => {
+    await renderField({ label: "Foto del documento (frente) *", showLabel: true });
+    expect(screen.getByText("Foto del documento (frente) *")).toBeOnTheScreen();
+
+    await renderField({ label: "Foto del documento (reverso) *" });
+    expect(screen.queryByText("Foto del documento (reverso) *")).toBeNull();
+  });
+
   it("explains how to enable the camera once the OS stops asking", async () => {
     const blocked = permission(false, false);
     jest.mocked(ImagePicker.useCameraPermissions).mockImplementation(() => [

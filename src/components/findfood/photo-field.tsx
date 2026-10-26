@@ -38,6 +38,8 @@ export interface PhotoFieldProps {
   disabled?: boolean;
   /** Shorter empty state, for side-by-side fields. */
   compact?: boolean;
+  /** Shows `label` above the field, for fields not already named by their section. */
+  showLabel?: boolean;
 }
 
 /** The upload result plus the picked file on the device, to show it elsewhere. */
@@ -57,6 +59,7 @@ export function PhotoField({
   onUploadedFile,
   disabled = false,
   compact = false,
+  showLabel = false,
 }: PhotoFieldProps) {
   const target: EvidenceTarget =
     mode === "evidence" && tipo && padre ? { proposito, registro: { tipo, padre } } : { proposito };
@@ -85,6 +88,11 @@ export function PhotoField({
 
   return (
     <Stack gap={8}>
+      {showLabel ? (
+        <Copy weight="medium" style={{ fontSize: 12 }}>
+          {label}
+        </Copy>
+      ) : null}
       {pending ? (
         <Row>
           <Image

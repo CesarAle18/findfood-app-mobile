@@ -127,8 +127,8 @@ async function fillRequired() {
   await type("Fecha de nacimiento *", "12/04/1995");
   await act(async () => fireEvent.press(screen.getByRole("radio", { name: "Sí, dispone" })));
   await press("Elegir ubicación");
-  await press("Subir Vehículo");
-  await press("Subir Documento (frente) *");
+  await press("Subir Foto del vehículo *");
+  await press("Subir Foto del documento (frente) *");
 }
 
 beforeEach(() => {
@@ -171,13 +171,13 @@ describe("VolunteerRegistrationScreen", () => {
         body: {
           tipo_vehiculo_id: 32,
           placa_vehiculo: "ABC123",
-          url_foto_vehiculo: "VEHICULO/Vehículo.jpg",
+          url_foto_vehiculo: "VEHICULO/Foto.jpg",
           capacidad_carga_kg: 800,
           tiene_refrigeracion: true,
           fecha_nacimiento: "1995-04-12",
           es_grupo: false,
           ubicacion_base: { lat: 4.65, lng: -74.06 },
-          documento_frente: "DOCUMENTO_IDENTIDAD/Documento.jpg",
+          documento_frente: "DOCUMENTO_IDENTIDAD/Foto.jpg",
         },
       }),
     );
