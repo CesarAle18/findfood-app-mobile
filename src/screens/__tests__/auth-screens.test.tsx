@@ -91,7 +91,7 @@ const type = (label: string, text: string) => fireEvent.changeText(screen.getByL
 const press = (name: string) => fireEvent.press(screen.getByRole("button", { name }));
 
 const NEUTRAL_NOTE =
-  "Si el correo es nuevo, te enviamos un código. Si ya tienes cuenta, inicia sesión o recupera tu contraseña.";
+  "Si el correo es nuevo, te enviamos un código. Si ya tienes cuenta, inicia sesión.";
 
 beforeEach(() => {
   mockSession = { status: "none" };
@@ -403,12 +403,11 @@ describe("VerifyEmailScreen", () => {
     expect(pathname()).toBe("/login");
   });
 
-  it("links a sign-up to login and password recovery in its neutral note", async () => {
+  it("shows a sign-up only the login link in its neutral note", async () => {
     await renderAt(signUpUrl);
 
     expect(screen.getByText(NEUTRAL_NOTE)).toBeOnTheScreen();
-    await fireEvent.press(screen.getByText("Recuperar contraseña"));
-    expect(await screen.findByText("route:recuperar-contrasena")).toBeOnTheScreen();
+    expect(screen.queryByText("Recuperar contraseña")).not.toBeOnTheScreen();
   });
 
   it("links the neutral note to login", async () => {

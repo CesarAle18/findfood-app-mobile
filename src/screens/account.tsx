@@ -453,17 +453,11 @@ function SignUpNote() {
   return (
     <Card soft>
       <Copy tone="secondary" style={{ fontSize: 12 }}>
-        Si el correo es nuevo, te enviamos un código. Si ya tienes cuenta, inicia sesión o
-        recupera tu contraseña.
+        Si el correo es nuevo, te enviamos un código. Si ya tienes cuenta, inicia sesión.
       </Copy>
-      <Row style={{ justifyContent: "space-between" }}>
-        <TextLink href="/login" align="left">
-          Iniciar sesión
-        </TextLink>
-        <TextLink href="/recuperar-contrasena" align="right">
-          Recuperar contraseña
-        </TextLink>
-      </Row>
+      <TextLink href="/login" align="left">
+        Iniciar sesión
+      </TextLink>
     </Card>
   );
 }

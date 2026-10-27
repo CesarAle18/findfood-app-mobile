@@ -575,7 +575,7 @@ try {
   routeParams = { email: "maria@correo.com", origen: "registro" };
   const signUpVerifyHtml = renderToStaticMarkup(React.createElement(VerifyEmailScreen));
   assert(signUpVerifyHtml.includes("Si el correo es nuevo, te enviamos un código."));
-  assert(signUpVerifyHtml.includes('href="/recuperar-contrasena"'));
+  assert(!signUpVerifyHtml.includes('href="/recuperar-contrasena"'));
   // Supabase just sent the sign-up code: the cooldown runs from the start.
   assert(signUpVerifyHtml.includes("Reenviar código en 01:00"));
   routeParams = { email: "maria@correo.com", enviar: "1" };
