@@ -67,6 +67,7 @@ const DONATION_MESSAGES = {
 const ASSIGNMENT_MESSAGES = {
   "oferta-vencida": "Esta oferta ya venció.",
   "oferta-ya-respondida": "Ya respondiste a esta oferta.",
+  "oferta-tomada": "Otro voluntario ya aceptó esta donación.",
   "donacion-no-disponible": "Esta donación ya no está disponible.",
   "asignacion-no-aceptada": "La asignación todavía no ha sido aceptada.",
   "asignacion-no-completada": "La asignación todavía no se ha completado.",

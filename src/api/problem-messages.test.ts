@@ -64,6 +64,7 @@ const PROBLEM_TYPES = [
   // Assignment.
   "oferta-vencida",
   "oferta-ya-respondida",
+  "oferta-tomada",
   "donacion-no-disponible",
   "asignacion-no-aceptada",
   "asignacion-no-completada",
