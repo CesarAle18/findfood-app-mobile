@@ -206,6 +206,9 @@ function VolunteerProfile({ me }: { me: MeDto }) {
       <Section title="Información de voluntario">
         <Details
           rows={[
+            ["Nombres", me.nombres ?? "Sin registrar"],
+            ["Apellidos", me.apellidos ?? "Sin registrar"],
+            ["Celular", profileFromMe(me).phone],
             ["Vehículo", voluntario.tipo_vehiculo.nombre],
             ["Placa", voluntario.placa_vehiculo],
             ["Capacidad", formatKg(voluntario.capacidad_carga_kg)],

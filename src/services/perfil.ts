@@ -23,6 +23,18 @@ export type ActualizarPerfilBody = {
   acepto_terminos?: true;
 };
 
+/**
+ * `PATCH /voluntario/perfil`: at least one field. Vehicle type, plate and capacity cannot
+ * change here (400).
+ */
+export type ActualizarPerfilVoluntarioBody = {
+  tiene_refrigeracion?: boolean;
+  /** Inside Bogotá or a neighbouring municipality. */
+  ubicacion_base?: Coordenada;
+  /** 1–100. */
+  radio_cobertura_km?: number;
+};
+
 export interface ImpactoDonanteDto {
   id: string;
   total_donaciones: number;
@@ -115,6 +127,11 @@ export function actualizarPerfil(body: ActualizarPerfilBody): Promise<MeDto> {
   return api.patch<MeDto>("/me", { body });
 }
 
+/** Cold chain and operation zone of the volunteer; answers the updated `GET /me` too. */
+export function actualizarPerfilVoluntario(body: ActualizarPerfilVoluntarioBody): Promise<MeDto> {
+  return api.patch<MeDto>("/voluntario/perfil", { body });
+}
+
 /**
  * Registers this install for push and stores its id, so sign-out can unregister it. If the
  * id cannot be stored the registration is deleted again and the error surfaces, so a later
@@ -178,6 +195,8 @@ export function useImpacto() {
 const invalidates = {
   /** Name, phone, terms and the pending steps they clear. */
   actualizarPerfil: () => [queryKeys.me],
+  /** `me.voluntario` cold chain, base point and radius. */
+  actualizarPerfilVoluntario: () => [queryKeys.me],
   /** `me.voluntario` appears with its verification PENDIENTE. */
   solicitarVoluntario: () => [queryKeys.me],
   /** `me.voluntario.disponibilidad` (and `disponible` turns off with no windows). */
@@ -195,6 +214,13 @@ export function useActualizarPerfilMutation() {
   return useMutation({
     mutationFn: actualizarPerfil,
     onSuccess: invalidateOnSuccess(invalidates.actualizarPerfil),
+  });
+}
+
+export function useActualizarPerfilVoluntarioMutation() {
+  return useMutation({
+    mutationFn: actualizarPerfilVoluntario,
+    onSuccess: invalidateOnSuccess(invalidates.actualizarPerfilVoluntario),
   });
 }
 

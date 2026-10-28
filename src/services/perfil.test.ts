@@ -12,6 +12,7 @@ import { mutationCase, renderWithClient } from "@/test-utils/query";
 import {
   actualizarDisponibilidad,
   actualizarPerfil,
+  actualizarPerfilVoluntario,
   cambiarDisponible,
   eliminarDispositivo,
   getImpacto,
@@ -20,6 +21,7 @@ import {
   solicitarVoluntario,
   useActualizarDisponibilidadMutation,
   useActualizarPerfilMutation,
+  useActualizarPerfilVoluntarioMutation,
   useCambiarDisponibleMutation,
   useEliminarDispositivoMutation,
   useImpacto,
@@ -92,6 +94,15 @@ describe("requests", () => {
         method: "patch",
         path: "/me",
         options: { body: { telefono: "3001234567", acepto_terminos: true } },
+      },
+    ],
+    [
+      "actualizarPerfilVoluntario",
+      () => actualizarPerfilVoluntario({ tiene_refrigeracion: false, radio_cobertura_km: 25 }),
+      {
+        method: "patch",
+        path: "/voluntario/perfil",
+        options: { body: { tiene_refrigeracion: false, radio_cobertura_km: 25 } },
       },
     ],
     [
@@ -209,6 +220,12 @@ describe("mutations invalidate exactly the queries they change", () => {
 
   it.each([
     mutationCase("PATCH /me", useActualizarPerfilMutation, { nombres: "Ana" }, [queryKeys.me]),
+    mutationCase(
+      "PATCH /voluntario/perfil",
+      useActualizarPerfilVoluntarioMutation,
+      { radio_cobertura_km: 25 },
+      [queryKeys.me],
+    ),
     mutationCase("POST /voluntario/solicitud", useSolicitarVoluntarioMutation, solicitud, [
       queryKeys.me,
     ]),

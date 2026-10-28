@@ -6,6 +6,8 @@
  */
 import { z } from "zod";
 
+import { coverageRadiusKm, optionalBaseLocation } from "@/domain/volunteer-request";
+
 const email = z
   .string()
   .trim()
@@ -123,6 +125,19 @@ export function completeProfileSchema(termsPending: boolean) {
 export const editProfileSchema = z.object({ nombres, apellidos, telefono });
 
 export type EditProfileData = z.output<typeof editProfileSchema>;
+
+/**
+ * The volunteer view of the profile editor: the contact fields (`PATCH /me`) plus cold chain
+ * and operation zone (`PATCH /voluntario/perfil`), with the request form's rules. Field names
+ * match both bodies, so API field errors land on them.
+ */
+export const editVolunteerProfileSchema = editProfileSchema.extend({
+  tiene_refrigeracion: z.boolean(),
+  ubicacion_base: optionalBaseLocation,
+  radio_cobertura_km: coverageRadiusKm,
+});
+
+export type EditVolunteerProfileData = z.output<typeof editVolunteerProfileSchema>;
 
 export type CompleteProfileData = z.output<ReturnType<typeof completeProfileSchema>>;
 
