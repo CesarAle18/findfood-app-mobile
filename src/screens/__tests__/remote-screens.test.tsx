@@ -408,6 +408,20 @@ describe("ProfileScreen", () => {
     expect(await screen.findByText("1200 kg")).toBeOnTheScreen();
   });
 
+  it("shows the volunteer's names and phone with the volunteer information", async () => {
+    answerGets({ "/me/impacto": impactoFixture() });
+
+    await renderScreen(() => <ProfileScreen volunteer />);
+
+    expect(screen.getByText("Nombres")).toBeOnTheScreen();
+    expect(screen.getByText("María")).toBeOnTheScreen();
+    expect(screen.getByText("Apellidos")).toBeOnTheScreen();
+    expect(screen.getByText("García López")).toBeOnTheScreen();
+    expect(screen.getByText("Celular")).toBeOnTheScreen();
+    expect(screen.getByText("+573001234567")).toBeOnTheScreen();
+    await screen.findByText("1200 kg");
+  });
+
   it("explains a failed account load and retries it", async () => {
     mockMe.data = undefined;
     mockMe.error = ApiError.network(new TypeError("Network request failed"));

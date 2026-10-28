@@ -2,8 +2,9 @@
  * `GET /me` and `GET /me/impacto` → the display strings of the profile and account screens.
  * Numbers use a decimal comma; no Intl formatter is needed (Hermes support varies).
  */
-import type { FranjaDto, MeDto } from "@/api/types";
+import type { Coordenada, FranjaDto, MeDto, MeVoluntarioDto } from "@/api/types";
 import { normalizeColombianMobile } from "@/domain/validation/auth";
+import type { ActualizarPerfilVoluntarioBody } from "@/services/perfil";
 
 export interface ProfileView {
   /** Given names and surnames, or the email while the profile has no names. */
@@ -82,5 +83,35 @@ export function profileChanges(
   if (data.apellidos !== (me.apellidos ?? "")) body.apellidos = data.apellidos;
   const currentPhone = me.telefono === null ? null : normalizeColombianMobile(me.telefono);
   if (data.telefono !== currentPhone) body.telefono = data.telefono;
+  return body;
+}
+
+/** The volunteer editor's validated cold chain and operation zone. */
+export interface VolunteerProfileValues {
+  tiene_refrigeracion: boolean;
+  ubicacion_base: Coordenada | null;
+  radio_cobertura_km: number;
+}
+
+/**
+ * The `PATCH /voluntario/perfil` body of the volunteer editor: only what differs from the
+ * account. An unset base point is never sent (it is only unset when the account has none).
+ */
+export function volunteerProfileChanges(
+  voluntario: Pick<MeVoluntarioDto, "tiene_refrigeracion" | "ubicacion_base" | "radio_cobertura_km">,
+  data: VolunteerProfileValues,
+): ActualizarPerfilVoluntarioBody {
+  const body: ActualizarPerfilVoluntarioBody = {};
+  if (data.tiene_refrigeracion !== voluntario.tiene_refrigeracion) {
+    body.tiene_refrigeracion = data.tiene_refrigeracion;
+  }
+  const base = voluntario.ubicacion_base;
+  const point = data.ubicacion_base;
+  if (point && (!base || point.lat !== base.lat || point.lng !== base.lng)) {
+    body.ubicacion_base = point;
+  }
+  if (data.radio_cobertura_km !== voluntario.radio_cobertura_km) {
+    body.radio_cobertura_km = data.radio_cobertura_km;
+  }
   return body;
 }

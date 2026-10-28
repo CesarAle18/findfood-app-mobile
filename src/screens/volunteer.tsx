@@ -7,7 +7,8 @@ import type { EstadoProducto, MeVoluntarioDto, VerificacionVoluntarioDto } from 
 import { CallButton } from "@/components/findfood/call-button";
 import { Countdown } from "@/components/findfood/countdown";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
-import { LocationPicker, PointMap } from "@/components/findfood/map";
+import { PointMap } from "@/components/findfood/map";
+import { ColdChainChoice, OperationZoneFields } from "@/components/findfood/volunteer-zone";
 import { PhotoField } from "@/components/findfood/photo-field";
 import {
   MotivoField,
@@ -213,20 +214,10 @@ function onPhotoField(error: unknown): unknown {
   });
 }
 
-const REFRIGERATION = ["Sí, dispone", "No dispone"];
 const GROUP = ["A título personal", "Con una organización"];
-/** What the API stores when the field is left empty (`radio_cobertura_km = 10`). */
-const DEFAULT_COVERAGE_KM = 10;
 
-/**
- * The radius the map draws: the API only offers donations inside it (hard filter). None
- * while the typed value is out of range, so the map never shows a radius it would reject.
- */
-export function coverageKm(typed: string): number | undefined {
-  if (!typed.trim()) return DEFAULT_COVERAGE_KM;
-  const km = Number(typed.replace(",", "."));
-  return Number.isFinite(km) && km >= 1 && km <= 100 ? km : undefined;
-}
+// The zone fields moved to a shared component; the radius helper stays importable from here.
+export { coverageKm } from "@/components/findfood/volunteer-zone";
 
 function VolunteerRequestFormView({ onSent }: { onSent: () => void }) {
   // Read once: the age is checked against the day the form was opened.
@@ -298,13 +289,9 @@ function VolunteerRequestFormView({ onSent }: { onSent: () => void }) {
               />
             </View>
           </Row>
-          <Copy weight="medium" style={{ fontSize: 12 }}>
-            Cadena de frío
-          </Copy>
-          <Choices
-            values={REFRIGERATION}
-            selected={values.tiene_refrigeracion ? 0 : 1}
-            onChange={(index) => form.setValue("tiene_refrigeracion", index === 0)}
+          <ColdChainChoice
+            value={values.tiene_refrigeracion}
+            onChange={(value) => form.setValue("tiene_refrigeracion", value)}
           />
           <PhotoField
             label="Foto del vehículo *"
@@ -348,18 +335,11 @@ function VolunteerRequestFormView({ onSent }: { onSent: () => void }) {
       </Section>
       <Section title="Zona de cobertura">
         <Stack>
-          <Copy tone="secondary">Mueve el mapa hasta el punto desde el que sueles salir.</Copy>
-          <LocationPicker
-            value={values.ubicacion_base}
-            onChange={(point) => form.setValue("ubicacion_base", point)}
-            coverageKm={coverageKm(values.radio_cobertura_km)}
-          />
-          <FormMessage message={errors.ubicacion_base} />
-          <Field
-            label="Radio de cobertura (km)"
-            {...form.field("radio_cobertura_km")}
-            placeholder="10"
-            keyboardType="decimal-pad"
+          <OperationZoneFields
+            location={values.ubicacion_base}
+            onLocationChange={(point) => form.setValue("ubicacion_base", point)}
+            locationError={errors.ubicacion_base}
+            radius={form.field("radio_cobertura_km")}
           />
         </Stack>
       </Section>

@@ -17,6 +17,9 @@ jest.mock("@/api", () => ({
   api: jest.requireActual<typeof import("@/test-utils/api")>("@/test-utils/api").createApiMock(),
 }));
 
+/** The role the fake session reports as active. */
+let mockActiveRole: "DONANTE" | "VOLUNTARIO" = "DONANTE";
+
 // `useMe` reads the `/me` cache, so what the editors store there shows on screen.
 jest.mock("@/state/session", () => {
   const { useQuery } = jest.requireActual<typeof import("@tanstack/react-query")>(
@@ -27,6 +30,25 @@ jest.mock("@/state/session", () => {
   );
   return {
     useMe: () => useQuery({ queryKey: keys.me, queryFn: () => new Promise(() => {}) }),
+    useAccess: () => ({ activeRole: mockActiveRole }),
+  };
+});
+
+/** The point the mocked map picks; a test may move it outside the service area. */
+let mockBasePoint = { lat: 4.7, lng: -74.05 };
+
+// react-native-maps needs its native module: a button picks the base point.
+jest.mock("@/components/findfood/map", () => {
+  const { createElement } = jest.requireActual<typeof import("react")>("react");
+  const { Pressable, Text: RNText } =
+    jest.requireActual<typeof import("react-native")>("react-native");
+  return {
+    LocationPicker: ({ onChange }: { onChange: (point: { lat: number; lng: number }) => void }) =>
+      createElement(
+        Pressable,
+        { accessibilityRole: "button", onPress: () => onChange(mockBasePoint) },
+        createElement(RNText, null, "Elegir ubicación"),
+      ),
   };
 });
 
@@ -74,6 +96,8 @@ const cachedMe = () => client.getQueryData<MeDto>(queryKeys.me);
 
 beforeEach(() => {
   resetApiMock(mockedApi);
+  mockActiveRole = "DONANTE";
+  mockBasePoint = { lat: 4.7, lng: -74.05 };
 });
 
 describe("EditProfileScreen", () => {
@@ -135,6 +159,169 @@ describe("EditProfileScreen", () => {
     ).toBeOnTheScreen();
     expect(pathname()).toBe("/editar-perfil");
     expect(cachedMe()).toEqual(account());
+  });
+});
+
+describe("EditProfileScreen for the volunteer view", () => {
+  const volunteer = (voluntario: Partial<NonNullable<MeDto["voluntario"]>> = {}): MeDto => {
+    const base = meFixture();
+    return { ...base, voluntario: { ...base.voluntario!, ...voluntario } };
+  };
+  const radius = () => screen.getByLabelText("Radio de cobertura (km)");
+
+  beforeEach(() => {
+    mockActiveRole = "VOLUNTARIO";
+  });
+
+  it("groups the contact fields and shows the vehicle read-only", async () => {
+    await renderAt("/editar-perfil", volunteer());
+
+    expect(screen.getByText("Información de voluntario")).toBeOnTheScreen();
+    expect(screen.getByLabelText("Nombres").props.value).toBe("María");
+    expect(screen.getByLabelText("Celular").props.value).toBe("+573001234567");
+    expect(screen.getByText("Vehículo y zona")).toBeOnTheScreen();
+    expect(screen.getByText("Camioneta")).toBeOnTheScreen();
+    expect(screen.getByText("ABC123")).toBeOnTheScreen();
+    expect(screen.getByText("500 kg")).toBeOnTheScreen();
+    // Vehicle, plate and capacity are not inputs.
+    expect(screen.queryByDisplayValue("ABC123")).toBeNull();
+    expect(screen.queryByDisplayValue("500")).toBeNull();
+    expect(screen.queryByLabelText(/^Placa/)).toBeNull();
+    expect(screen.getByRole("radio", { name: "Sí, dispone" })).toBeChecked();
+    expect(radius().props.value).toBe("10");
+  });
+
+  it("sends only the changed cold chain and radius to PATCH /voluntario/perfil", async () => {
+    const updated = volunteer({ tiene_refrigeracion: false, radio_cobertura_km: 25 });
+    mockedApi.patch.mockResolvedValue(updated);
+    await renderAt("/editar-perfil", volunteer());
+
+    await act(async () => fireEvent.press(screen.getByRole("radio", { name: "No dispone" })));
+    await type("Radio de cobertura (km)", "25");
+    await press("Guardar cambios");
+
+    expect(mockedApi.patch).toHaveBeenCalledTimes(1);
+    expect(mockedApi.patch).toHaveBeenCalledWith("/voluntario/perfil", {
+      body: { tiene_refrigeracion: false, radio_cobertura_km: 25 },
+    });
+    expect(cachedMe()).toEqual(updated);
+    await waitFor(() => expect(pathname()).toBe("/perfil"));
+  });
+
+  it("sends a moved base point", async () => {
+    mockedApi.patch.mockResolvedValue(volunteer({ ubicacion_base: mockBasePoint }));
+    await renderAt("/editar-perfil", volunteer());
+
+    await press("Elegir ubicación");
+    await press("Guardar cambios");
+
+    expect(mockedApi.patch).toHaveBeenCalledTimes(1);
+    expect(mockedApi.patch).toHaveBeenCalledWith("/voluntario/perfil", {
+      body: { ubicacion_base: { lat: 4.7, lng: -74.05 } },
+    });
+  });
+
+  it("sends changed names only to PATCH /me", async () => {
+    const updated = volunteer();
+    mockedApi.patch.mockResolvedValue({ ...updated, nombres: "Ana" });
+    await renderAt("/editar-perfil", volunteer());
+
+    await type("Nombres", "Ana");
+    await press("Guardar cambios");
+
+    expect(mockedApi.patch).toHaveBeenCalledTimes(1);
+    expect(mockedApi.patch).toHaveBeenCalledWith("/me", { body: { nombres: "Ana" } });
+    await waitFor(() => expect(pathname()).toBe("/perfil"));
+  });
+
+  it("sends both requests one after another and keeps the last account", async () => {
+    const afterMe = { ...volunteer(), nombres: "Ana" };
+    const afterVolunteer = { ...volunteer({ radio_cobertura_km: 30 }), nombres: "Ana" };
+    mockedApi.patch.mockResolvedValueOnce(afterMe).mockResolvedValueOnce(afterVolunteer);
+    await renderAt("/editar-perfil", volunteer());
+
+    await type("Nombres", "Ana");
+    await type("Radio de cobertura (km)", "30");
+    await press("Guardar cambios");
+
+    expect(mockedApi.patch.mock.calls).toEqual([
+      ["/me", { body: { nombres: "Ana" } }],
+      ["/voluntario/perfil", { body: { radio_cobertura_km: 30 } }],
+    ]);
+    expect(cachedMe()).toEqual(afterVolunteer);
+    await waitFor(() => expect(pathname()).toBe("/perfil"));
+  });
+
+  it("goes back without requests when nothing changed", async () => {
+    await renderAt("/editar-perfil", volunteer());
+
+    await press("Guardar cambios");
+
+    expect(mockedApi.patch).not.toHaveBeenCalled();
+    await waitFor(() => expect(pathname()).toBe("/perfil"));
+  });
+
+  it("does not require a base point the account never had", async () => {
+    mockedApi.patch.mockResolvedValue(volunteer({ ubicacion_base: null, radio_cobertura_km: 20 }));
+    await renderAt("/editar-perfil", volunteer({ ubicacion_base: null }));
+
+    await type("Radio de cobertura (km)", "20");
+    await press("Guardar cambios");
+
+    expect(mockedApi.patch).toHaveBeenCalledWith("/voluntario/perfil", {
+      body: { radio_cobertura_km: 20 },
+    });
+  });
+
+  it("validates the radius and the base point on the client", async () => {
+    mockBasePoint = { lat: 6.24, lng: -75.58 };
+    await renderAt("/editar-perfil", volunteer());
+
+    await type("Radio de cobertura (km)", "150");
+    await press("Elegir ubicación");
+    await press("Guardar cambios");
+
+    expect(screen.getByText("El radio debe estar entre 1 y 100 km.")).toBeOnTheScreen();
+    expect(
+      screen.getByText("Tu punto base debe estar en Bogotá o un municipio vecino."),
+    ).toBeOnTheScreen();
+    expect(mockedApi.patch).not.toHaveBeenCalled();
+  });
+
+  it("puts a 400 radius error from the API on the radius field and stays", async () => {
+    mockedApi.patch.mockRejectedValue(
+      new ApiError({
+        type: "validacion",
+        status: 400,
+        title: "Bad Request",
+        fields: { radio_cobertura_km: ["must not be greater than 100"] },
+      }),
+    );
+    await renderAt("/editar-perfil", volunteer());
+
+    await type("Radio de cobertura (km)", "50");
+    await press("Guardar cambios");
+
+    expect(await screen.findByText("Debe ser menor o igual a 100.")).toBeOnTheScreen();
+    expect(radius().props.accessibilityHint).toContain("Debe ser menor o igual a 100.");
+    expect(pathname()).toBe("/editar-perfil");
+  });
+
+  it("keeps the contact-only form for a volunteer acting as donor", async () => {
+    mockActiveRole = "DONANTE";
+    await renderAt("/editar-perfil", volunteer());
+
+    expect(screen.getByLabelText("Nombres")).toBeOnTheScreen();
+    expect(screen.queryByText("Información de voluntario")).toBeNull();
+    expect(screen.queryByText("Vehículo y zona")).toBeNull();
+    expect(screen.queryByLabelText("Radio de cobertura (km)")).toBeNull();
+  });
+
+  it("keeps the contact-only form for an account without a volunteer profile", async () => {
+    await renderAt("/editar-perfil", meFixture({ roles: ["DONANTE"], voluntario: null }));
+
+    expect(screen.getByLabelText("Nombres")).toBeOnTheScreen();
+    expect(screen.queryByText("Vehículo y zona")).toBeNull();
   });
 });
 

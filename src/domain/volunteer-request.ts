@@ -79,6 +79,23 @@ const optionalNumber = (min: number, max: number, range: string) =>
     .transform((text) => (text === "" ? undefined : parseDecimal(text)))
     .pipe(z.number(INVALID_NUMBER).min(min, range).max(max, range).optional());
 
+const RADIUS_RANGE = "El radio debe estar entre 1 y 100 km.";
+const BASE_OUTSIDE_AREA = "Tu punto base debe estar en Bogotá o un municipio vecino.";
+
+/** The profile editor's coverage radius: the account always has one, so it stays required. */
+export const coverageRadiusKm = requiredNumber("Ingresa el radio de cobertura.", 1, 100, RADIUS_RANGE);
+
+/**
+ * The profile editor's base point: accounts that never chose one may keep it unset, but a
+ * chosen point must be inside the service area.
+ */
+export const optionalBaseLocation = z
+  .custom<Coordenada | null>(
+    (value) => value === null || typeof value === "object",
+    "Elige tu ubicación base en el mapa.",
+  )
+  .refine((point) => point === null || isInServiceArea(point), BASE_OUTSIDE_AREA);
+
 const dateKey = ({ year, month, day }: { year: number; month: number; day: number }) =>
   year * 10000 + month * 100 + day;
 
@@ -140,8 +157,8 @@ export function volunteerRequestSchema(now: number) {
           (value) => value !== null && typeof value === "object",
           "Elige tu ubicación base en el mapa.",
         )
-        .refine(isInServiceArea, "Tu punto base debe estar en Bogotá o un municipio vecino."),
-      radio_cobertura_km: optionalNumber(1, 100, "El radio debe estar entre 1 y 100 km."),
+        .refine(isInServiceArea, BASE_OUTSIDE_AREA),
+      radio_cobertura_km: optionalNumber(1, 100, RADIUS_RANGE),
       documento_frente: photo("Sube la foto del frente de tu documento."),
       documento_reverso: optionalPhoto,
       selfie: optionalPhoto,

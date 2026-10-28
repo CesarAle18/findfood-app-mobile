@@ -10,8 +10,9 @@ const native = require("react-native-web");
 const root = path.resolve(__dirname, "..");
 const original = Module._load;
 let routeParams = {};
-/** What the fake session reports: `useAccess().phase` and `useMe().data`. */
+/** What the fake session reports: `useAccess().phase`, `.activeRole` and `useMe().data`. */
 let accessPhase = "app";
+let activeRole = "DONANTE";
 let me;
 let fixtures;
 let draft;
@@ -193,7 +194,7 @@ Module._load = function (name, parent, isMain) {
     return {
       useAccess: () => ({
         phase: accessPhase,
-        activeRole: "DONANTE",
+        activeRole,
         canDonor: true,
         canVolunteer: true,
         setActiveRole() {},
@@ -397,6 +398,16 @@ try {
   );
   assert(volunteerProfileHtml.includes("María García López"));
   assert(volunteerProfileHtml.includes("Camioneta"));
+  count++;
+  // The volunteer view of the profile editor adds the vehicle (read-only) and the zone.
+  const { EditProfileScreen } = require("../src/screens/edit-profile.tsx");
+  assert(!renderToStaticMarkup(React.createElement(EditProfileScreen)).includes("Vehículo y zona"));
+  activeRole = "VOLUNTARIO";
+  const volunteerEditorHtml = renderToStaticMarkup(React.createElement(EditProfileScreen));
+  activeRole = "DONANTE";
+  assert(volunteerEditorHtml.includes("Información de voluntario"));
+  assert(volunteerEditorHtml.includes("Vehículo y zona") && volunteerEditorHtml.includes("ABC123"));
+  assert(volunteerEditorHtml.includes("Radio de cobertura (km)"));
   count++;
   // Remote lists and details render their rows: human codes, never the UUIDs.
   const {
