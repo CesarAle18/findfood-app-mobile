@@ -51,6 +51,8 @@ const readyDraft: DonationDraft = {
       quantity: "20",
       unit: "L",
       coldChain: "Refrigerado",
+      rutaFoto: "productos/u/leche.jpg",
+      fotoUri: "file:///leche.jpg",
     },
   ],
   pickupDate: "16/10/2026",
@@ -117,6 +119,7 @@ describe("NewDonationScreen", () => {
     expect(
       screen.getByText("Ingresa una cantidad mayor que 0, con máximo 2 decimales."),
     ).toBeOnTheScreen();
+    expect(screen.getByText("Agrega una foto del producto.")).toBeOnTheScreen();
     expect(screen.getByText("Ingresa una dirección de al menos 5 caracteres.")).toBeOnTheScreen();
     expect(screen.getByText(PICKUP_POINT_REQUIRED)).toBeOnTheScreen();
     expect(screen.getByText("Revisa los campos marcados antes de continuar.")).toBeOnTheScreen();
@@ -184,6 +187,7 @@ describe("ReviewDonationScreen", () => {
         cantidad: 20,
         peso_estimado_kg: 20,
         requiere_refrigeracion: true,
+        ruta_foto: "productos/u/leche.jpg",
       },
     ],
   };
@@ -278,7 +282,7 @@ describe("ReviewDonationScreen", () => {
       ...readyDraft,
       products: [
         { ...readyDraft.products[0], rutaFoto: "productos/u/a.jpg", fotoUri: "file:///a.jpg" },
-        { ...readyDraft.products[0], id: 2, name: "Arroz" },
+        { ...readyDraft.products[0], id: 2, name: "Arroz", rutaFoto: null, fotoUri: null },
       ],
     });
 

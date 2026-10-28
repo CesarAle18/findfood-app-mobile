@@ -305,7 +305,7 @@ function safely<T>(map: () => T): T | null {
 /** Spanish messages keyed by draft field; products by `productErrorKey`. */
 export type DraftErrors = Partial<Record<string, string>>;
 
-type ProductField = "tipoAlimentoId" | "quantity" | "expiresOn";
+type ProductField = "tipoAlimentoId" | "quantity" | "expiresOn" | "rutaFoto";
 
 export function productErrorKey(id: number, field: ProductField): string {
   return `products.${id}.${field}`;
@@ -332,6 +332,10 @@ function draftSchema(now: number) {
         (date) => !isDate(date) || !isBeforeTodayInBogota(date, now),
         "El producto ya está vencido.",
       ),
+    rutaFoto: z
+      .string()
+      .nullable()
+      .refine((ruta) => ruta !== null && ruta !== "", "Agrega una foto del producto."),
   });
   return z
     .object({

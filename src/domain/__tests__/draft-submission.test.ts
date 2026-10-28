@@ -28,6 +28,8 @@ const leche: DraftProduct = {
   quantity: "20",
   unit: "L",
   coldChain: "Refrigerado",
+  rutaFoto: "productos/u1/leche.jpg",
+  fotoUri: "file:///leche.jpg",
 };
 
 const ready: DonationDraft = {
@@ -79,6 +81,7 @@ describe("toCrearDonacionBody", () => {
           cantidad: 20,
           peso_estimado_kg: 20,
           requiere_refrigeracion: true,
+          ruta_foto: "productos/u1/leche.jpg",
         },
       ],
     });
@@ -102,7 +105,7 @@ describe("toCrearDonacionBody", () => {
         ...ready,
         products: [
           { ...leche, expiresOn: "20/10/2026", rutaFoto: "productos/u1/foto.jpg", fotoUri: "file:///foto.jpg" },
-          { ...leche, id: 2, coldChain: "No requiere" },
+          { ...leche, id: 2, coldChain: "No requiere", rutaFoto: null, fotoUri: null },
         ],
       },
       { unidades },
@@ -156,6 +159,15 @@ describe("validateDraft", () => {
     expect(errors?.[productErrorKey(leche.id, "quantity")]).toBe(
       "Ingresa una cantidad mayor que 0, con máximo 2 decimales.",
     );
+  });
+
+  it("asks for each product's photo", () => {
+    const errors = validateDraft(
+      { ...ready, products: [leche, { ...leche, id: 2, rutaFoto: null, fotoUri: null }] },
+      NOW,
+    );
+    expect(errors?.[productErrorKey(2, "rutaFoto")]).toBe("Agrega una foto del producto.");
+    expect(errors?.[productErrorKey(leche.id, "rutaFoto")]).toBeUndefined();
   });
 
   it("allows 1 to 30 products", () => {

@@ -244,6 +244,7 @@ export function NewDonationScreen() {
                         update(product.id, { rutaFoto: ruta, fotoUri: localUri || null })
                       }
                     />
+                    <FieldError message={productError(product.id, "rutaFoto")} />
                   </Section>
                 </Section>
               </Animated.View>
