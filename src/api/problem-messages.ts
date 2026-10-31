@@ -92,6 +92,8 @@ const ROUTING_MESSAGES = {
   "ruta-no-iniciable": "Esta ruta todavía no se puede iniciar.",
   "ruta-no-en-curso": "Esta ruta no está en curso.",
   "parada-cerrada": "Esta parada ya está cerrada.",
+  "ubicacion-requerida": "Activa tu ubicación para registrar la llegada.",
+  "fuera-de-radio": "Debes estar a menos de 1 km de la parada para registrar la llegada.",
   "precision-insuficiente":
     "La ubicación no es lo bastante precisa. Espera a tener mejor señal e inténtalo de nuevo.",
   "evidencia-requerida": "Adjunta la evidencia fotográfica para continuar.",

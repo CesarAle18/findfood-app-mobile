@@ -118,7 +118,7 @@ export interface RutaDetalleDto {
   paradas: ParadaRutaDto[];
 }
 
-/** `POST /paradas/:id/llegada` (idempotent). */
+/** `POST /paradas/:id/llegada` (idempotent). The location is required and within 1 km of the stop. */
 export type LlegadaBody = { ubicacion?: Coordenada };
 
 /** `POST /paradas/:id/confirmar`: needs at least one evidence photo of the stop first. */

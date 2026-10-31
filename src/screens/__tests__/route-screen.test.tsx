@@ -34,6 +34,7 @@ jest.mock("@/api", () => ({
 const mockGetCurrentFix = jest.fn();
 
 jest.mock("@/location/current-fix", () => ({
+  ...jest.requireActual("@/location/current-fix"),
   getCurrentFix: (...args: unknown[]) => mockGetCurrentFix(...args),
 }));
 
@@ -284,7 +285,7 @@ describe("ActiveRouteScreen · route in progress", () => {
   });
 
   it("registers the arrival at a pending pickup with the current position", async () => {
-    mockGetCurrentFix.mockResolvedValue({ ubicacion: { lat: 3.42, lng: -76.54 }, precision_m: 12 });
+    mockGetCurrentFix.mockResolvedValue({ ubicacion: { lat: 3.421, lng: -76.54 }, precision_m: 12 });
     answerGets({ enCurso, detalle: withStops(first, second, entrega) });
 
     await renderRoutes();
@@ -295,11 +296,11 @@ describe("ActiveRouteScreen · route in progress", () => {
     await fireEvent.press(screen.getByRole("button", { name: "Llegué al punto" }));
 
     expect(mockApi.post).toHaveBeenCalledWith("/paradas/par-1/llegada", {
-      body: { ubicacion: { lat: 3.42, lng: -76.54 } },
+      body: { ubicacion: { lat: 3.421, lng: -76.54 } },
     });
   });
 
-  it("registers the arrival without a position when there is no fix", async () => {
+  it("refuses the arrival when there is no fix", async () => {
     mockGetCurrentFix.mockResolvedValue(null);
     answerGets({ enCurso, detalle: withStops(first, second, entrega) });
 
@@ -307,10 +308,23 @@ describe("ActiveRouteScreen · route in progress", () => {
 
     await fireEvent.press(await screen.findByRole("button", { name: "Llegué al punto" }));
 
-    expect(mockApi.post).toHaveBeenCalledWith("/paradas/par-1/llegada", { body: {} });
+    expect(await screen.findByText("Activa tu ubicación para registrar la llegada.")).toBeOnTheScreen();
+    expect(mockApi.post).not.toHaveBeenCalledWith("/paradas/par-1/llegada", expect.anything());
   });
 
-  it("still registers the arrival when reading the position fails", async () => {
+  it("refuses the arrival when the volunteer is farther than 1 km", async () => {
+    mockGetCurrentFix.mockResolvedValue({ ubicacion: { lat: 3.44, lng: -76.54 }, precision_m: 12 });
+    answerGets({ enCurso, detalle: withStops(first, second, entrega) });
+
+    await renderRoutes();
+
+    await fireEvent.press(await screen.findByRole("button", { name: "Llegué al punto" }));
+
+    expect(await screen.findByText(/Acércate a menos de 1 km/)).toBeOnTheScreen();
+    expect(mockApi.post).not.toHaveBeenCalledWith("/paradas/par-1/llegada", expect.anything());
+  });
+
+  it("does not register the arrival when reading the position fails", async () => {
     mockGetCurrentFix.mockRejectedValue(new Error("location unavailable"));
     answerGets({ enCurso, detalle: withStops(first, second, entrega) });
 
@@ -318,7 +332,7 @@ describe("ActiveRouteScreen · route in progress", () => {
 
     await fireEvent.press(await screen.findByRole("button", { name: "Llegué al punto" }));
 
-    expect(mockApi.post).toHaveBeenCalledWith("/paradas/par-1/llegada", { body: {} });
+    expect(mockApi.post).not.toHaveBeenCalledWith("/paradas/par-1/llegada", expect.anything());
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Llegué al punto" })).not.toBeBusy(),
     );
@@ -347,7 +361,7 @@ describe("ActiveRouteScreen · route in progress", () => {
   });
 
   it("drives the delivery once every pickup is closed", async () => {
-    mockGetCurrentFix.mockResolvedValue(null);
+    mockGetCurrentFix.mockResolvedValue({ ubicacion: { lat: 3.46, lng: -76.52 }, precision_m: 12 });
     const done = { estado: "COMPLETADA" } as const;
     answerGets({ enCurso, detalle: withStops({ ...first, ...done }, { ...second, ...done }, entrega) });
 
@@ -356,7 +370,9 @@ describe("ActiveRouteScreen · route in progress", () => {
     const arrive = await screen.findByRole("button", { name: "Llegué al banco" });
     expect(screen.queryByRole("button", { name: "Reportar problema" })).toBeNull();
     await fireEvent.press(arrive);
-    expect(mockApi.post).toHaveBeenCalledWith("/paradas/par-3/llegada", { body: {} });
+    expect(mockApi.post).toHaveBeenCalledWith("/paradas/par-3/llegada", {
+      body: { ubicacion: { lat: 3.46, lng: -76.52 } },
+    });
   });
 
   it("opens the delivery registration once at the bank", async () => {

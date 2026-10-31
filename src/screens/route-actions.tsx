@@ -8,6 +8,7 @@ import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Platform, StyleSheet, View } from "react-native";
 
+import type { Coordenada } from "@/api/types";
 import { isApiError } from "@/api/errors";
 import { messageFor } from "@/api/problem-messages";
 import { CallButton } from "@/components/findfood/call-button";
@@ -40,7 +41,13 @@ import {
   pickupWindowLabel,
   stopProgress,
 } from "@/domain/mappers/routes";
-import { getCurrentFix, needsManualConfirmation, type CurrentFix } from "@/location/current-fix";
+import {
+  distanceToStop,
+  getCurrentFix,
+  isWithinArrivalRadius,
+  needsManualConfirmation,
+  type CurrentFix,
+} from "@/location/current-fix";
 import { useAbandonarAsignacionMutation, useOfertas } from "@/services/asignaciones";
 import { useMotivos, useTiposIncidencia, type TipoIncidenciaDto } from "@/services/catalogos";
 import { donacionQuery } from "@/services/donaciones";
@@ -124,6 +131,7 @@ export function NextStop({
         <ArrivalButton
           key={`llegada-${parada.id}`}
           paradaId={parada.id}
+          stop={{ lat: parada.lat, lng: parada.lng }}
           label={pickup ? "Llegué al punto" : "Llegué al banco"}
         />
       ) : (
@@ -177,10 +185,18 @@ function PickupActions({
 }
 
 /**
- * `POST /paradas/:id/llegada`. The position is best effort: it goes only when the device has
- * a fix, and the arrival never waits on a missing permission.
+ * `POST /paradas/:id/llegada`. The arrival needs a fix within `ARRIVAL_RADIUS_M` of the stop:
+ * without a fix or farther away nothing is sent (the API enforces the same radius).
  */
-function ArrivalButton({ paradaId, label }: { paradaId: string; label: string }) {
+function ArrivalButton({
+  paradaId,
+  stop,
+  label,
+}: {
+  paradaId: string;
+  stop: Coordenada;
+  label: string;
+}) {
   const { mutateAsync: registrar, isPending } = useRegistrarLlegadaMutation();
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string>();
@@ -196,8 +212,17 @@ function ArrivalButton({ paradaId, label }: { paradaId: string; label: string })
     } finally {
       setLocating(false);
     }
+    if (fix === null) {
+      setError("Activa tu ubicación para registrar la llegada.");
+      return;
+    }
+    if (!isWithinArrivalRadius(fix, stop)) {
+      const km = (distanceToStop(fix, stop) / 1000).toFixed(1);
+      setError(`Estás a ${km} km de la parada. Acércate a menos de 1 km para registrar la llegada.`);
+      return;
+    }
     try {
-      await registrar({ id: paradaId, body: fix ? { ubicacion: fix.ubicacion } : {} });
+      await registrar({ id: paradaId, body: { ubicacion: fix.ubicacion } });
     } catch (failure) {
       setError(messageFor(failure));
     }

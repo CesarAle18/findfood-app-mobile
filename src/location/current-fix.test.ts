@@ -1,6 +1,11 @@
 import * as Location from "expo-location";
 
-import { GPS_PRECISION_MIN_M, getCurrentFix, needsManualConfirmation } from "./current-fix";
+import {
+  GPS_PRECISION_MIN_M,
+  getCurrentFix,
+  isWithinArrivalRadius,
+  needsManualConfirmation,
+} from "./current-fix";
 
 const mockedLocation = jest.mocked(Location);
 
@@ -107,5 +112,18 @@ describe("needsManualConfirmation", () => {
     ["precise", fix(8), false],
   ])("%s", (_name, value, expected) => {
     expect(needsManualConfirmation(value)).toBe(expected);
+  });
+});
+
+describe("isWithinArrivalRadius", () => {
+  const stop = { lat: 3.42, lng: -76.54 };
+  const fixAt = (lat: number) => ({ ubicacion: { lat, lng: stop.lng }, precision_m: 10 });
+
+  it("accepts a fix within 1 km of the stop", () => {
+    expect(isWithinArrivalRadius(fixAt(3.425), stop)).toBe(true);
+  });
+
+  it("rejects a fix farther than 1 km", () => {
+    expect(isWithinArrivalRadius(fixAt(3.43), stop)).toBe(false);
   });
 });

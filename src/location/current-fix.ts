@@ -6,9 +6,13 @@
 import * as Location from "expo-location";
 
 import type { Coordenada } from "@/api/types";
+import { distanceMeters } from "@/location/throttle";
 
 /** Mirrors the API parameter `GPS_PRECISION_MIN_M`: coarser fixes need manual confirmation. */
 export const GPS_PRECISION_MIN_M = 50;
+
+/** Mirrors the API constant `RADIO_LLEGADA_M`: arrivals farther from the stop are refused. */
+export const ARRIVAL_RADIUS_M = 1000;
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -60,4 +64,14 @@ export async function getCurrentFix({
 /** Whether the API will reject the fix unless the volunteer confirms manually. */
 export function needsManualConfirmation(fix: CurrentFix | null): boolean {
   return fix === null || fix.precision_m === null || fix.precision_m > GPS_PRECISION_MIN_M;
+}
+
+/** Meters between the fix and a stop. */
+export function distanceToStop(fix: CurrentFix, stop: Coordenada): number {
+  return distanceMeters(fix.ubicacion, stop);
+}
+
+/** Whether the fix is close enough to the stop for the API to accept the arrival. */
+export function isWithinArrivalRadius(fix: CurrentFix, stop: Coordenada): boolean {
+  return distanceToStop(fix, stop) <= ARRIVAL_RADIUS_M;
 }
