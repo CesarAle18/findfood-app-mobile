@@ -168,6 +168,12 @@ Module._load = function (name, parent, isMain) {
     );
   if (name === "react-native") return native;
   if (name === "react-native-reanimated") return reanimatedStub;
+  // Needs its native module; the screens' scroll view renders as a plain one here.
+  if (name === "react-native-keyboard-controller")
+    return {
+      KeyboardAwareScrollView: ({ bottomOffset, ...props }) =>
+        React.createElement(native.ScrollView, props),
+    };
   if (name === "react-native-safe-area-context")
     return {
       SafeAreaView: ({ edges, ...props }) =>

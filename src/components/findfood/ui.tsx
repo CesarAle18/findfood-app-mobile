@@ -16,7 +16,9 @@ import {
   type TextInputProps,
   type TextStyle,
   type ViewStyle,
+  useWindowDimensions,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { SafeAreaView, type Edges } from "react-native-safe-area-context";
 import { Icon, type IconName } from "./icon";
 import {
@@ -69,6 +71,15 @@ const SAFE_AREA_EDGES: Edges = ["top", "left", "right"];
 const STACK_SAFE_AREA_EDGES: Edges =
   Platform.OS === "ios" ? SAFE_AREA_EDGES : [...SAFE_AREA_EDGES, "bottom"];
 
+/**
+ * Space kept between the focused input and the keyboard. About a fifth of the window puts
+ * the field near the middle of what the keyboard leaves visible, with its error message and
+ * the controls below it (a show-password eye, the next field) still in view.
+ */
+export function keyboardBottomOffset(windowHeight: number): number {
+  return Math.max(96, Math.round(windowHeight * 0.2));
+}
+
 export function Screen({
   children,
   title,
@@ -90,6 +101,7 @@ export function Screen({
   scroll?: boolean;
 }>) {
   const isTabScreen = useIsTabScreen();
+  const { height } = useWindowDimensions();
   const heading = title ? (
     <View style={styles.heading}>
       <View style={styles.headingText}>
@@ -148,7 +160,10 @@ export function Screen({
           </Link>
         </View>
         {scroll ? (
-          <ScrollView
+          // Scrolls the focused input above the keyboard as it opens, on both platforms
+          // (Android draws edge-to-edge, so the window no longer resizes for it), and
+          // follows the keyboard back as it closes instead of jumping.
+          <KeyboardAwareScrollView
             style={styles.scroll}
             contentContainerStyle={[
               styles.content,
@@ -157,11 +172,11 @@ export function Screen({
             contentInsetAdjustmentBehavior="automatic"
             showsVerticalScrollIndicator
             keyboardShouldPersistTaps="handled"
-            automaticallyAdjustKeyboardInsets
+            bottomOffset={keyboardBottomOffset(height)}
           >
             {heading}
             {children}
-          </ScrollView>
+          </KeyboardAwareScrollView>
         ) : (
           <View style={[styles.content, styles.fixedContent]}>
             {heading}

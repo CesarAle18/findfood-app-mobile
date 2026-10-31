@@ -24,6 +24,12 @@ jest.mock("react-native-worklets", () => require("react-native-worklets/src/mock
 // path, as the library documents, because the package's `exports` do not expose it.
 require("./node_modules/@react-native-google-signin/google-signin/jest/build/jest/setup.js");
 
+// Keyboard Controller's native module does not exist under Jest. Its own mock renders
+// KeyboardAwareScrollView as a plain ScrollView and KeyboardProvider as a passthrough.
+jest.mock("react-native-keyboard-controller", () =>
+  require("react-native-keyboard-controller/jest"),
+);
+
 // FlashList lays items out from native measurements, which do not exist under Jest. Its own
 // `@shopify/flash-list/jestSetup` (2.0.2) also remaps `FlashList` to an export that no longer
 // exists, so only the measurements are replaced here: a 400x900 viewport, 100 pt items.

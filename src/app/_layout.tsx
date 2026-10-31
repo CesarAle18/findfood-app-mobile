@@ -18,6 +18,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { queryClient, setupQueryManagers } from "@/api/query-client";
@@ -123,19 +124,22 @@ export default function RootLayout() {
     return <ConfigErrorRoot error={configResult.error} fontsReady={fontsLoaded || !!fontError} />;
   }
 
+  // KeyboardProvider tracks the keyboard for the screens' keyboard-aware scroll views.
   return (
-    <QueryClientProvider client={queryClient}>
-      <SessionProvider>
-        <SignedInEffects />
-        <MobileProvider>
-          <StatusBar style="dark" />
-          <View style={styles.root}>
-            <RootNavigator fontsLoaded={fontsLoaded} fontError={fontError} />
-            <OfflineOverlay />
-          </View>
-        </MobileProvider>
-      </SessionProvider>
-    </QueryClientProvider>
+    <KeyboardProvider>
+      <QueryClientProvider client={queryClient}>
+        <SessionProvider>
+          <SignedInEffects />
+          <MobileProvider>
+            <StatusBar style="dark" />
+            <View style={styles.root}>
+              <RootNavigator fontsLoaded={fontsLoaded} fontError={fontError} />
+              <OfflineOverlay />
+            </View>
+          </MobileProvider>
+        </SessionProvider>
+      </QueryClientProvider>
+    </KeyboardProvider>
   );
 }
 

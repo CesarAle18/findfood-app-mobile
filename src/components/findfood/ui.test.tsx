@@ -1,7 +1,18 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { View } from "react-native";
 
-import { Button, Field } from "./ui";
+import { Button, Field, keyboardBottomOffset } from "./ui";
+
+describe("keyboardBottomOffset", () => {
+  it("leaves about a fifth of the window between the focused field and the keyboard", () => {
+    expect(keyboardBottomOffset(800)).toBe(160);
+    expect(keyboardBottomOffset(917)).toBe(183);
+  });
+
+  it("keeps room for the field's error and action on short windows", () => {
+    expect(keyboardBottomOffset(400)).toBe(96);
+  });
+});
 
 describe("Field", () => {
   it("shows the error below the input and announces it on the input", async () => {
