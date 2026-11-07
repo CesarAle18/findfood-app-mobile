@@ -55,7 +55,6 @@ const readyDraft: DonationDraft = {
       fotoUri: "file:///leche.jpg",
     },
   ],
-  pickupDate: "16/10/2026",
   direccion: "Cra 45 #12-30",
   ubicacionRecogida: { lat: 4.65, lng: -74.06 },
 };
@@ -109,7 +108,7 @@ afterEach(() => {
 
 describe("NewDonationScreen", () => {
   it("shows the errors by field and stays while the draft is incomplete", async () => {
-    await renderScreen(NewDonationScreen, { ...initialDonationDraft, pickupDate: "16/10/2026" });
+    await renderScreen(NewDonationScreen, initialDonationDraft);
 
     await fireEvent.press(await screen.findByText("Continuar"));
 
@@ -124,23 +123,13 @@ describe("NewDonationScreen", () => {
     expect(screen.queryByText("Revisión")).toBeNull();
   });
 
-  it("asks only for the pickup date, without hours", async () => {
+  it("does not ask for a pickup window", async () => {
     await renderScreen(NewDonationScreen, readyDraft);
 
-    expect(await screen.findByLabelText("Fecha de recogida: 16/10/2026")).toBeOnTheScreen();
-    expect(screen.queryByText("Desde")).toBeNull();
-    expect(screen.queryByText("Hasta")).toBeNull();
-  });
-
-  it("refuses a pickup date before today", async () => {
-    await renderScreen(NewDonationScreen, { ...readyDraft, pickupDate: "15/10/2026" });
-
-    await fireEvent.press(await screen.findByText("Continuar"));
-
-    expect(
-      screen.getByText("La fecha de recogida no puede ser anterior a hoy."),
-    ).toBeOnTheScreen();
-    expect(screen.queryByText("Revisión")).toBeNull();
+    expect(await screen.findByText("Continuar")).toBeOnTheScreen();
+    expect(screen.queryByText("Ventana de recogida")).toBeNull();
+    expect(screen.queryByText("Fecha de recogida")).toBeNull();
+    expect(screen.queryByLabelText(/Fecha de recogida/)).toBeNull();
   });
 
   it("refuses a pickup point outside Bogotá's service area", async () => {
@@ -158,8 +147,7 @@ describe("NewDonationScreen", () => {
   it("opens the review when the draft is valid", async () => {
     await renderScreen(NewDonationScreen, readyDraft);
 
-    expect(await screen.findByLabelText("Fecha de recogida: 16/10/2026")).toBeOnTheScreen();
-    await fireEvent.press(screen.getByText("Continuar"));
+    await fireEvent.press(await screen.findByText("Continuar"));
 
     expect(await screen.findByText("Revisión")).toBeOnTheScreen();
   });
@@ -182,9 +170,9 @@ describe("NewDonationScreen", () => {
 
 describe("ReviewDonationScreen", () => {
   const expectedBody = {
-    // Today (10:00 in Bogotá): from the current minute until the end of the day.
+    // From the moment of sending (10:00 in Bogotá) for 24 hours.
     ventana_recogida_inicio: "2026-10-16T10:00:00-05:00",
-    ventana_recogida_fin: "2026-10-16T23:59:00-05:00",
+    ventana_recogida_fin: "2026-10-17T10:00:00-05:00",
     direccion_recogida: "Cra 45 #12-30",
     ubicacion_recogida: { lat: 4.65, lng: -74.06 },
     items: [
@@ -273,23 +261,33 @@ describe("ReviewDonationScreen", () => {
     );
   });
 
-  it("shows the pickup day as a full-day window", async () => {
+  it("does not show a pickup window to the donor", async () => {
     await renderScreen(ReviewDonationScreen, readyDraft);
 
-    expect(await screen.findByText("Ventana: 16/10/2026 · Todo el día")).toBeOnTheScreen();
+    expect(await screen.findByText("Punto general de recogida")).toBeOnTheScreen();
+    expect(screen.queryByText(/Ventana:/)).toBeNull();
   });
 
-  it("checks the window again before sending", async () => {
-    // 23:50 in Bogotá: less than 15 minutes of today are left.
-    jest.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 9, 17, 4, 50));
+  it("starts the window when the donor confirms, even late at night", async () => {
+    mockApi.post.mockImplementation(async (path: string) => {
+      if (path === "/donaciones") return detalleFixture({ id: "nueva-1", estado: "BORRADOR" });
+      if (path === "/donaciones/nueva-1/publicar") return publicada("nueva-1");
+      throw new Error(`unexpected POST ${path}`);
+    });
     await renderScreen(ReviewDonationScreen, readyDraft);
+    // 23:50 in Bogotá, after the screen opened.
+    jest.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 9, 17, 4, 50));
 
     await pressConfirm();
 
-    expect(
-      await screen.findByText("Ya no queda tiempo para recoger hoy. Elige otra fecha."),
-    ).toBeOnTheScreen();
-    expect(mockApi.post).not.toHaveBeenCalled();
+    expect(await screen.findByText("Esperando voluntario nueva-1")).toBeOnTheScreen();
+    expect(mockApi.post).toHaveBeenNthCalledWith(1, "/donaciones", {
+      body: {
+        ...expectedBody,
+        ventana_recogida_inicio: "2026-10-16T23:50:00-05:00",
+        ventana_recogida_fin: "2026-10-17T23:50:00-05:00",
+      },
+    });
   });
 
   it("shows each product's photo, or that it has none", async () => {

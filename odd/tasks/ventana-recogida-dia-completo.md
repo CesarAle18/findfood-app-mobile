@@ -4,28 +4,28 @@
 **Branch:** `feat/ventana-recogida-dia-completo` (from `develop` @ `5d2ff66`)
 
 ## Objective
-The "Ventana de recogida" section of the new-donation form keeps only the pickup date; the "Desde"/"Hasta" time pickers are removed.
+The new-donation form no longer has a "Ventana de recogida" section at all (T1 first removed the "Desde"/"Hasta" hours; T3 also removed "Fecha de recogida"). The app derives the window from the moment of sending: now → now + 24 h.
 
 ## Problem / Why
-The user asked to remove the pickup hours when creating a donation.
+The user asked to remove the pickup hours when creating a donation, and then the whole pickup-window section.
 
 ## Scope / constraints
-- `POST /donaciones` still requires `ventana_recogida_inicio` and `ventana_recogida_fin` (ISO with offset), so the app derives a full-day window from the chosen date (user decision, 2026-11-07): a future date sends 00:00–23:59 Bogotá; today sends from now (to the minute) until 23:59.
-- Validation errors move to the date field: past date, or too little time left today (the existing 15-minute minimum).
-- The review screen shows the date with "Todo el día" instead of the hours.
-- Delivery strategy: `ask-on-risk`. Forecast ≈ 150 authored lines; one PR.
+- `POST /donaciones` still requires `ventana_recogida_inicio` and `ventana_recogida_fin` (ISO with offset). Since T3 (user decision, 2026-11-07) the app sends start = the current Bogotá minute at confirmation, end = start + 24 h (`…-05:00`, the end on the next calendar day). T1's full-day window from a chosen date (00:00–23:59, or now–23:59 for today) is superseded.
+- No pickup-window validation remains in the form; the review screen shows no window line.
+- Delivery strategy: `ask-on-risk`. Forecast ≈ 150 authored lines per task; one PR.
 
 ## Tasks
 - [x] T1 remove `pickupFrom`/`pickupUntil` from the draft, derive the full-day window in the body and validation, update the form and review screens and their tests. Route: delegated writer (2+ non-trivial files).
 - [x] T2 expiry calendar ("Fecha de vencimiento"): `DateTimeField` marks today (Bogotá) and, with the new `disablePast` prop, disables past days and "Mes anterior" before the current month; applied to the expiry field only. Route: inline (one component + its new test). Commit `92e8fb1`.
+- [x] T3 remove the whole "Ventana de recogida" section (incl. "Fecha de recogida") and `pickupDate` from the draft; `pickupWindowFromNow(now)` replaces `fullDayPickupWindow`/`fullDayPickupBounds`; no pickup-window validation; the review card drops its "Ventana:" line. Route: delegated writer (2+ non-trivial files).
 
 ## Acceptance criteria
-- The form shows only "Fecha de recogida" under "Ventana de recogida".
-- A future date produces `…T00:00:00-05:00` – `…T23:59:00-05:00`; today produces a start at the current minute and the same end.
-- A past date, or today with less than 15 minutes left, shows an error on the date field and blocks publishing.
+- The form has no "Ventana de recogida" section and no "Fecha de recogida" field (T3).
+- Confirming at instant `now` sends `ventana_recogida_inicio` = the current Bogotá minute and `ventana_recogida_fin` = 24 h later (next calendar day), e.g. 23:50 → next day 23:50.
+- No pickup-window error blocks the form or the review; the review card shows no window.
 
 ## Checks
-- `npm run lint`, `npm run typecheck`, `npx jest src/domain src/screens`.
+- `npm run lint`, `npm run typecheck`, `npx jest src/domain src/screens src/state`.
 
 ## Progress
 - 2026-11-07: explored; branch created; feature document created.
@@ -37,3 +37,7 @@ The user asked to remove the pickup hours when creating a donation.
 - 2026-11-07: removed the date hint "El voluntario podrá recoger en cualquier momento de ese día." at the user's request (inline, one mechanical UI line + its assertion). `npx jest donor-draft-screens` 13 passed; `npm run typecheck` clean; eslint on both files exit 0.
 - 2026-11-07: T2 done in `92e8fb1`. RED: `npx jest src/components/findfood/__tests__/date-time-field.test.tsx` 4 failed (no today mark, no disablePast; the calendar opened on the wall-clock month). GREEN: `npx jest src/components src/screens` 34 suites / 426 tests passed; `npm run typecheck` clean; `npx eslint src/components/findfood src/screens/donations.tsx` exit 0.
 - 2026-11-07: branch reached the slice budget (assess: medium, 404 lines, `slice_budget_reached`). Native review granted, lineage `review-667a35e91273a98d`, one reliability lens: approved and acknowledged (authority burned). Reviewed boundary is now `92e8fb1`. Advisory, non-blocking: R3-001 (this record lacked T2, fixed by this entry), R3-002 (pickup date picker could also use `disablePast`), R3-003 (`fullDayPickupWindow` at 23:59 gives a zero-length window; `validateDraft` blocks it first).
+- 2026-11-07 T3 (delegated writer): removed the section, `pickupDate`, `newDonationDraft` (callers in `donor.tsx` and `mobile-context.tsx` now use `initialDonationDraft`), the full-day helpers and their tests, and the pickup-date refines/messages. `toCrearDonacionBody` sends `pickupWindowFromNow(now)`; `donor.tsx` still uses one `now` for `validateDraft` and the body, so a PATCH retry re-sends a fresh window. R3-002/R3-003 are moot (no pickup date, no zero-length window).
+  - API check (`findfood-api/src/modulos/donaciones`, read-only): create/PATCH only require `fin > inicio` (`validarVentana`); publish refuses `inicio < now − 5 min` (`TOLERANCIA_INICIO_MIN`, `ventana-en-el-pasado`) and `fin < now + 15 min` (`MARGEN_PUBLICACION_MIN`, `ventana-muy-corta`); no maximum duration or days-ahead rule. now → now + 24 h complies; the end was not adapted.
+  - RED: `npx jest src/domain/mappers/dates.test.ts src/domain/__tests__/draft-submission.test.ts src/screens/__tests__/donor-draft-screens.test.tsx` → 3 suites failed, 21 failed / 104 passed.
+  - GREEN: `npm run typecheck` → clean; `npx eslint src/domain src/screens src/state src/test-utils` → exit 0; `npx jest src/domain src/screens src/state` → 44 suites / 733 tests passed.

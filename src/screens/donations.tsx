@@ -270,16 +270,6 @@ export function NewDonationScreen() {
         </Copy>
       </Pressing>
       <FieldError message={errors?.products} />
-      <Section title="Ventana de recogida">
-        <DateTimeField
-          label="Fecha de recogida"
-          value={draft.pickupDate}
-          onChange={(pickupDate) =>
-            setDraft((current) => ({ ...current, pickupDate }))
-          }
-          error={errors?.pickupDate}
-        />
-      </Section>
       <Section title="Ubicación de la entrega">
         <Field
           label="Dirección de recogida"

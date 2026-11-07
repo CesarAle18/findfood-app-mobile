@@ -221,29 +221,15 @@ export function pickupWindowBounds(input: PickupWindowInput): { start: number; e
   };
 }
 
-const START_OF_DAY: WallTime = { hour: 0, minute: 0 };
-const END_OF_DAY: WallTime = { hour: 23, minute: 59 };
-
 /**
- * The whole Bogotá day of a `DD/MM/AAAA` date as a pickup window: 00:00–23:59, or from the
- * current minute of `now` (epoch milliseconds) when the date is today in Bogotá.
+ * The pickup window of a donation sent at `now` (epoch milliseconds): from the current
+ * Bogotá minute until the same minute of the next day (Bogotá has no DST, so 24 hours).
  */
-export function fullDayPickupWindow(date: string, now: number): PickupWindowBody {
-  const day = parseDate(date);
-  const current = bogotaParts(now);
-  const start = sameDate(day, current.date) ? current.time : START_OF_DAY;
+export function pickupWindowFromNow(now: number): PickupWindowBody {
+  const { date, time } = bogotaParts(now);
   return {
-    ventana_recogida_inicio: bogotaIso(day, start),
-    ventana_recogida_fin: bogotaIso(day, END_OF_DAY),
-  };
-}
-
-/** Epoch milliseconds of both bounds of `fullDayPickupWindow`. */
-export function fullDayPickupBounds(date: string, now: number): { start: number; end: number } {
-  const body = fullDayPickupWindow(date, now);
-  return {
-    start: parseTimestamp(body.ventana_recogida_inicio),
-    end: parseTimestamp(body.ventana_recogida_fin),
+    ventana_recogida_inicio: bogotaIso(date, time),
+    ventana_recogida_fin: bogotaIso(nextDay(date), time),
   };
 }
 

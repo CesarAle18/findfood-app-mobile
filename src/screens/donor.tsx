@@ -34,7 +34,7 @@ import {
 } from "@/components/findfood/ui";
 import { colors } from "@/design/tokens";
 import {
-  newDonationDraft,
+  initialDonationDraft,
   toCrearDonacionBody,
   validateDraft,
   type DraftProduct,
@@ -737,7 +737,7 @@ function useConfirmDonation() {
 
   const confirm = async () => {
     setError(undefined);
-    // The window may have closed since the form was checked.
+    // One instant for the checks (an expiry may have passed) and the window, which opens now.
     const now = Date.now();
     const invalid = validateDraft(draft, now);
     if (invalid) {
@@ -767,7 +767,7 @@ function useConfirmDonation() {
         setDraft((current) => ({ ...current, apiId: id }));
       }
       await publicar.mutateAsync(id);
-      setDraft(newDonationDraft());
+      setDraft(initialDonationDraft);
       router.replace({ pathname: "/donante/espera-voluntario", params: { id } });
     } catch (failure) {
       if (existing && isApiError(failure) && failure.type === "donacion-no-editable") {
@@ -827,9 +827,6 @@ export function ReviewDonationScreen() {
         ) : (
           <Copy tone="secondary">Punto pendiente de seleccionar en el mapa</Copy>
         )}
-        <Copy tone="secondary">
-          Ventana: {draft.pickupDate || "Fecha pendiente"} · Todo el día
-        </Copy>
       </Card>
       <Section title="Productos agregados">
         <Copy tone="secondary">

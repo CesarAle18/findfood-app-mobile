@@ -2,12 +2,10 @@ import { z } from "zod";
 
 import type { Coordenada } from "@/api/types";
 import {
-  fullDayPickupBounds,
-  fullDayPickupWindow,
   isBeforeTodayInBogota,
   parseDate,
+  pickupWindowFromNow,
   toFechaVencimiento,
-  todayInBogota,
 } from "@/domain/mappers/dates";
 import { MappingError } from "@/domain/mappers/errors";
 import { isInServiceArea } from "@/domain/mappers/geo";
@@ -43,8 +41,6 @@ export interface DonationDraft {
   /** The donation created in the API (BORRADOR); a retry updates it instead of creating another. */
   apiId: string | null;
   products: DraftProduct[];
-  /** `DD/MM/AAAA` (Bogotá) of the pickup day; the volunteer may come at any time that day. */
-  pickupDate: string;
   /** The address the donor typed; the map never overwrites it. */
   direccion: string;
   /** Optional landmark for the volunteer ("Portería norte"). */
@@ -74,20 +70,15 @@ function blankProduct(id: number): DraftProduct {
   };
 }
 
-/** A draft without a pickup date; screens start from `newDonationDraft`. */
+/** An empty draft, where the form starts. */
 export const initialDonationDraft: DonationDraft = {
   apiId: null,
   products: [blankProduct(1)],
-  pickupDate: "",
   direccion: "",
   referencia: "",
   ubicacionRecogida: null,
   direccionUbicada: null,
 };
-/** A fresh draft that picks up today (Bogotá). */
-export function newDonationDraft(now: number = Date.now()): DonationDraft {
-  return { ...initialDonationDraft, pickupDate: todayInBogota(now) };
-}
 
 export function appendProduct(draft: DonationDraft): DonationDraft {
   const id = Math.max(0, ...draft.products.map((p) => p.id)) + 1;
@@ -221,8 +212,6 @@ const MAX_PRODUCTS = 30;
 /** `cantidad` and `peso_estimado_kg` bounds of the API (2 decimals). */
 const MIN_AMOUNT = 0.01;
 const MAX_AMOUNT = 99_999_999;
-/** `POST /donaciones/:id/publicar` refuses a window that ends sooner than this. */
-const MIN_REMAINING_MS = 15 * 60 * 1000;
 
 const QUANTITY_PATTERN = /^\d+(?:[.,]\d{1,2})?$/;
 
@@ -265,9 +254,9 @@ function itemBody(product: DraftProduct, { unidades }: DraftCatalogs): ItemDonac
  * the draft is incomplete (see `validateDraft` for the reasons). A unit missing from the
  * catalog, or without a kg factor, throws a `MappingError`.
  *
- * The window is the whole pickup day (from the current minute when it is today).
+ * The donor does not choose a window: it opens when the donation is sent, for 24 hours.
  *
- * @param now Epoch milliseconds; today's window starts at it.
+ * @param now Epoch milliseconds of sending; the window starts at its minute.
  */
 export function toCrearDonacionBody(
   draft: DonationDraft,
@@ -276,8 +265,7 @@ export function toCrearDonacionBody(
 ): CrearDonacionBody | null {
   const pickup = draftPickupBody(draft);
   if (!pickup || draft.products.length === 0 || draft.products.length > MAX_PRODUCTS) return null;
-  const window = safely(() => fullDayPickupWindow(draft.pickupDate, now));
-  if (!window) return null;
+  const window = pickupWindowFromNow(now);
   const items: ItemDonacionBody[] = [];
   for (const product of draft.products) {
     const item = itemBody(product, catalogs);
@@ -340,18 +328,6 @@ function draftSchema(now: number) {
         .array(product)
         .min(1, "Agrega al menos un producto.")
         .max(MAX_PRODUCTS, `Puedes donar como máximo ${MAX_PRODUCTS} productos.`),
-      // Only the first failing message is shown (see `validateDraft`).
-      pickupDate: z
-        .string()
-        .refine(isDate, "Selecciona la fecha de recogida.")
-        .refine(
-          (date) => !isDate(date) || !isBeforeTodayInBogota(date, now),
-          "La fecha de recogida no puede ser anterior a hoy.",
-        )
-        .refine(
-          (date) => !isDate(date) || fullDayPickupBounds(date, now).end >= now + MIN_REMAINING_MS,
-          "Ya no queda tiempo para recoger hoy. Elige otra fecha.",
-        ),
       direccion: z.string().trim().min(5, "Ingresa una dirección de al menos 5 caracteres."),
       ubicacionRecogida: z
         .object({ lat: z.number(), lng: z.number() })
@@ -365,7 +341,7 @@ function draftSchema(now: number) {
  * Checks the draft against the rules `POST /donaciones` and `… /publicar` apply, so the
  * donor sees them by field before sending. Null when the draft can be published.
  *
- * @param now Epoch milliseconds; the window and the expiry depend on it.
+ * @param now Epoch milliseconds; the expiry check depends on it.
  */
 export function validateDraft(draft: DonationDraft, now: number): DraftErrors | null {
   const result = draftSchema(now).safeParse(draft);
