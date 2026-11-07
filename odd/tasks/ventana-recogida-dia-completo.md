@@ -17,6 +17,7 @@ The user asked to remove the pickup hours when creating a donation.
 
 ## Tasks
 - [x] T1 remove `pickupFrom`/`pickupUntil` from the draft, derive the full-day window in the body and validation, update the form and review screens and their tests. Route: delegated writer (2+ non-trivial files).
+- [x] T2 expiry calendar ("Fecha de vencimiento"): `DateTimeField` marks today (Bogotá) and, with the new `disablePast` prop, disables past days and "Mes anterior" before the current month; applied to the expiry field only. Route: inline (one component + its new test). Commit `92e8fb1`.
 
 ## Acceptance criteria
 - The form shows only "Fecha de recogida" under "Ventana de recogida".
@@ -34,3 +35,5 @@ The user asked to remove the pickup hours when creating a donation.
   - `npm run lint` (whole project) not run separately; the scoped eslint above covers the changed files.
 - 2026-11-07: review assess (`--base-ref 5d2ff66 --committed-only`, untracked unrelated files excluded): risk `medium`, `review_due: false` (`under_budget`, 288 changed lines). Parent spot check: `npx jest draft-submission donor-draft-screens` 2 suites / 32 tests passed. Full `npm run lint` not run (scoped eslint exit 0).
 - 2026-11-07: removed the date hint "El voluntario podrá recoger en cualquier momento de ese día." at the user's request (inline, one mechanical UI line + its assertion). `npx jest donor-draft-screens` 13 passed; `npm run typecheck` clean; eslint on both files exit 0.
+- 2026-11-07: T2 done in `92e8fb1`. RED: `npx jest src/components/findfood/__tests__/date-time-field.test.tsx` 4 failed (no today mark, no disablePast; the calendar opened on the wall-clock month). GREEN: `npx jest src/components src/screens` 34 suites / 426 tests passed; `npm run typecheck` clean; `npx eslint src/components/findfood src/screens/donations.tsx` exit 0.
+- 2026-11-07: branch reached the slice budget (assess: medium, 404 lines, `slice_budget_reached`). Native review granted, lineage `review-667a35e91273a98d`, one reliability lens: approved and acknowledged (authority burned). Reviewed boundary is now `92e8fb1`. Advisory, non-blocking: R3-001 (this record lacked T2, fixed by this entry), R3-002 (pickup date picker could also use `disablePast`), R3-003 (`fullDayPickupWindow` at 23:59 gives a zero-length window; `validateDraft` blocks it first).
