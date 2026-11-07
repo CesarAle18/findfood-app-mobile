@@ -17,6 +17,7 @@ import {
   PICKUP_POINT_REQUIRED,
   type DonationDraft,
 } from "@/domain/donation-draft";
+import { clearReverseGeocodeCache } from "@/location/geocode";
 import { NewDonationScreen } from "@/screens/donations";
 import { ReviewDonationScreen } from "@/screens/donor";
 import { MobileProvider } from "@/state/mobile-context";
@@ -27,6 +28,9 @@ import { createTestQueryClient } from "@/test-utils/query";
 jest.mock("@/api", () => ({
   api: jest.requireActual<typeof import("@/test-utils/api")>("@/test-utils/api").createApiMock(),
 }));
+
+// A build with the Maps key: the picker draws the map the donor moves.
+jest.mock("@/config/maps", () => ({ hasGoogleMapsKey: () => true }));
 
 // The Jest build of Reanimated has no LayoutAnimationConfig: render its children as they are.
 jest.mock("@/components/findfood/motion", () => ({
@@ -55,9 +59,6 @@ const readyDraft: DonationDraft = {
       fotoUri: "file:///leche.jpg",
     },
   ],
-  pickupDate: "16/10/2026",
-  pickupFrom: "16:00",
-  pickupUntil: "18:00",
   direccion: "Cra 45 #12-30",
   ubicacionRecogida: { lat: 4.65, lng: -74.06 },
 };
@@ -111,7 +112,7 @@ afterEach(() => {
 
 describe("NewDonationScreen", () => {
   it("shows the errors by field and stays while the draft is incomplete", async () => {
-    await renderScreen(NewDonationScreen, { ...initialDonationDraft, pickupDate: "16/10/2026" });
+    await renderScreen(NewDonationScreen, initialDonationDraft);
 
     await fireEvent.press(await screen.findByText("Continuar"));
 
@@ -126,15 +127,13 @@ describe("NewDonationScreen", () => {
     expect(screen.queryByText("Revisión")).toBeNull();
   });
 
-  it("refuses a window that already ended", async () => {
-    await renderScreen(NewDonationScreen, { ...readyDraft, pickupFrom: "08:00", pickupUntil: "09:00" });
+  it("does not ask for a pickup window", async () => {
+    await renderScreen(NewDonationScreen, readyDraft);
 
-    await fireEvent.press(await screen.findByText("Continuar"));
-
-    expect(screen.getByText("La recogida no puede empezar en el pasado.")).toBeOnTheScreen();
-    expect(
-      screen.getByText("La recogida debe terminar al menos 15 minutos después de ahora."),
-    ).toBeOnTheScreen();
+    expect(await screen.findByText("Continuar")).toBeOnTheScreen();
+    expect(screen.queryByText("Ventana de recogida")).toBeNull();
+    expect(screen.queryByText("Fecha de recogida")).toBeNull();
+    expect(screen.queryByLabelText(/Fecha de recogida/)).toBeNull();
   });
 
   it("refuses a pickup point outside Bogotá's service area", async () => {
@@ -152,18 +151,37 @@ describe("NewDonationScreen", () => {
   it("opens the review when the draft is valid", async () => {
     await renderScreen(NewDonationScreen, readyDraft);
 
-    expect(await screen.findByLabelText("Fecha de recogida: 16/10/2026")).toBeOnTheScreen();
+    await fireEvent.press(await screen.findByText("Continuar"));
+
+    expect(await screen.findByText("Revisión")).toBeOnTheScreen();
+  });
+
+  it("does not show the chosen point's coordinates", async () => {
+    await renderScreen(NewDonationScreen, readyDraft);
+
+    expect(await screen.findByText("Continuar")).toBeOnTheScreen();
+    expect(screen.queryByText(/Punto elegido/)).toBeNull();
+    expect(
+      screen.queryByText("Este punto de recogida se compartirá entre todos los productos."),
+    ).toBeNull();
+  });
+
+  it("locates the typed address as the pickup point", async () => {
+    jest.spyOn(Location, "geocodeAsync").mockResolvedValue([{ latitude: 4.61, longitude: -74.07 }]);
+    await renderScreen(NewDonationScreen, { ...readyDraft, ubicacionRecogida: null });
+
+    await fireEvent.press(await screen.findByRole("button", { name: "Ubicar dirección" }));
     await fireEvent.press(screen.getByText("Continuar"));
 
     expect(await screen.findByText("Revisión")).toBeOnTheScreen();
   });
 
-  it("locates the typed address as the pickup point, and drops it when the address changes", async () => {
+  it("drops the located point when the address changes", async () => {
     jest.spyOn(Location, "geocodeAsync").mockResolvedValue([{ latitude: 4.61, longitude: -74.07 }]);
     await renderScreen(NewDonationScreen, { ...readyDraft, ubicacionRecogida: null });
 
     await fireEvent.press(await screen.findByRole("button", { name: "Ubicar dirección" }));
-    expect(await screen.findByText(/Punto elegido/)).toBeOnTheScreen();
+    await waitFor(() => expect(Location.geocodeAsync).toHaveBeenCalled());
 
     await fireEvent.changeText(screen.getByDisplayValue("Cra 45 #12-30"), "Cra 45 #12-31");
     expect(screen.queryByText(/Punto elegido/)).toBeNull();
@@ -172,12 +190,57 @@ describe("NewDonationScreen", () => {
     expect(screen.getByText(PICKUP_POINT_REQUIRED)).toBeOnTheScreen();
     expect(screen.queryByText("Revisión")).toBeNull();
   });
+
+  describe("the address follows the chosen point", () => {
+    const suggested = "Calle 76 #15-20, Bogotá";
+
+    beforeEach(() => {
+      clearReverseGeocodeCache();
+      mockApi.get.mockImplementation(async (path: string) => {
+        if (path === "/catalogos") return catalogosFixture;
+        if (path === "/geo/inversa") return { direccion: suggested };
+        throw new Error(`unexpected GET ${path}`);
+      });
+    });
+
+    it("replaces the typed address once the donor moves the map", async () => {
+      await renderScreen(NewDonationScreen, readyDraft);
+
+      const region = { latitude: 4.7, longitude: -74.1, latitudeDelta: 0.01, longitudeDelta: 0.01 };
+      const map = await screen.findByTestId("location-picker-map");
+      await fireEvent(map, "regionChangeComplete", region, { isGesture: true });
+
+      expect(await screen.findByDisplayValue(suggested, {}, { timeout: 2000 })).toBeOnTheScreen();
+      expect(screen.queryByDisplayValue("Cra 45 #12-30")).toBeNull();
+    });
+
+    it("replaces the typed address with the device position's", async () => {
+      const defaultHook = jest.mocked(Location.useForegroundPermissions).getMockImplementation()!;
+      const granted = { status: "granted", granted: true, canAskAgain: true, expires: "never" };
+      jest.mocked(Location.useForegroundPermissions).mockImplementation(() => [
+        granted as never,
+        jest.fn(async () => granted as never),
+        jest.fn(async () => granted as never),
+      ]);
+      try {
+        await renderScreen(NewDonationScreen, readyDraft);
+
+        await fireEvent.press(await screen.findByRole("button", { name: "Usar mi ubicación" }));
+
+        expect(await screen.findByDisplayValue(suggested)).toBeOnTheScreen();
+        expect(screen.queryByDisplayValue("Cra 45 #12-30")).toBeNull();
+      } finally {
+        jest.mocked(Location.useForegroundPermissions).mockImplementation(defaultHook);
+      }
+    });
+  });
 });
 
 describe("ReviewDonationScreen", () => {
   const expectedBody = {
-    ventana_recogida_inicio: "2026-10-16T16:00:00-05:00",
-    ventana_recogida_fin: "2026-10-16T18:00:00-05:00",
+    // From the moment of sending (10:00 in Bogotá) for 24 hours.
+    ventana_recogida_inicio: "2026-10-16T10:00:00-05:00",
+    ventana_recogida_fin: "2026-10-17T10:00:00-05:00",
     direccion_recogida: "Cra 45 #12-30",
     ubicacion_recogida: { lat: 4.65, lng: -74.06 },
     items: [
@@ -266,15 +329,33 @@ describe("ReviewDonationScreen", () => {
     );
   });
 
-  it("checks the window again before sending", async () => {
-    // 17:50: the 16:00–18:00 window started long ago.
-    jest.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 9, 16, 22, 50));
+  it("does not show a pickup window to the donor", async () => {
     await renderScreen(ReviewDonationScreen, readyDraft);
+
+    expect(await screen.findByText("Punto general de recogida")).toBeOnTheScreen();
+    expect(screen.queryByText(/Ventana:/)).toBeNull();
+  });
+
+  it("starts the window when the donor confirms, even late at night", async () => {
+    mockApi.post.mockImplementation(async (path: string) => {
+      if (path === "/donaciones") return detalleFixture({ id: "nueva-1", estado: "BORRADOR" });
+      if (path === "/donaciones/nueva-1/publicar") return publicada("nueva-1");
+      throw new Error(`unexpected POST ${path}`);
+    });
+    await renderScreen(ReviewDonationScreen, readyDraft);
+    // 23:50 in Bogotá, after the screen opened.
+    jest.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 9, 17, 4, 50));
 
     await pressConfirm();
 
-    expect(await screen.findByText("La recogida no puede empezar en el pasado.")).toBeOnTheScreen();
-    expect(mockApi.post).not.toHaveBeenCalled();
+    expect(await screen.findByText("Esperando voluntario nueva-1")).toBeOnTheScreen();
+    expect(mockApi.post).toHaveBeenNthCalledWith(1, "/donaciones", {
+      body: {
+        ...expectedBody,
+        ventana_recogida_inicio: "2026-10-16T23:50:00-05:00",
+        ventana_recogida_fin: "2026-10-17T23:50:00-05:00",
+      },
+    });
   });
 
   it("shows each product's photo, or that it has none", async () => {

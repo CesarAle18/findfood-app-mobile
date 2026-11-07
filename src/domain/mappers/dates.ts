@@ -221,6 +221,18 @@ export function pickupWindowBounds(input: PickupWindowInput): { start: number; e
   };
 }
 
+/**
+ * The pickup window of a donation sent at `now` (epoch milliseconds): from the current
+ * Bogotá minute until the same minute of the next day (Bogotá has no DST, so 24 hours).
+ */
+export function pickupWindowFromNow(now: number): PickupWindowBody {
+  const { date, time } = bogotaParts(now);
+  return {
+    ventana_recogida_inicio: bogotaIso(date, time),
+    ventana_recogida_fin: bogotaIso(nextDay(date), time),
+  };
+}
+
 // --- Today --------------------------------------------------------------------------------
 
 /** `DD/MM/AAAA` of the Bogotá calendar day of `now` (epoch milliseconds). */

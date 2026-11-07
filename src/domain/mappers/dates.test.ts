@@ -12,6 +12,7 @@ import {
   todayInBogota,
   isBeforeTodayInBogota,
   pickupWindowBounds,
+  pickupWindowFromNow,
 } from "./dates";
 import { errorCode } from "@/test-utils/mapping";
 
@@ -391,6 +392,23 @@ describe("pickupWindowBounds", () => {
     expect(pickupWindowBounds({ date: "31/12/2026", start: "22:00", end: "01:30" })).toEqual({
       start: bogota(2026, 12, 31, 22),
       end: bogota(2027, 1, 1, 1, 30),
+    });
+  });
+});
+
+describe("pickupWindowFromNow", () => {
+  it("starts at the current minute and ends 24 hours later", () => {
+    expect(pickupWindowFromNow(bogota(2026, 10, 16, 10, 20) + 42_000)).toEqual({
+      ventana_recogida_inicio: "2026-10-16T10:20:00-05:00",
+      ventana_recogida_fin: "2026-10-17T10:20:00-05:00",
+    });
+  });
+
+  it("reads the time in Bogotá and rolls the end over the year", () => {
+    // 21:30 in Bogotá is already the next day in UTC.
+    expect(pickupWindowFromNow(bogota(2026, 12, 31, 21, 30))).toEqual({
+      ventana_recogida_inicio: "2026-12-31T21:30:00-05:00",
+      ventana_recogida_fin: "2027-01-01T21:30:00-05:00",
     });
   });
 });

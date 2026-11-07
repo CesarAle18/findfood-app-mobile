@@ -1,4 +1,5 @@
 import { colors } from "@/design/tokens";
+import { todayInBogota } from "@/domain/mappers/dates";
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, View } from "react-native";
 import { Icon } from "./icon";
@@ -16,6 +17,17 @@ export function calendarDays(year: number, month: number) {
   ] as (number | null)[];
 }
 const pad = (n: number) => String(n).padStart(2, "0");
+/** `YYYYMMDD` of a `DD/MM/AAAA` date, to compare days. */
+const dayKey = (date: string) => {
+  const [day, month, year] = date.split("/").map(Number);
+  return year * 10000 + month * 100 + day;
+};
+/** Today (Bogotá) as `DD/MM/AAAA`, and the first day of its month. */
+function today() {
+  const date = todayInBogota(Date.now());
+  const [, month, year] = date.split("/").map(Number);
+  return { date, month: new Date(year, month - 1, 1) };
+}
 const months = [
   "Enero",
   "Febrero",
@@ -37,6 +49,7 @@ export function DateTimeField({
   onChange,
   mode = "date",
   error,
+  disablePast = false,
 }: {
   label: string;
   value: string;
@@ -44,9 +57,12 @@ export function DateTimeField({
   mode?: "date" | "time";
   /** Validation message, shown below the field and announced with it. */
   error?: string;
+  /** Date mode: days before today (Bogotá) cannot be picked. */
+  disablePast?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [month, setMonth] = useState(new Date());
+  const [now, setNow] = useState(today);
+  const [month, setMonth] = useState(now.month);
   const [hour, setHour] = useState(0);
   const [minute, setMinute] = useState(0);
   const openBorder = useActiveStyle(open, { border: true });
@@ -55,10 +71,13 @@ export function DateTimeField({
     justifyContent: "center" as const,
     alignItems: "center" as const,
   };
+  const atFirstMonth = disablePast && month <= now.month;
   function show() {
+    const current = today();
+    setNow(current);
     const parts = value.split("/").map(Number);
     setMonth(
-      parts.length === 3 ? new Date(parts[2], parts[1] - 1, 1) : new Date(),
+      parts.length === 3 ? new Date(parts[2], parts[1] - 1, 1) : current.month,
     );
     const time = value.split(":").map(Number);
     setHour(time[0] || 0);
@@ -136,7 +155,13 @@ export function DateTimeField({
                   <Pressing
                     accessibilityRole="button"
                     accessibilityLabel="Mes anterior"
-                    surface={{ ...action, width: 48 }}
+                    accessibilityState={{ disabled: atFirstMonth }}
+                    disabled={atFirstMonth}
+                    surface={{
+                      ...action,
+                      width: 48,
+                      opacity: atFirstMonth ? 0.3 : 1,
+                    }}
                     onPress={() =>
                       setMonth(
                         new Date(month.getFullYear(), month.getMonth() - 1, 1),
@@ -183,14 +208,19 @@ export function DateTimeField({
                   {calendarDays(month.getFullYear(), month.getMonth()).map(
                     (day, i) => {
                       const date = `${pad(day || 1)}/${pad(month.getMonth() + 1)}/${month.getFullYear()}`;
+                      const isToday = date === now.date;
+                      const isPast =
+                        disablePast && dayKey(date) < dayKey(now.date);
+                      const selected = value === date;
                       return day === null ? (
                         <View key={i} style={{ width: "14.2857%" }} />
                       ) : (
                         <Pressable
                           key={i}
                           accessibilityRole="button"
-                          accessibilityLabel={date}
-                          accessibilityState={{ selected: value === date }}
+                          accessibilityLabel={isToday ? `${date}, hoy` : date}
+                          accessibilityState={{ selected, disabled: isPast }}
+                          disabled={isPast}
                           onPress={() => {
                             onChange(date);
                             setOpen(false);
@@ -199,11 +229,18 @@ export function DateTimeField({
                             ...action,
                             width: "14.2857%",
                             borderRadius: 8,
-                            backgroundColor:
-                              value === date ? colors.soft : colors.surface,
+                            borderWidth: isToday ? 1 : 0,
+                            borderColor: colors.primary,
+                            opacity: isPast ? 0.3 : 1,
+                            backgroundColor: selected
+                              ? colors.soft
+                              : colors.surface,
                           }}
                         >
-                          <Copy tone={value === date ? "primary" : "default"}>
+                          <Copy
+                            tone={selected || isToday ? "primary" : "default"}
+                            weight={isToday ? "bold" : undefined}
+                          >
                             {day}
                           </Copy>
                         </Pressable>

@@ -57,7 +57,6 @@ import {
   validateDraft,
   type DraftProduct,
 } from "@/domain/donation-draft";
-import { formatCoordenada } from "@/domain/mappers/geo";
 import {
   COLD_CHAIN_OPTIONS,
   fromRequiereRefrigeracion,
@@ -203,6 +202,7 @@ export function NewDonationScreen() {
                     label="Fecha de vencimiento"
                     value={product.expiresOn}
                     onChange={(expiresOn) => update(product.id, { expiresOn })}
+                    disablePast
                     error={productError(product.id, "expiresOn")}
                   />
                   <SelectField
@@ -269,39 +269,6 @@ export function NewDonationScreen() {
         </Copy>
       </Pressing>
       <FieldError message={errors?.products} />
-      <Section title="Ventana de recogida">
-        <DateTimeField
-          label="Fecha de recogida"
-          value={draft.pickupDate}
-          onChange={(pickupDate) =>
-            setDraft((current) => ({ ...current, pickupDate }))
-          }
-          error={errors?.pickupDate}
-        />
-        <Row style={{ alignItems: "flex-start" }}>
-          <DateTimeField
-            mode="time"
-            label="Desde"
-            value={draft.pickupFrom}
-            onChange={(pickupFrom) =>
-              setDraft((current) => ({ ...current, pickupFrom }))
-            }
-            error={errors?.pickupFrom}
-          />
-          <DateTimeField
-            mode="time"
-            label="Hasta"
-            value={draft.pickupUntil}
-            onChange={(pickupUntil) =>
-              setDraft((current) => ({ ...current, pickupUntil }))
-            }
-            error={errors?.pickupUntil}
-          />
-        </Row>
-        <Copy tone="secondary">
-          Si la hora de fin es anterior a la de inicio, la recogida termina al día siguiente.
-        </Copy>
-      </Section>
       <Section title="Ubicación de la entrega">
         <Field
           label="Dirección de recogida"
@@ -338,28 +305,9 @@ export function NewDonationScreen() {
             setDraft((current) => setDireccion(current, direccion))
           }
           onChange={(point, source) => setDraft((current) => setUbicacion(current, point, source))}
-          // Only while the address is empty: a typed address is never replaced.
-          onAddressSuggestion={
-            draft.direccion.trim() === ""
-              ? (text) => setDraft((current) => suggestDireccion(current, text))
-              : undefined
-          }
+          // Each point from the map or the device writes its own address in the field.
+          onAddressSuggestion={(text) => setDraft((current) => suggestDireccion(current, text))}
         />
-        <Card soft>
-          <Row>
-            <Icon name="pin" />
-            <View style={{ flex: 1 }}>
-              <Copy>
-                {draft.ubicacionRecogida
-                  ? `Punto elegido: ${formatCoordenada(draft.ubicacionRecogida)}`
-                  : "Ubica la dirección escrita, usa tu ubicación o mueve el mapa hasta tu punto de recogida."}
-              </Copy>
-              <Copy tone="secondary">
-                Este punto de recogida se compartirá entre todos los productos.
-              </Copy>
-            </View>
-          </Row>
-        </Card>
         <FieldError message={errors?.ubicacionRecogida} />
       </Section>
       <FormMessage

@@ -127,9 +127,12 @@ describe("suggestDireccion", () => {
     expect(suggestDireccion(initialDonationDraft, "Calle 76 15-20").direccion).toBe("Calle 76 15-20");
   });
 
-  it("never overwrites an address the donor typed", () => {
-    const typed = { ...initialDonationDraft, direccion: "Cra 45 #12-30" };
-    expect(suggestDireccion(typed, "Calle 76 15-20")).toBe(typed);
+  it("replaces the address with the one of the new map or device point", () => {
+    const point = { lat: 4.61, lng: -74.07 };
+    const typed = { ...initialDonationDraft, direccion: "Cra 45 #12-30", ubicacionRecogida: point };
+    const suggested = suggestDireccion(typed, "Calle 76 15-20");
+    expect(suggested.direccion).toBe("Calle 76 15-20");
+    expect(suggested.ubicacionRecogida).toBe(point);
   });
 });
 

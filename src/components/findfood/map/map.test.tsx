@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
-import { createRef } from "react";
+import { createRef, useState } from "react";
 import * as Location from "expo-location";
 import { Platform } from "react-native";
 
@@ -388,6 +388,131 @@ describe("LocationPicker with Google through the API", () => {
     expect(geocodificarInversa).toHaveBeenCalledWith({ lat: 4.71, lng: -74.1 });
     expect(onAddressSuggestion).toHaveBeenCalledWith("Calle 76 #15-20, Bogotá");
     expect(Location.reverseGeocodeAsync).not.toHaveBeenCalled();
+  });
+
+  const rest = () =>
+    act(async () => {
+      jest.advanceTimersByTime(REVERSE_GEOCODE_DELAY_MS);
+    });
+
+  it("suggests the address of each new point the donor moves the map to", async () => {
+    jest.useFakeTimers();
+    jest
+      .mocked(geocodificarInversa)
+      .mockResolvedValueOnce({ direccion: "Calle 76 #15-20, Bogotá" })
+      .mockResolvedValueOnce({ direccion: "Cra. 7 #45-10, Bogotá" });
+    const onAddressSuggestion = jest.fn();
+    await render(
+      <LocationPicker ref={picker} value={null} onChange={jest.fn()} onAddressSuggestion={onAddressSuggestion} />,
+    );
+    const map = screen.getByTestId("location-picker-map");
+
+    await act(async () => {
+      fireEvent(map, "regionChangeComplete", region, { isGesture: true });
+    });
+    await rest();
+    await act(async () => {
+      fireEvent(map, "regionChangeComplete", { ...region, latitude: 4.63 }, { isGesture: true });
+    });
+    await rest();
+
+    expect(onAddressSuggestion.mock.calls).toEqual([
+      ["Calle 76 #15-20, Bogotá"],
+      ["Cra. 7 #45-10, Bogotá"],
+    ]);
+  });
+
+  it("ignores a late answer for a point the donor already left", async () => {
+    jest.useFakeTimers();
+    let answerFirst!: (answer: { direccion: string }) => void;
+    jest
+      .mocked(geocodificarInversa)
+      .mockReturnValueOnce(new Promise((resolve) => (answerFirst = resolve)))
+      .mockResolvedValueOnce({ direccion: "Cra. 7 #45-10, Bogotá" });
+    const onAddressSuggestion = jest.fn();
+    await render(
+      <LocationPicker ref={picker} value={null} onChange={jest.fn()} onAddressSuggestion={onAddressSuggestion} />,
+    );
+    const map = screen.getByTestId("location-picker-map");
+
+    await act(async () => {
+      fireEvent(map, "regionChangeComplete", region, { isGesture: true });
+    });
+    await rest();
+    await act(async () => {
+      fireEvent(map, "regionChangeComplete", { ...region, latitude: 4.63 }, { isGesture: true });
+    });
+    await rest();
+    await act(async () => {
+      answerFirst({ direccion: "Calle 76 #15-20, Bogotá" });
+    });
+
+    expect(onAddressSuggestion.mock.calls).toEqual([["Cra. 7 #45-10, Bogotá"]]);
+  });
+
+  it("does not rewrite an address located right after a map move", async () => {
+    jest.useFakeTimers();
+    jest.mocked(geocodificar).mockResolvedValue({
+      direccion: "Cra. 45 #12-30, Bogotá",
+      ubicacion: { lat: 4.62, lng: -74.08 },
+      precision: "ROOFTOP",
+    });
+    jest.mocked(geocodificarInversa).mockResolvedValue({ direccion: "Calle 76 #15-20, Bogotá" });
+    const onAddressSuggestion = jest.fn();
+    await render(
+      <LocationPicker ref={picker}
+        value={null}
+        onChange={jest.fn()}
+        address="Cra 45 #12-30"
+        onAddressSuggestion={onAddressSuggestion}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent(screen.getByTestId("location-picker-map"), "regionChangeComplete", region, {
+        isGesture: true,
+      });
+    });
+    await locate();
+    await rest();
+
+    expect(geocodificarInversa).not.toHaveBeenCalled();
+    expect(onAddressSuggestion).not.toHaveBeenCalled();
+  });
+
+  it("does not search or list suggestions for the address the map wrote", async () => {
+    jest.useFakeTimers();
+    jest.mocked(geocodificarInversa).mockResolvedValue({ direccion: "Calle 76 #15-20, Bogotá" });
+    jest.mocked(autocompletarDireccion).mockResolvedValue({
+      sugerencias: [{ place_id: "ChIJ76", principal: "Calle 76 #15-20", secundario: "Bogotá" }],
+    });
+    function Form() {
+      const [address, setAddress] = useState("");
+      return (
+        <LocationPicker ref={picker}
+          value={null}
+          onChange={jest.fn()}
+          address={address}
+          onAddressChosen={setAddress}
+          onAddressSuggestion={setAddress}
+        />
+      );
+    }
+    await render(<Form />);
+
+    await act(async () => {
+      fireEvent(screen.getByTestId("location-picker-map"), "regionChangeComplete", region, {
+        isGesture: true,
+      });
+    });
+    await rest();
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOCOMPLETE_DELAY_MS);
+    });
+
+    expect(geocodificarInversa).toHaveBeenCalledTimes(1);
+    expect(autocompletarDireccion).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Calle 76 #15-20, Bogotá" })).toBeNull();
   });
 
   it("draws the coverage radius around the chosen point", async () => {

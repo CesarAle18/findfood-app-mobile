@@ -34,7 +34,7 @@ import {
 } from "@/components/findfood/ui";
 import { colors } from "@/design/tokens";
 import {
-  newDonationDraft,
+  initialDonationDraft,
   toCrearDonacionBody,
   validateDraft,
   type DraftProduct,
@@ -737,15 +737,16 @@ function useConfirmDonation() {
 
   const confirm = async () => {
     setError(undefined);
-    // The window may have closed since the form was checked.
-    const invalid = validateDraft(draft, Date.now());
+    // One instant for the checks (an expiry may have passed) and the window, which opens now.
+    const now = Date.now();
+    const invalid = validateDraft(draft, now);
     if (invalid) {
       setError(Object.values(invalid)[0] ?? INCOMPLETE_MESSAGE);
       return;
     }
     let body: CrearDonacionBody | null = null;
     try {
-      body = unidades ? toCrearDonacionBody(draft, { unidades }) : null;
+      body = unidades ? toCrearDonacionBody(draft, { unidades }, now) : null;
     } catch (failure) {
       setError(messageFor(failure));
       return;
@@ -766,7 +767,7 @@ function useConfirmDonation() {
         setDraft((current) => ({ ...current, apiId: id }));
       }
       await publicar.mutateAsync(id);
-      setDraft(newDonationDraft());
+      setDraft(initialDonationDraft);
       router.replace({ pathname: "/donante/espera-voluntario", params: { id } });
     } catch (failure) {
       if (existing && isApiError(failure) && failure.type === "donacion-no-editable") {
@@ -826,10 +827,6 @@ export function ReviewDonationScreen() {
         ) : (
           <Copy tone="secondary">Punto pendiente de seleccionar en el mapa</Copy>
         )}
-        <Copy tone="secondary">
-          Ventana: {draft.pickupDate ? `${draft.pickupDate} · ` : ""}
-          {draft.pickupFrom} – {draft.pickupUntil}
-        </Copy>
       </Card>
       <Section title="Productos agregados">
         <Copy tone="secondary">
