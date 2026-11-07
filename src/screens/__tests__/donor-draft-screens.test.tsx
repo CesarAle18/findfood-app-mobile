@@ -152,12 +152,32 @@ describe("NewDonationScreen", () => {
     expect(await screen.findByText("Revisión")).toBeOnTheScreen();
   });
 
-  it("locates the typed address as the pickup point, and drops it when the address changes", async () => {
+  it("does not show the chosen point's coordinates", async () => {
+    await renderScreen(NewDonationScreen, readyDraft);
+
+    expect(await screen.findByText("Continuar")).toBeOnTheScreen();
+    expect(screen.queryByText(/Punto elegido/)).toBeNull();
+    expect(
+      screen.queryByText("Este punto de recogida se compartirá entre todos los productos."),
+    ).toBeNull();
+  });
+
+  it("locates the typed address as the pickup point", async () => {
     jest.spyOn(Location, "geocodeAsync").mockResolvedValue([{ latitude: 4.61, longitude: -74.07 }]);
     await renderScreen(NewDonationScreen, { ...readyDraft, ubicacionRecogida: null });
 
     await fireEvent.press(await screen.findByRole("button", { name: "Ubicar dirección" }));
-    expect(await screen.findByText(/Punto elegido/)).toBeOnTheScreen();
+    await fireEvent.press(screen.getByText("Continuar"));
+
+    expect(await screen.findByText("Revisión")).toBeOnTheScreen();
+  });
+
+  it("drops the located point when the address changes", async () => {
+    jest.spyOn(Location, "geocodeAsync").mockResolvedValue([{ latitude: 4.61, longitude: -74.07 }]);
+    await renderScreen(NewDonationScreen, { ...readyDraft, ubicacionRecogida: null });
+
+    await fireEvent.press(await screen.findByRole("button", { name: "Ubicar dirección" }));
+    await waitFor(() => expect(Location.geocodeAsync).toHaveBeenCalled());
 
     await fireEvent.changeText(screen.getByDisplayValue("Cra 45 #12-30"), "Cra 45 #12-31");
     expect(screen.queryByText(/Punto elegido/)).toBeNull();

@@ -57,7 +57,6 @@ import {
   validateDraft,
   type DraftProduct,
 } from "@/domain/donation-draft";
-import { formatCoordenada } from "@/domain/mappers/geo";
 import {
   COLD_CHAIN_OPTIONS,
   fromRequiereRefrigeracion,
@@ -313,21 +312,6 @@ export function NewDonationScreen() {
               : undefined
           }
         />
-        <Card soft>
-          <Row>
-            <Icon name="pin" />
-            <View style={{ flex: 1 }}>
-              <Copy>
-                {draft.ubicacionRecogida
-                  ? `Punto elegido: ${formatCoordenada(draft.ubicacionRecogida)}`
-                  : "Ubica la dirección escrita, usa tu ubicación o mueve el mapa hasta tu punto de recogida."}
-              </Copy>
-              <Copy tone="secondary">
-                Este punto de recogida se compartirá entre todos los productos.
-              </Copy>
-            </View>
-          </Row>
-        </Card>
         <FieldError message={errors?.ubicacionRecogida} />
       </Section>
       <FormMessage
