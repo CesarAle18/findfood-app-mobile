@@ -284,6 +284,17 @@ describe("ActiveRouteScreen · route in progress", () => {
     });
   });
 
+  it("leaves a given-up pickup out of the map, the list and the stop count", async () => {
+    answerGets({ enCurso, detalle: withStops({ ...first, estado: "OMITIDA" }, second, entrega) });
+
+    await renderRoutes();
+
+    expect(await screen.findByText("1 de 2")).toBeOnTheScreen();
+    expect(screen.getByText(/· 2 paradas$/)).toBeOnTheScreen();
+    expect(screen.getByLabelText("Mapa de la ruta con 2 paradas")).toBeOnTheScreen();
+    expect(screen.queryByText("DON-1048")).toBeNull();
+  });
+
   it("registers the arrival at a pending pickup with the current position", async () => {
     mockGetCurrentFix.mockResolvedValue({ ubicacion: { lat: 3.421, lng: -76.54 }, precision_m: 12 });
     answerGets({ enCurso, detalle: withStops(first, second, entrega) });

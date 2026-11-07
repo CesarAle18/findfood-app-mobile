@@ -27,15 +27,26 @@ export function pendingStops<T extends Stop>(paradas: readonly T[]): T[] {
   return byOrder(paradas).filter(isOpen);
 }
 
+/**
+ * The stops that still belong to the route, in visiting order. An OMITIDA stop left it (its
+ * pickup was given up and the donation went back to the offers). A route whose stops are
+ * all OMITIDA was cancelled, and it keeps them so its history still shows what it held.
+ */
+export function routeStops<T extends Stop>(paradas: readonly T[]): T[] {
+  const kept = byOrder(paradas).filter((parada) => parada.estado !== "OMITIDA");
+  return kept.length > 0 ? kept : byOrder(paradas);
+}
+
 /** The first stop still to visit, or null once every stop is closed. */
 export function nextStop<T extends Stop>(paradas: readonly T[]): T | null {
   return pendingStops(paradas)[0] ?? null;
 }
 
-/** `2 de 3`: the stop's position in visiting order. */
+/** `2 de 3`: the stop's position in visiting order, among the stops still on the route. */
 export function stopProgress(paradas: readonly Stop[], parada: Stop): string {
-  const position = byOrder(paradas).findIndex((other) => other.id === parada.id) + 1;
-  return `${position} de ${paradas.length}`;
+  const stops = routeStops(paradas);
+  const position = stops.findIndex((other) => other.id === parada.id) + 1;
+  return `${position} de ${stops.length}`;
 }
 
 /** Kilograms confirmed at the completed pickups. */

@@ -14,6 +14,7 @@ import {
   nextStop,
   pendingStops,
   pickupWindowLabel,
+  routeStops,
   stopProgress,
   validateRouteSelection,
 } from "./routes";
@@ -49,6 +50,31 @@ describe("nextStop", () => {
 describe("stopProgress", () => {
   it("reads the stop's position in visiting order", () => {
     expect(stopProgress([entrega, second, first], second)).toBe("2 de 3");
+  });
+
+  it("leaves the given-up stops out", () => {
+    expect(stopProgress([entrega, second, { ...first, estado: "OMITIDA" as const }], second)).toBe(
+      "1 de 2",
+    );
+  });
+});
+
+describe("routeStops", () => {
+  it("drops the OMITIDA stops and keeps the failed and completed ones, in order", () => {
+    const paradas = [
+      entrega,
+      { ...second, estado: "FALLIDA" as const },
+      { ...first, estado: "OMITIDA" as const },
+    ];
+
+    expect(routeStops(paradas).map((p) => p.id)).toEqual(["par-2", "par-3"]);
+  });
+
+  it("keeps every stop of a route whose stops were all given up", () => {
+    const omitida = { estado: "OMITIDA" as const };
+    const paradas = [{ ...entrega, ...omitida }, { ...first, ...omitida }];
+
+    expect(routeStops(paradas).map((p) => p.id)).toEqual(["par-1", "par-3"]);
   });
 });
 

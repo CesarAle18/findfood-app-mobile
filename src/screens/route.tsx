@@ -13,7 +13,7 @@ import { colors } from "@/design/tokens";
 import { fromFechaVencimiento, fromIsoToBogota } from "@/domain/mappers/dates";
 import { MappingError } from "@/domain/mappers/errors";
 import { formatKg } from "@/domain/mappers/profile";
-import { pickupWindowLabel } from "@/domain/mappers/routes";
+import { pickupWindowLabel, routeStops } from "@/domain/mappers/routes";
 import { paradaStatus, rutaStatus, type StatusView } from "@/domain/mappers/statuses";
 import { useLiveRoute } from "@/location/live-route";
 import type { PermissionGate } from "@/platform/permissions";
@@ -95,6 +95,8 @@ function RouteDetail({
   const enCurso = ruta.estado === "EN_CURSO";
   const live = useLiveRoute(enCurso ? ruta.id : null);
   const { gate, request } = live;
+  // Given-up stops (OMITIDA) leave the map and the list; the rest are numbered 1..n.
+  const paradas = routeStops(ruta.paradas).map((parada, i) => ({ ...parada, orden: i + 1 }));
   return (
     <>
       <Card>
@@ -104,12 +106,12 @@ function RouteDetail({
           </Copy>
           <StatusBadge status={rutaStatus(ruta.estado)} />
         </Row>
-        <Copy tone="secondary">{`${routeDate(ruta.fecha_programada)} · ${ruta.paradas.length} paradas`}</Copy>
+        <Copy tone="secondary">{`${routeDate(ruta.fecha_programada)} · ${paradas.length} paradas`}</Copy>
         {metrics !== "" ? <Copy tone="secondary">{metrics}</Copy> : null}
       </Card>
       <RouteMapView
         geometria={ruta.geometria}
-        paradas={ruta.paradas}
+        paradas={paradas}
         tramo={live.seguimiento?.tramo?.trayecto ?? null}
         showsUserLocation={enCurso && gate === "granted"}
       />
@@ -124,7 +126,7 @@ function RouteDetail({
       {ruta.estado === "EN_CURSO" ? <NextStop ruta={ruta} onNotice={onNotice} /> : null}
       <Section title="Paradas">
         <Card>
-          {ruta.paradas.map((parada) => (
+          {paradas.map((parada) => (
             <StopRow key={parada.id} parada={parada} destino={ruta.almacen_destino.nombre} />
           ))}
         </Card>
