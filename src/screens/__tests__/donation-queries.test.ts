@@ -1,9 +1,19 @@
+import type { QueryClient } from "@tanstack/react-query";
+import { act, waitFor } from "@testing-library/react-native";
+
+import { api } from "@/api";
 import type { EstadoDonacion } from "@/api/types";
 import type { HistorialEstadoDto } from "@/services/donaciones";
+import { setRealtimeStatus } from "@/sync/status";
+import type { ApiMock } from "@/test-utils/api";
 import { DONATION_ID, detalleFixture, pageFixture, resumenFixture } from "@/test-utils/fixtures";
+import { seguimientoDonacionFixture } from "@/test-utils/fixtures/seguimiento";
+import { renderWithClient } from "@/test-utils/query";
 
 import {
   PUBLISHED_POLL_MS,
+  TRACKING_IDLE_POLL_MS,
+  TRACKING_POLL_MS,
   canCancel,
   filterDonations,
   formatInstant,
@@ -13,7 +23,16 @@ import {
   pollWhilePublished,
   publishedSteps,
   selectPages,
+  useDonationDetail,
+  useDonationHistory,
+  useDonationTracking,
 } from "../donation-queries";
+
+jest.mock("@/api", () => ({
+  api: jest.requireActual<typeof import("@/test-utils/api")>("@/test-utils/api").createApiMock(),
+}));
+
+const mockApi = api as unknown as ApiMock;
 
 describe("nextOffset", () => {
   it("asks for the rows after the ones already loaded", () => {
@@ -148,6 +167,82 @@ describe("pollWhilePublished", () => {
     "EXPIRADA",
   ])("stops polling for %p", (estado) => {
     expect(pollWhilePublished(query(estado))).toBe(false);
+  });
+});
+
+/** The interval the hook's only query polls at now: its observer's `refetchInterval`, evaluated. */
+function pollInterval(client: QueryClient): number | false | undefined {
+  const [query] = client.getQueryCache().getAll();
+  const refetchInterval = query.observers[0]?.options.refetchInterval;
+  return typeof refetchInterval === "function" ? refetchInterval(query) : refetchInterval;
+}
+
+const setStatus = (status: Parameters<typeof setRealtimeStatus>[0]) =>
+  act(async () => {
+    setRealtimeStatus(status);
+  });
+
+// While the Realtime channel is joined its events announce every state change, so only the
+// polls that follow continuously changing data (the live ETA and position) keep running.
+describe("polls while the Realtime channel is joined", () => {
+  beforeEach(() => {
+    mockApi.get.mockReset();
+  });
+
+  afterEach(() => setStatus("idle"));
+
+  it("the published detail polls every 15 s only while the channel is down", async () => {
+    mockApi.get.mockResolvedValue(detalleFixture({ estado: "PUBLICADA" }));
+    const { result, client } = await renderWithClient(() =>
+      useDonationDetail(DONATION_ID, { live: true }),
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(pollInterval(client)).toBe(PUBLISHED_POLL_MS);
+
+    await setStatus("connected");
+    expect(pollInterval(client)).toBe(false);
+
+    // Dropped (Realtime retries): the poll is the fallback again.
+    await setStatus("error");
+    expect(pollInterval(client)).toBe(PUBLISHED_POLL_MS);
+  });
+
+  it("the history keeps its interval only while the channel is down", async () => {
+    mockApi.get.mockResolvedValue([]);
+    const { result, client } = await renderWithClient(() =>
+      useDonationHistory(DONATION_ID, PUBLISHED_POLL_MS),
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(pollInterval(client)).toBe(PUBLISHED_POLL_MS);
+
+    await setStatus("connected");
+    expect(pollInterval(client)).toBe(false);
+  });
+
+  it("the tracking drops its 60 s poll before the route starts", async () => {
+    mockApi.get.mockResolvedValue(
+      seguimientoDonacionFixture({ estado_donacion: "ASIGNADA", activo: false, fase: null }),
+    );
+    const { result, client } = await renderWithClient(() =>
+      useDonationTracking(DONATION_ID, "ASIGNADA"),
+    );
+    await waitFor(() => expect(result.current.data?.activo).toBe(false));
+    expect(pollInterval(client)).toBe(TRACKING_IDLE_POLL_MS);
+
+    await setStatus("connected");
+    expect(pollInterval(client)).toBe(false);
+  });
+
+  it("the tracking keeps its 30 s poll inside the live window, joined or not", async () => {
+    mockApi.get.mockResolvedValue(seguimientoDonacionFixture());
+    const { result, client } = await renderWithClient(() =>
+      useDonationTracking(DONATION_ID, "EN_RECOLECCION"),
+    );
+    await waitFor(() => expect(result.current.data?.activo).toBe(true));
+    expect(pollInterval(client)).toBe(TRACKING_POLL_MS);
+
+    await setStatus("connected");
+    expect(pollInterval(client)).toBe(TRACKING_POLL_MS);
   });
 });
 

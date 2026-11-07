@@ -34,6 +34,7 @@ import {
   type SeguimientoDonacionDto,
 } from "@/services/donaciones";
 import { invalidateKeys, queryKeys } from "@/services/query-keys";
+import { useRealtimeConnected } from "@/sync/status";
 
 export const DONATIONS_PAGE_SIZE = 20;
 
@@ -146,14 +147,16 @@ export function useDonationId(): string | undefined {
 
 /**
  * `GET /donaciones/:id`; idle without an id (the screen shows its empty state). With `live`,
- * it polls while PUBLICADA (`pollWhilePublished`), only in the foreground.
+ * it polls while PUBLICADA (`pollWhilePublished`), only in the foreground and while the
+ * Realtime channel, which announces the assignment, is not joined.
  */
 export function useDonationDetail(id: string | undefined, { live = false } = {}) {
+  const connected = useRealtimeConnected();
   return useQuery({
     ...donacionQuery(id ?? ""),
     enabled: Boolean(id),
     select: selectDetail,
-    refetchInterval: live ? pollWhilePublished : false,
+    refetchInterval: live && !connected ? pollWhilePublished : false,
     refetchIntervalInBackground: false,
   });
 }
@@ -261,12 +264,16 @@ export function publishedSteps(
   return mapped;
 }
 
-/** `GET /donaciones/:id/historial`; idle without an id. */
+/**
+ * `GET /donaciones/:id/historial`; idle without an id. It polls at `refetchInterval` only while
+ * the Realtime channel, which announces every state change, is not joined.
+ */
 export function useDonationHistory(id: string | undefined, refetchInterval: number | false) {
+  const connected = useRealtimeConnected();
   return useQuery({
     ...historialDonacionQuery(id ?? ""),
     enabled: Boolean(id),
-    refetchInterval,
+    refetchInterval: connected ? false : refetchInterval,
     refetchIntervalInBackground: false,
   });
 }
@@ -298,17 +305,20 @@ export function pollWhileActive(query: {
 
 /**
  * `GET /donaciones/:id/seguimiento` while a volunteer holds the donation (`estado` is the
- * detail's). It polls every 30 s inside the live window (60 s before the route starts), only
- * in the foreground. When the
+ * detail's). It polls every 30 s inside the live window (ETA and position), only in the
+ * foreground; before the route starts, every 60 s while the Realtime channel, which announces
+ * the start, is not joined. When the
  * window closes (delivered) or the tracking reports a state the detail does not show yet
  * (picked up), the detail and its history are refreshed, so the rest of Seguimiento follows.
  */
 export function useDonationTracking(id: string | undefined, estado: EstadoDonacion | undefined) {
   const client = useQueryClient();
+  const connected = useRealtimeConnected();
   const tracking = useQuery({
     ...seguimientoDonacionQuery(id ?? ""),
     enabled: Boolean(id) && estado !== undefined && hasLiveTracking(estado),
-    refetchInterval: pollWhileActive,
+    refetchInterval: (query) =>
+      connected && !query.state.data?.activo ? false : pollWhileActive(query),
     refetchIntervalInBackground: false,
   });
   const activo = tracking.data?.activo;

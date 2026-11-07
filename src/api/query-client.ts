@@ -74,6 +74,10 @@ export function setupQueryManagers(): void {
   // On web TanStack's default listener (visibilitychange) already does this.
   if (Platform.OS !== "web") {
     focusManager.setEventListener((setFocused) => {
+      // Seeds the state: a launch in the background (a background location relaunch, say) is
+      // not focused, so nothing that waits for the foreground starts until the app opens.
+      // Later corrections of `currentState` arrive as change events.
+      setFocused(AppState.currentState === "active");
       const subscription = AppState.addEventListener("change", (state) => {
         setFocused(state === "active");
       });

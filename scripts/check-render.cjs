@@ -248,6 +248,10 @@ Module._load = function (name, parent, isMain) {
       useVolunteerLivePosition: () => ({ status: null, position: null }),
       useGlide: (target) => target,
     };
+  // No Realtime channel here, so the polls it replaces stay on; some checks call screens as
+  // plain functions, where `useSyncExternalStore` has no dispatcher.
+  if (name === "@/sync/status")
+    return { useRealtimeConnected: () => false, isRealtimeConnected: () => false };
   // No requests leave this check: the query hooks are stubbed above.
   if (name === "@/api") return { api: {} };
   // Photo capture and upload need the native picker, manipulator and file system; the

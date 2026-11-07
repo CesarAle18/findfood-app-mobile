@@ -347,7 +347,8 @@ const NO_HISTORY: HistorialEstadoDto[] = [];
 
 export function WaitingScreen() {
   const id = useDonationId();
-  // Polls every 15 s while PUBLICADA; a received push about it refreshes it at once.
+  // Polls every 15 s while PUBLICADA, unless the Realtime channel is joined; a Realtime event
+  // or a received push about it refreshes it at once.
   const detail = useDonationDetail(id, { live: true });
   const estado = detail.data?.dto.estado;
   const { data: historial = NO_HISTORY } = useDonationHistory(

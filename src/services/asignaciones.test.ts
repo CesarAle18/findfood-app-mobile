@@ -1,8 +1,10 @@
-import { waitFor } from "@testing-library/react-native";
+import { act, waitFor } from "@testing-library/react-native";
 
 import { api } from "@/api";
 import { queryKeys } from "@/services/query-keys";
+import { setRealtimeStatus } from "@/sync/status";
 import { resetApiMock, sentRequests, type ApiMock, type SentRequest } from "@/test-utils/api";
+import { ofertaFixture } from "@/test-utils/fixtures";
 import { mutationCase, renderWithClient } from "@/test-utils/query";
 
 import {
@@ -85,6 +87,31 @@ describe("pollWhileOffered", () => {
     expect(pollWhileOffered(query([{ estado: "ACEPTADA" }]))).toBe(false);
     expect(pollWhileOffered(query([]))).toBe(false);
     expect(pollWhileOffered(query())).toBe(false);
+  });
+
+  // The Realtime channel announces every offer made, expired or reassigned.
+  it("is off while the Realtime channel is joined", async () => {
+    mockedApi.get.mockResolvedValue([ofertaFixture()]);
+    const { result, client } = await renderWithClient(() => useOfertas({ live: true }));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const interval = () => {
+      const [ofertas] = client.getQueryCache().getAll();
+      const refetchInterval = ofertas.observers[0]?.options.refetchInterval;
+      return typeof refetchInterval === "function" ? refetchInterval(ofertas) : refetchInterval;
+    };
+    expect(interval()).toBe(OFFER_POLL_MS);
+
+    try {
+      await act(async () => {
+        setRealtimeStatus("connected");
+      });
+      expect(interval()).toBe(false);
+    } finally {
+      await act(async () => {
+        setRealtimeStatus("idle");
+      });
+    }
+    expect(interval()).toBe(OFFER_POLL_MS);
   });
 });
 
