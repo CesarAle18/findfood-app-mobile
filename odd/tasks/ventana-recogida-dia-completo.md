@@ -16,7 +16,7 @@ The user asked to remove the pickup hours when creating a donation.
 - Delivery strategy: `ask-on-risk`. Forecast ≈ 150 authored lines; one PR.
 
 ## Tasks
-- [ ] T1 remove `pickupFrom`/`pickupUntil` from the draft, derive the full-day window in the body and validation, update the form and review screens and their tests. Route: delegated writer (2+ non-trivial files).
+- [x] T1 remove `pickupFrom`/`pickupUntil` from the draft, derive the full-day window in the body and validation, update the form and review screens and their tests. Route: delegated writer (2+ non-trivial files).
 
 ## Acceptance criteria
 - The form shows only "Fecha de recogida" under "Ventana de recogida".
@@ -28,3 +28,7 @@ The user asked to remove the pickup hours when creating a donation.
 
 ## Progress
 - 2026-11-07: explored; branch created; feature document created.
+- 2026-11-07 T1 (delegated writer): added `fullDayPickupWindow`/`fullDayPickupBounds` in `src/domain/mappers/dates.ts` (`toPickupWindow`/`pickupWindowBounds` kept, still covered by their tests); dropped `pickupFrom`/`pickupUntil` from the draft; `toCrearDonacionBody(draft, catalogs, now = Date.now())` sends the full-day window; `pickupDate` validation adds "La fecha de recogida no puede ser anterior a hoy." and "Ya no queda tiempo para recoger hoy. Elige otra fecha." (15-minute minimum), replacing the hour rules; the form shows only the date plus "El voluntario podrá recoger en cualquier momento de ese día."; the review card reads "Ventana: <fecha> · Todo el día"; `donor.tsx` uses one `now` for validation and the body.
+  - RED: `npx jest src/domain/mappers/dates.test.ts src/domain/__tests__/draft-submission.test.ts` → 11 failed, 107 passed (new full-day window, body and date-validation tests).
+  - GREEN: `npm run typecheck` → clean; `npx eslint src/domain src/screens src/state src/test-utils` → exit 0, no findings; `npx jest src/domain src/screens` → 39 suites, 700 tests passed.
+  - `npm run lint` (whole project) not run separately; the scoped eslint above covers the changed files.

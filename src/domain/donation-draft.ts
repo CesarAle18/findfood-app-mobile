@@ -2,12 +2,12 @@ import { z } from "zod";
 
 import type { Coordenada } from "@/api/types";
 import {
+  fullDayPickupBounds,
+  fullDayPickupWindow,
   isBeforeTodayInBogota,
   parseDate,
-  pickupWindowBounds,
   toFechaVencimiento,
   todayInBogota,
-  toPickupWindow,
 } from "@/domain/mappers/dates";
 import { MappingError } from "@/domain/mappers/errors";
 import { isInServiceArea } from "@/domain/mappers/geo";
@@ -43,10 +43,8 @@ export interface DonationDraft {
   /** The donation created in the API (BORRADOR); a retry updates it instead of creating another. */
   apiId: string | null;
   products: DraftProduct[];
-  /** `DD/MM/AAAA` (Bogotá) of the window start. */
+  /** `DD/MM/AAAA` (Bogotá) of the pickup day; the volunteer may come at any time that day. */
   pickupDate: string;
-  pickupFrom: string;
-  pickupUntil: string;
   /** The address the donor typed; the map never overwrites it. */
   direccion: string;
   /** Optional landmark for the volunteer ("Portería norte"). */
@@ -81,8 +79,6 @@ export const initialDonationDraft: DonationDraft = {
   apiId: null,
   products: [blankProduct(1)],
   pickupDate: "",
-  pickupFrom: "16:00",
-  pickupUntil: "18:00",
   direccion: "",
   referencia: "",
   ubicacionRecogida: null,
@@ -225,9 +221,7 @@ const MAX_PRODUCTS = 30;
 /** `cantidad` and `peso_estimado_kg` bounds of the API (2 decimals). */
 const MIN_AMOUNT = 0.01;
 const MAX_AMOUNT = 99_999_999;
-/** `POST /donaciones/:id/publicar` refuses a start further back than this. */
-const START_GRACE_MS = 5 * 60 * 1000;
-/** `… /publicar` refuses a window that ends sooner than this. */
+/** `POST /donaciones/:id/publicar` refuses a window that ends sooner than this. */
 const MIN_REMAINING_MS = 15 * 60 * 1000;
 
 const QUANTITY_PATTERN = /^\d+(?:[.,]\d{1,2})?$/;
@@ -270,16 +264,19 @@ function itemBody(product: DraftProduct, { unidades }: DraftCatalogs): ItemDonac
  * `POST /donaciones` (and the `PATCH` of an existing draft) from the form, or null while
  * the draft is incomplete (see `validateDraft` for the reasons). A unit missing from the
  * catalog, or without a kg factor, throws a `MappingError`.
+ *
+ * The window is the whole pickup day (from the current minute when it is today).
+ *
+ * @param now Epoch milliseconds; today's window starts at it.
  */
 export function toCrearDonacionBody(
   draft: DonationDraft,
   catalogs: DraftCatalogs,
+  now: number = Date.now(),
 ): CrearDonacionBody | null {
   const pickup = draftPickupBody(draft);
   if (!pickup || draft.products.length === 0 || draft.products.length > MAX_PRODUCTS) return null;
-  const window = safely(() =>
-    toPickupWindow({ date: draft.pickupDate, start: draft.pickupFrom, end: draft.pickupUntil }),
-  );
+  const window = safely(() => fullDayPickupWindow(draft.pickupDate, now));
   if (!window) return null;
   const items: ItemDonacionBody[] = [];
   for (const product of draft.products) {
@@ -343,41 +340,24 @@ function draftSchema(now: number) {
         .array(product)
         .min(1, "Agrega al menos un producto.")
         .max(MAX_PRODUCTS, `Puedes donar como máximo ${MAX_PRODUCTS} productos.`),
-      pickupDate: z.string().refine(isDate, "Selecciona la fecha de recogida."),
-      pickupFrom: z.string(),
-      pickupUntil: z.string(),
+      // Only the first failing message is shown (see `validateDraft`).
+      pickupDate: z
+        .string()
+        .refine(isDate, "Selecciona la fecha de recogida.")
+        .refine(
+          (date) => !isDate(date) || !isBeforeTodayInBogota(date, now),
+          "La fecha de recogida no puede ser anterior a hoy.",
+        )
+        .refine(
+          (date) => !isDate(date) || fullDayPickupBounds(date, now).end >= now + MIN_REMAINING_MS,
+          "Ya no queda tiempo para recoger hoy. Elige otra fecha.",
+        ),
       direccion: z.string().trim().min(5, "Ingresa una dirección de al menos 5 caracteres."),
       ubicacionRecogida: z
         .object({ lat: z.number(), lng: z.number() })
         .nullable()
         .refine((point) => point !== null, PICKUP_POINT_REQUIRED)
         .refine((point) => point === null || isInServiceArea(point), PICKUP_POINT_OUTSIDE_AREA),
-    })
-    .superRefine((draft, ctx) => {
-      if (!isDate(draft.pickupDate)) return;
-      const issue = (field: "pickupFrom" | "pickupUntil", message: string) =>
-        ctx.addIssue({ code: "custom", path: [field], message });
-      if (draft.pickupFrom === draft.pickupUntil) {
-        issue("pickupUntil", "La hora de fin debe ser distinta de la de inicio.");
-        return;
-      }
-      const bounds = safely(() =>
-        pickupWindowBounds({
-          date: draft.pickupDate,
-          start: draft.pickupFrom,
-          end: draft.pickupUntil,
-        }),
-      );
-      if (!bounds) {
-        issue("pickupFrom", "Selecciona las horas de recogida.");
-        return;
-      }
-      if (bounds.start < now - START_GRACE_MS) {
-        issue("pickupFrom", "La recogida no puede empezar en el pasado.");
-      }
-      if (bounds.end < now + MIN_REMAINING_MS) {
-        issue("pickupUntil", "La recogida debe terminar al menos 15 minutos después de ahora.");
-      }
     });
 }
 

@@ -278,28 +278,8 @@ export function NewDonationScreen() {
           }
           error={errors?.pickupDate}
         />
-        <Row style={{ alignItems: "flex-start" }}>
-          <DateTimeField
-            mode="time"
-            label="Desde"
-            value={draft.pickupFrom}
-            onChange={(pickupFrom) =>
-              setDraft((current) => ({ ...current, pickupFrom }))
-            }
-            error={errors?.pickupFrom}
-          />
-          <DateTimeField
-            mode="time"
-            label="Hasta"
-            value={draft.pickupUntil}
-            onChange={(pickupUntil) =>
-              setDraft((current) => ({ ...current, pickupUntil }))
-            }
-            error={errors?.pickupUntil}
-          />
-        </Row>
         <Copy tone="secondary">
-          Si la hora de fin es anterior a la de inicio, la recogida termina al día siguiente.
+          El voluntario podrá recoger en cualquier momento de ese día.
         </Copy>
       </Section>
       <Section title="Ubicación de la entrega">

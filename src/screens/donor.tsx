@@ -738,14 +738,15 @@ function useConfirmDonation() {
   const confirm = async () => {
     setError(undefined);
     // The window may have closed since the form was checked.
-    const invalid = validateDraft(draft, Date.now());
+    const now = Date.now();
+    const invalid = validateDraft(draft, now);
     if (invalid) {
       setError(Object.values(invalid)[0] ?? INCOMPLETE_MESSAGE);
       return;
     }
     let body: CrearDonacionBody | null = null;
     try {
-      body = unidades ? toCrearDonacionBody(draft, { unidades }) : null;
+      body = unidades ? toCrearDonacionBody(draft, { unidades }, now) : null;
     } catch (failure) {
       setError(messageFor(failure));
       return;
@@ -827,8 +828,7 @@ export function ReviewDonationScreen() {
           <Copy tone="secondary">Punto pendiente de seleccionar en el mapa</Copy>
         )}
         <Copy tone="secondary">
-          Ventana: {draft.pickupDate ? `${draft.pickupDate} · ` : ""}
-          {draft.pickupFrom} – {draft.pickupUntil}
+          Ventana: {draft.pickupDate || "Fecha pendiente"} · Todo el día
         </Copy>
       </Card>
       <Section title="Productos agregados">

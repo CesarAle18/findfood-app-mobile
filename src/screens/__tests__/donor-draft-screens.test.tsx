@@ -56,8 +56,6 @@ const readyDraft: DonationDraft = {
     },
   ],
   pickupDate: "16/10/2026",
-  pickupFrom: "16:00",
-  pickupUntil: "18:00",
   direccion: "Cra 45 #12-30",
   ubicacionRecogida: { lat: 4.65, lng: -74.06 },
 };
@@ -126,15 +124,26 @@ describe("NewDonationScreen", () => {
     expect(screen.queryByText("Revisión")).toBeNull();
   });
 
-  it("refuses a window that already ended", async () => {
-    await renderScreen(NewDonationScreen, { ...readyDraft, pickupFrom: "08:00", pickupUntil: "09:00" });
+  it("asks only for the pickup date, without hours", async () => {
+    await renderScreen(NewDonationScreen, readyDraft);
+
+    expect(await screen.findByLabelText("Fecha de recogida: 16/10/2026")).toBeOnTheScreen();
+    expect(
+      screen.getByText("El voluntario podrá recoger en cualquier momento de ese día."),
+    ).toBeOnTheScreen();
+    expect(screen.queryByText("Desde")).toBeNull();
+    expect(screen.queryByText("Hasta")).toBeNull();
+  });
+
+  it("refuses a pickup date before today", async () => {
+    await renderScreen(NewDonationScreen, { ...readyDraft, pickupDate: "15/10/2026" });
 
     await fireEvent.press(await screen.findByText("Continuar"));
 
-    expect(screen.getByText("La recogida no puede empezar en el pasado.")).toBeOnTheScreen();
     expect(
-      screen.getByText("La recogida debe terminar al menos 15 minutos después de ahora."),
+      screen.getByText("La fecha de recogida no puede ser anterior a hoy."),
     ).toBeOnTheScreen();
+    expect(screen.queryByText("Revisión")).toBeNull();
   });
 
   it("refuses a pickup point outside Bogotá's service area", async () => {
@@ -176,8 +185,9 @@ describe("NewDonationScreen", () => {
 
 describe("ReviewDonationScreen", () => {
   const expectedBody = {
-    ventana_recogida_inicio: "2026-10-16T16:00:00-05:00",
-    ventana_recogida_fin: "2026-10-16T18:00:00-05:00",
+    // Today (10:00 in Bogotá): from the current minute until the end of the day.
+    ventana_recogida_inicio: "2026-10-16T10:00:00-05:00",
+    ventana_recogida_fin: "2026-10-16T23:59:00-05:00",
     direccion_recogida: "Cra 45 #12-30",
     ubicacion_recogida: { lat: 4.65, lng: -74.06 },
     items: [
@@ -266,14 +276,22 @@ describe("ReviewDonationScreen", () => {
     );
   });
 
+  it("shows the pickup day as a full-day window", async () => {
+    await renderScreen(ReviewDonationScreen, readyDraft);
+
+    expect(await screen.findByText("Ventana: 16/10/2026 · Todo el día")).toBeOnTheScreen();
+  });
+
   it("checks the window again before sending", async () => {
-    // 17:50: the 16:00–18:00 window started long ago.
-    jest.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 9, 16, 22, 50));
+    // 23:50 in Bogotá: less than 15 minutes of today are left.
+    jest.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 9, 17, 4, 50));
     await renderScreen(ReviewDonationScreen, readyDraft);
 
     await pressConfirm();
 
-    expect(await screen.findByText("La recogida no puede empezar en el pasado.")).toBeOnTheScreen();
+    expect(
+      await screen.findByText("Ya no queda tiempo para recoger hoy. Elige otra fecha."),
+    ).toBeOnTheScreen();
     expect(mockApi.post).not.toHaveBeenCalled();
   });
 

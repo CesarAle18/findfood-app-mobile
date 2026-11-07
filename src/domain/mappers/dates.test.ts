@@ -12,6 +12,8 @@ import {
   todayInBogota,
   isBeforeTodayInBogota,
   pickupWindowBounds,
+  fullDayPickupWindow,
+  fullDayPickupBounds,
 } from "./dates";
 import { errorCode } from "@/test-utils/mapping";
 
@@ -392,5 +394,40 @@ describe("pickupWindowBounds", () => {
       start: bogota(2026, 12, 31, 22),
       end: bogota(2027, 1, 1, 1, 30),
     });
+  });
+});
+
+describe("fullDayPickupWindow / fullDayPickupBounds", () => {
+  const now = bogota(2026, 10, 16, 10, 20);
+
+  it("covers the whole Bogotá day of a future date", () => {
+    expect(fullDayPickupWindow("31/12/2026", now)).toEqual({
+      ventana_recogida_inicio: "2026-12-31T00:00:00-05:00",
+      ventana_recogida_fin: "2026-12-31T23:59:00-05:00",
+    });
+  });
+
+  it("starts today's window at the current minute", () => {
+    expect(fullDayPickupWindow("16/10/2026", now + 42_000)).toEqual({
+      ventana_recogida_inicio: "2026-10-16T10:20:00-05:00",
+      ventana_recogida_fin: "2026-10-16T23:59:00-05:00",
+    });
+  });
+
+  it("reads today in Bogotá, not in UTC", () => {
+    // 21:00 in Bogotá is already the 17th in UTC.
+    const window = fullDayPickupWindow("16/10/2026", bogota(2026, 10, 16, 21));
+    expect(window.ventana_recogida_inicio).toBe("2026-10-16T21:00:00-05:00");
+  });
+
+  it("returns the epoch bounds of the window", () => {
+    expect(fullDayPickupBounds("16/10/2026", now)).toEqual({
+      start: bogota(2026, 10, 16, 10, 20),
+      end: bogota(2026, 10, 16, 23, 59),
+    });
+  });
+
+  it("rejects an invalid date", () => {
+    expect(errorCode(() => fullDayPickupWindow("", now))).toBe("invalid-date");
   });
 });

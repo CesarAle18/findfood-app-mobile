@@ -36,8 +36,6 @@ const ready: DonationDraft = {
   ...initialDonationDraft,
   products: [leche],
   pickupDate: "16/10/2026",
-  pickupFrom: "16:00",
-  pickupUntil: "18:00",
   direccion: "Cra 45 #12-30",
   referencia: "",
   ubicacionRecogida: { lat: 4.65, lng: -74.06 },
@@ -69,9 +67,9 @@ describe("parseQuantity", () => {
 
 describe("toCrearDonacionBody", () => {
   it("maps the products, the window and the pickup point", () => {
-    expect(toCrearDonacionBody(ready, { unidades })).toStrictEqual({
-      ventana_recogida_inicio: "2026-10-16T16:00:00-05:00",
-      ventana_recogida_fin: "2026-10-16T18:00:00-05:00",
+    expect(toCrearDonacionBody(ready, { unidades }, NOW)).toStrictEqual({
+      ventana_recogida_inicio: "2026-10-16T10:00:00-05:00",
+      ventana_recogida_fin: "2026-10-16T23:59:00-05:00",
       direccion_recogida: "Cra 45 #12-30",
       ubicacion_recogida: { lat: 4.65, lng: -74.06 },
       items: [
@@ -120,13 +118,17 @@ describe("toCrearDonacionBody", () => {
     expect(body?.items[1].requiere_refrigeracion).toBe(false);
   });
 
-  it("ends the window the next day when it crosses midnight", () => {
-    const body = toCrearDonacionBody(
-      { ...ready, pickupDate: "31/12/2026", pickupFrom: "22:00", pickupUntil: "01:00" },
-      { unidades },
-    );
-    expect(body?.ventana_recogida_inicio).toBe("2026-12-31T22:00:00-05:00");
-    expect(body?.ventana_recogida_fin).toBe("2027-01-01T01:00:00-05:00");
+  it("picks up all day on a future date", () => {
+    const body = toCrearDonacionBody({ ...ready, pickupDate: "31/12/2026" }, { unidades }, NOW);
+    expect(body?.ventana_recogida_inicio).toBe("2026-12-31T00:00:00-05:00");
+    expect(body?.ventana_recogida_fin).toBe("2026-12-31T23:59:00-05:00");
+  });
+
+  it("picks up today from the current minute until the end of the day", () => {
+    const now = bogota(2026, 10, 16, 14, 37) + 30_000;
+    const body = toCrearDonacionBody(ready, { unidades }, now);
+    expect(body?.ventana_recogida_inicio).toBe("2026-10-16T14:37:00-05:00");
+    expect(body?.ventana_recogida_fin).toBe("2026-10-16T23:59:00-05:00");
   });
 
   it("is null while the draft is incomplete", () => {
@@ -183,9 +185,8 @@ describe("validateDraft", () => {
   it("refuses a product that expired before today in Bogotá", () => {
     // 23:30 in Bogotá: UTC is already the 17th, but the 16th is still today.
     const lateNight = bogota(2026, 10, 16, 23, 30);
-    const late = { ...ready, pickupFrom: "23:45", pickupUntil: "01:00" };
     const expiring = (expiresOn: string) =>
-      validateDraft({ ...late, products: [{ ...leche, expiresOn }] }, lateNight);
+      validateDraft({ ...ready, products: [{ ...leche, expiresOn }] }, lateNight);
 
     expect(expiring("16/10/2026")).toBeNull();
     expect(expiring("15/10/2026")?.[productErrorKey(leche.id, "expiresOn")]).toBe(
@@ -193,28 +194,20 @@ describe("validateDraft", () => {
     );
   });
 
-  it("refuses a window that started more than 5 minutes ago", () => {
-    const at = (hour: number, minute: number) => bogota(2026, 10, 16, hour, minute);
-    expect(validateDraft(ready, at(16, 5))).toBeNull();
-    expect(validateDraft(ready, at(16, 6))?.pickupFrom).toBe(
-      "La recogida no puede empezar en el pasado.",
+  it("refuses a pickup date before today in Bogotá", () => {
+    expect(validateDraft({ ...ready, pickupDate: "15/10/2026" }, NOW)?.pickupDate).toBe(
+      "La fecha de recogida no puede ser anterior a hoy.",
     );
+    expect(validateDraft({ ...ready, pickupDate: "17/10/2026" }, NOW)).toBeNull();
   });
 
-  it("asks the window to end at least 15 minutes from now", () => {
-    const draft = { ...ready, pickupFrom: "17:40", pickupUntil: "18:00" };
-    expect(validateDraft(draft, bogota(2026, 10, 16, 17, 45))).toBeNull();
-    expect(validateDraft(draft, bogota(2026, 10, 16, 17, 46))?.pickupUntil).toBe(
-      "La recogida debe terminar al menos 15 minutos después de ahora.",
+  it("refuses today when less than 15 minutes of the day are left", () => {
+    const lateToday = bogota(2026, 10, 16, 23, 45);
+    expect(validateDraft(ready, bogota(2026, 10, 16, 23, 44))).toBeNull();
+    expect(validateDraft(ready, lateToday)?.pickupDate).toBe(
+      "Ya no queda tiempo para recoger hoy. Elige otra fecha.",
     );
-  });
-
-  it("accepts a window that crosses midnight and refuses one with equal times", () => {
-    const night = { ...ready, pickupFrom: "22:00", pickupUntil: "01:00" };
-    expect(validateDraft(night, bogota(2026, 10, 16, 21, 30))).toBeNull();
-    expect(validateDraft({ ...ready, pickupUntil: "16:00" }, NOW)?.pickupUntil).toBe(
-      "La hora de fin debe ser distinta de la de inicio.",
-    );
+    expect(validateDraft({ ...ready, pickupDate: "17/10/2026" }, lateToday)).toBeNull();
   });
 
   it("asks for the pickup date, the address and the point", () => {
