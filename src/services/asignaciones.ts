@@ -6,6 +6,7 @@ import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api";
 import type { EstadoAsignacion, EstadoDonacion } from "@/api/types";
+import { useRealtimeConnected } from "@/sync/status";
 
 import { invalidateOnSuccess, queryKeys, type Invalidation } from "./query-keys";
 
@@ -141,11 +142,15 @@ export function pollWhileOffered(query: {
   return query.state.data?.some((oferta) => oferta.estado === "OFRECIDA") ? OFFER_POLL_MS : false;
 }
 
-/** With `live`, it polls while an offer is OFRECIDA (`pollWhileOffered`), only in the foreground. */
+/**
+ * With `live`, it polls while an offer is OFRECIDA (`pollWhileOffered`), only in the foreground
+ * and while the Realtime channel, which announces every offer made or closed, is not joined.
+ */
 export function useOfertas({ live = false }: { live?: boolean } = {}) {
+  const connected = useRealtimeConnected();
   return useQuery({
     ...ofertasQuery(),
-    refetchInterval: live ? pollWhileOffered : false,
+    refetchInterval: live && !connected ? pollWhileOffered : false,
     refetchIntervalInBackground: false,
   });
 }

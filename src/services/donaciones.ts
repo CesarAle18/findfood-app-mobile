@@ -323,12 +323,12 @@ export function useHistorialDonacion(id: string) {
 export type ActualizarDonacionVariables = { id: string; body: ActualizarDonacionBody };
 export type CancelarDonacionVariables = { id: string; body: CancelarDonacionBody };
 
-const { donaciones } = queryKeys;
+const { donaciones, perfil } = queryKeys;
 
 /** What each mutation leaves stale. */
 const invalidates = {
-  /** A new draft shows up in the lists. */
-  crear: () => [donaciones.lists()],
+  /** A new draft shows up in the lists and counts in the donor's impact. */
+  crear: () => [donaciones.lists(), perfil.impacto()],
   /** Fields change, the state does not: the history stays as it is. */
   actualizar: (_: unknown, { id }: ActualizarDonacionVariables) => [
     donaciones.lists(),
@@ -340,11 +340,15 @@ const invalidates = {
     donaciones.detail(id),
     donaciones.historial(id),
   ],
-  /** State change, recorded in the history (its live offer closes too). */
+  /**
+   * State change, recorded in the history (its live offer closes too); the donor's impact
+   * counts cancelled donations.
+   */
   cancelar: (_: unknown, { id }: CancelarDonacionVariables) => [
     donaciones.lists(),
     donaciones.detail(id),
     donaciones.historial(id),
+    perfil.impacto(),
   ],
 } satisfies Record<string, Invalidation<never, never>>;
 

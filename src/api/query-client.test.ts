@@ -217,6 +217,7 @@ interface LoadedManagers {
 function loadManagers(
   os: "ios" | "android" | "web",
   initialNetwork: Promise<NetworkState> = new Promise(() => {}),
+  initialAppState: ReactNative.AppStateStatus = "active",
 ): LoadedManagers {
   jest.resetModules();
   /* eslint-disable @typescript-eslint/no-require-imports */
@@ -227,6 +228,8 @@ function loadManagers(
   /* eslint-enable @typescript-eslint/no-require-imports */
 
   jest.replaceProperty(Platform, "OS", os);
+  // The React Native preset mocks `currentState` as a function; this registry's mock is fresh.
+  (AppState as { currentState: ReactNative.AppStateStatus }).currentState = initialAppState;
   let appStateListener: (state: ReactNative.AppStateStatus) => void = () => {};
   const removeAppStateListener = jest.fn();
   const addAppStateListener = jest
@@ -275,6 +278,17 @@ describe("setupQueryManagers", () => {
     expect(managers.focusManager.isFocused()).toBe(true);
     managers.emitAppState("inactive");
     expect(managers.focusManager.isFocused()).toBe(false);
+  });
+
+  // A background relaunch (background location, say) must not count as focused: nothing
+  // that waits for the foreground (refetches, the Realtime channel) starts until it opens.
+  it("seeds the focus from the app state at launch", () => {
+    const managers = loadManagers("android", undefined, "background");
+    managers.setupQueryManagers();
+
+    expect(managers.focusManager.isFocused()).toBe(false);
+    managers.emitAppState("active");
+    expect(managers.focusManager.isFocused()).toBe(true);
   });
 
   it("drives the online manager from expo-network", () => {

@@ -1,6 +1,7 @@
 /**
- * Tapped pushes open their screen; pushes received in the foreground refresh the inbox, the
- * donation they are about and, for a volunteer, their offers and routes.
+ * Pushes received in the foreground refresh what they are about (`keysForPushData`, the
+ * map shared with the Realtime sync events); tapped pushes refresh it too, then open their
+ * screen.
  *
  * A tap can arrive before the app can navigate: on a cold start the session is still
  * loading and `Stack.Protected` has not mounted the signed-in routes. The tap is kept as
@@ -14,6 +15,7 @@ import { Platform } from "react-native";
 import { marcarNotificacionLeida } from "@/services/notificaciones";
 import { queryKeys } from "@/services/query-keys";
 import { useAccess } from "@/state/session";
+import { invalidateTargets, keysForPushData } from "@/sync/sync-keys";
 
 import { openNotification, type OpenableNotification } from "./use-open-notification";
 
@@ -39,40 +41,6 @@ export function notificationFromData(
     donacion_id: optionalString(data?.donacion_id),
     asignacion_id: optionalString(data?.asignacion_id),
   };
-}
-
-/**
- * What a received push about a donation leaves stale: its detail, its history and the lists
- * (a state change moves it between tabs). Empty when the push names no donation.
- */
-export function donationKeysForPush(data: Record<string, unknown> | null | undefined) {
-  const id = optionalString(data?.donacion_id);
-  if (id === null) return [];
-  return [
-    queryKeys.donaciones.detail(id),
-    queryKeys.donaciones.historial(id),
-    queryKeys.donaciones.lists(),
-  ];
-}
-
-/**
- * What a received push leaves stale on the volunteer's side: a new offer refreshes the
- * offers; a cancelled donation can drop an accepted offer and a stop from a route. A
- * reviewed volunteer request changes `GET /me` (its state and, once approved, the
- * VOLUNTARIO role), which nothing else would fetch again while the app stays open.
- */
-export function volunteerKeysForPush(data: Record<string, unknown> | null | undefined) {
-  switch (optionalString(data?.tipo)) {
-    case "VERIFICACION_APROBADA":
-    case "VERIFICACION_RECHAZADA":
-      return [queryKeys.me];
-    case "ASIGNACION_OFRECIDA":
-      return [queryKeys.asignaciones.ofertas()];
-    case "DONACION_CANCELADA":
-      return [queryKeys.asignaciones.ofertas(), queryKeys.rutas.all];
-    default:
-      return [];
-  }
 }
 
 /** Only a tap on the notification itself opens it (not an action button). */
@@ -128,12 +96,8 @@ export function useNotificationResponses(navigatorReady: boolean): void {
       if (next) setPending(next);
     });
     const received = Notifications.addNotificationReceivedListener((notification) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.notificaciones.all });
       // Optional chaining: a push without content still refreshes the inbox.
-      const data = notification?.request?.content?.data;
-      for (const queryKey of [...donationKeysForPush(data), ...volunteerKeysForPush(data)]) {
-        void queryClient.invalidateQueries({ queryKey });
-      }
+      invalidateTargets(queryClient, keysForPushData(notification?.request?.content?.data));
     });
     return () => {
       tapped.remove();
@@ -145,9 +109,12 @@ export function useNotificationResponses(navigatorReady: boolean): void {
   useEffect(() => {
     if (!canOpen || !pending || openedKey.current === pending.key) return;
     openedKey.current = pending.key;
+    // A push tapped from the background was never received in the foreground: its screen
+    // (or a cached screen under it) may show data from before the change.
+    invalidateTargets(queryClient, keysForPushData(pending.notification));
     openNotification(pending.notification, { ...access, markRead });
     Notifications.clearLastNotificationResponseAsync().catch(() => {
       // Nothing to clear (or no native module): the key already prevents a second open.
     });
-  }, [canOpen, pending, access, markRead]);
+  }, [canOpen, pending, access, markRead, queryClient]);
 }

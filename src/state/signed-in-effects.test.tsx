@@ -5,6 +5,7 @@ import { api } from "@/api";
 import { useVolunteerLocationTracking } from "@/location/use-volunteer-location-tracking";
 import { usePushRegistration } from "@/notifications/push";
 import { catalogosQuery } from "@/services/catalogos";
+import { useRealtimeSync } from "@/sync/use-realtime-sync";
 import { resetApiMock, type ApiMock } from "@/test-utils/api";
 import { catalogosFixture } from "@/test-utils/fixtures";
 import { createTestQueryClient } from "@/test-utils/query";
@@ -18,6 +19,8 @@ jest.mock("@/api", () => ({
 const mockAccess = { phase: "loading" as string, canDonor: false, canVolunteer: false };
 
 jest.mock("@/notifications/push", () => ({ usePushRegistration: jest.fn() }));
+
+jest.mock("@/sync/use-realtime-sync", () => ({ useRealtimeSync: jest.fn() }));
 
 jest.mock("@/location/use-volunteer-location-tracking", () => ({
   useVolunteerLocationTracking: jest.fn(),
@@ -33,10 +36,13 @@ const mockedApi = api as unknown as ApiMock;
 
 const mockedPushRegistration = usePushRegistration as jest.Mock;
 
+const mockedRealtimeSync = jest.mocked(useRealtimeSync);
+
 beforeEach(() => {
   mockAccess.canDonor = false;
   mockAccess.canVolunteer = false;
   mockedPushRegistration.mockClear();
+  mockedRealtimeSync.mockClear();
   mockedLocationTracking.mockClear();
   resetApiMock(mockedApi);
   mockedApi.get.mockResolvedValue(catalogosFixture);
@@ -62,6 +68,7 @@ describe("SignedInEffects", () => {
       expect(mockedApi.get).not.toHaveBeenCalled();
       expect(client.getQueryData(catalogosQuery().queryKey)).toBeUndefined();
       expect(mockedPushRegistration).not.toHaveBeenCalled();
+      expect(mockedRealtimeSync).not.toHaveBeenCalled();
       expect(mockedLocationTracking).not.toHaveBeenCalled();
     },
   );
@@ -83,6 +90,15 @@ describe("SignedInEffects", () => {
     mockAccess.canVolunteer = true;
     await renderEffects("app");
     expect(mockedPushRegistration).toHaveBeenLastCalledWith(true);
+  });
+
+  it("syncs in real time only when the account has a role that receives pushes", async () => {
+    await renderEffects("app");
+    expect(mockedRealtimeSync).toHaveBeenLastCalledWith(false);
+
+    mockAccess.canDonor = true;
+    await renderEffects("app");
+    expect(mockedRealtimeSync).toHaveBeenLastCalledWith(true);
   });
 
   it("runs the volunteer location tracking while signed in", async () => {

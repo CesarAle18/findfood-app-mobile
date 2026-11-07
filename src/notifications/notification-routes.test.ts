@@ -28,6 +28,12 @@ const donorAlerts = target("/donante/alertas", "DONANTE");
 const volunteerAlerts = target("/voluntario/alertas", "VOLUNTARIO");
 const detail = target({ pathname: "/donante/detalle-donacion", params: { id: DONATION } }, "DONANTE");
 const delivery = target({ pathname: "/donante/entrega-donacion", params: { id: DONATION } }, "DONANTE");
+const volunteerDetail = target(
+  { pathname: "/voluntario/detalle-donacion", params: { id: DONATION } },
+  "VOLUNTARIO",
+);
+const volunteerHome = target("/voluntario", "VOLUNTARIO");
+const volunteerActive: NotificationAccess = { ...both, activeRole: "VOLUNTARIO" };
 
 describe("routeForNotification", () => {
   it.each<[string, NotificationAccess, NotificationTarget | null]>([
@@ -66,8 +72,43 @@ describe("routeForNotification", () => {
     ["ASIGNACION_OFRECIDA", donorOnly, donorAlerts],
     ["DONACION_ENTREGADA", volunteerOnly, volunteerAlerts],
     ["DONACION_ENTREGADA", { canDonor: false, canVolunteer: false, activeRole: null }, null],
+    // Staff actions on the donor's donation open it, like the other donor notices.
+    ["DONACION_CANCELADA_BANCO", both, detail],
+    ["DONACION_REPUBLICADA", both, detail],
+    ["RECOGIDA_FALLIDA", both, detail],
+    ["RECOGIDA_FALLIDA", volunteerOnly, volunteerAlerts],
+    // A closed offer has no screen left: the volunteer's Inicio lists the open ones.
+    ["ASIGNACION_TOMADA", both, volunteerHome],
+    ["ASIGNACION_RETIRADA", both, volunteerHome],
+    ["ASIGNACION_RETIRADA", donorOnly, donorAlerts],
+    // A reviewed incident opens its donation in the view the user is in.
+    ["INCIDENCIA_EN_REVISION", both, detail],
+    ["INCIDENCIA_EN_REVISION", volunteerActive, volunteerDetail],
+    ["INCIDENCIA_RESUELTA", both, detail],
+    ["INCIDENCIA_RESUELTA", volunteerOnly, volunteerDetail],
+    ["INCIDENCIA_RESUELTA", { ...donorOnly, activeRole: "VOLUNTARIO" }, detail],
+    // Staff-only codes keep the fallback.
+    ["INCIDENCIA_REPORTADA", both, donorAlerts],
   ])("%s → %j", (tipo, access, expected) => {
     expect(routeForNotification({ tipo, ...ids }, access)).toEqual(expected);
+  });
+
+  it("opens the closed offers' Inicio even without ids", () => {
+    const empty = { donacion_id: null, asignacion_id: null };
+    for (const tipo of ["ASIGNACION_TOMADA", "ASIGNACION_RETIRADA"]) {
+      expect(routeForNotification({ tipo, ...empty }, both)).toEqual(volunteerHome);
+    }
+  });
+
+  it.each([
+    ["DONACION_CANCELADA_BANCO", both, donorAlerts],
+    ["DONACION_REPUBLICADA", both, donorAlerts],
+    ["RECOGIDA_FALLIDA", both, donorAlerts],
+    ["INCIDENCIA_EN_REVISION", both, donorAlerts],
+    ["INCIDENCIA_RESUELTA", volunteerActive, volunteerAlerts],
+  ] as const)("%s without a donation opens the alerts tab", (tipo, access, expected) => {
+    const notice = { tipo, donacion_id: null, asignacion_id: ASSIGNMENT };
+    expect(routeForNotification(notice, access)).toEqual(expected);
   });
 
   it("falls back to the alerts tab when the related id is missing", () => {
@@ -93,12 +134,24 @@ describe("isImportant", () => {
     expect([...IMPORTANT_CODES].sort()).toEqual([
       "ASIGNACION_OFRECIDA",
       "DONACION_CANCELADA",
+      "DONACION_CANCELADA_BANCO",
       "DONACION_EXPIRADA",
       "DONACION_RECHAZADA",
+      "RECOGIDA_FALLIDA",
       "VERIFICACION_RECHAZADA",
     ]);
     expect(isImportant("ASIGNACION_OFRECIDA")).toBe(true);
     expect(isImportant("DONACION_RECIBIDA")).toBe(false);
     expect(isImportant("OTRO")).toBe(false);
+  });
+
+  it.each([
+    "DONACION_REPUBLICADA",
+    "ASIGNACION_TOMADA",
+    "ASIGNACION_RETIRADA",
+    "INCIDENCIA_EN_REVISION",
+    "INCIDENCIA_RESUELTA",
+  ])("leaves the informative %s out", (tipo) => {
+    expect(isImportant(tipo)).toBe(false);
   });
 });
