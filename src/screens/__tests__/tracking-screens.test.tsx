@@ -12,7 +12,7 @@ import { Linking } from "react-native";
 
 import { api } from "@/api";
 import type { EstadoDonacion } from "@/api/types";
-import * as auth from "@/auth/supabase";
+import { LIVE_EVENT } from "@/location/live-route";
 import { AssignedVolunteerScreen } from "@/screens/assigned-volunteer";
 import {
   TRACKING_IDLE_POLL_MS,
@@ -32,6 +32,7 @@ import type { ApiMock } from "@/test-utils/api";
 import { DONATION_ID, asignacionFixture, detalleFixture } from "@/test-utils/fixtures";
 import { seguimientoDonacionFixture } from "@/test-utils/fixtures/seguimiento";
 import { createQueryWrapper, createTestQueryClient } from "@/test-utils/query";
+import { plugRealtime } from "@/test-utils/realtime";
 
 jest.mock("@/api", () => ({
   api: jest.requireActual<typeof import("@/test-utils/api")>("@/test-utils/api").createApiMock(),
@@ -202,30 +203,6 @@ describe("TrackingScreen · En vivo", () => {
       ...overrides,
     });
 
-  type Broadcast = (message: { payload: unknown }) => void;
-  type StatusCallback = (status: string, error?: Error) => void;
-
-  /** A Realtime client whose channel answers `onSubscribe` as soon as the screen joins. */
-  function plugRealtime(onSubscribe: (emit: (payload: unknown) => void, report: StatusCallback) => void) {
-    interface ChannelMock {
-      on: jest.Mock<ChannelMock, [string, object, Broadcast]>;
-      subscribe: jest.Mock<ChannelMock, [StatusCallback]>;
-    }
-    let broadcast: Broadcast = () => {};
-    const channel: ChannelMock = {
-      on: jest.fn((_type: string, _filter: object, handler: Broadcast) => {
-        broadcast = handler;
-        return channel;
-      }),
-      subscribe: jest.fn((callback: StatusCallback) => {
-        onSubscribe((payload) => broadcast({ payload }), callback);
-        return channel;
-      }),
-    };
-    const fake = { channel: jest.fn(() => channel), removeChannel: jest.fn(async () => "ok") };
-    return { fake, restore: jest.replaceProperty(auth, "supabase", fake as never).restore };
-  }
-
   it("shows the map and when the volunteer reaches the pickup point", async () => {
     answer(onTheWay, HISTORY, live());
     await renderScreen(TrackingScreen);
@@ -319,9 +296,16 @@ describe("TrackingScreen · En vivo", () => {
   });
 
   it("moves the marker with the live position when it is newer than the stored one", async () => {
-    const realtime = plugRealtime((emit, report) => {
-      report("SUBSCRIBED");
-      emit({ lat: 4.66, lng: -74.055, rumbo: 200, velocidad_kmh: 25, precision_m: 5, at: minutesAgo(0) });
+    const realtime = plugRealtime((channel) => {
+      channel.report("SUBSCRIBED");
+      channel.broadcast(LIVE_EVENT, {
+        lat: 4.66,
+        lng: -74.055,
+        rumbo: 200,
+        velocidad_kmh: 25,
+        precision_m: 5,
+        at: minutesAgo(0),
+      });
     });
     try {
       answer(onTheWay, HISTORY, live());
@@ -345,8 +329,8 @@ describe("TrackingScreen · En vivo", () => {
   });
 
   it("says quietly when live updates are unavailable", async () => {
-    const realtime = plugRealtime((_emit, report) => {
-      report("CHANNEL_ERROR", new Error("Unauthorized"));
+    const realtime = plugRealtime((channel) => {
+      channel.report("CHANNEL_ERROR", new Error("Unauthorized"));
     });
     try {
       answer(onTheWay, HISTORY, live());
