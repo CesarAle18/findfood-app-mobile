@@ -32,3 +32,4 @@ The user asked to remove the pickup hours when creating a donation.
   - RED: `npx jest src/domain/mappers/dates.test.ts src/domain/__tests__/draft-submission.test.ts` → 11 failed, 107 passed (new full-day window, body and date-validation tests).
   - GREEN: `npm run typecheck` → clean; `npx eslint src/domain src/screens src/state src/test-utils` → exit 0, no findings; `npx jest src/domain src/screens` → 39 suites, 700 tests passed.
   - `npm run lint` (whole project) not run separately; the scoped eslint above covers the changed files.
+- 2026-11-07: review assess (`--base-ref 5d2ff66 --committed-only`, untracked unrelated files excluded): risk `medium`, `review_due: false` (`under_budget`, 288 changed lines). Parent spot check: `npx jest draft-submission donor-draft-screens` 2 suites / 32 tests passed. Full `npm run lint` not run (scoped eslint exit 0).
