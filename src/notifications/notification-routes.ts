@@ -6,12 +6,17 @@ import type { Href } from "expo-router";
 
 import type { MobileRole } from "@/auth/access";
 
-/** Codes the "Importantes" tab shows: they ask the user to act or report a failure. */
+/**
+ * Codes the "Importantes" tab shows: they ask the user to act or report a failure. Any other
+ * code, known or not, is informative.
+ */
 export const IMPORTANT_CODES: ReadonlySet<string> = new Set([
   "ASIGNACION_OFRECIDA",
   "DONACION_CANCELADA",
+  "DONACION_CANCELADA_BANCO",
   "DONACION_EXPIRADA",
   "DONACION_RECHAZADA",
+  "RECOGIDA_FALLIDA",
   "VERIFICACION_RECHAZADA",
 ]);
 
@@ -56,18 +61,45 @@ const DONOR_DONATION_SCREENS = {
   DONACION_RECIBIDA: "/donante/entrega-donacion",
   DONACION_RECHAZADA: "/donante/detalle-donacion",
   DONACION_EXPIRADA: "/donante/detalle-donacion",
+  // Staff cancelled it, published it again for another volunteer, or its pickup failed.
+  DONACION_CANCELADA_BANCO: "/donante/detalle-donacion",
+  DONACION_REPUBLICADA: "/donante/detalle-donacion",
+  RECOGIDA_FALLIDA: "/donante/detalle-donacion",
 } as const;
+
+/** Another volunteer or the bank fleet took the offer: it is closed, Inicio lists the open ones. */
+const CLOSED_OFFER_CODES: ReadonlySet<string> = new Set([
+  "ASIGNACION_TOMADA",
+  "ASIGNACION_RETIRADA",
+]);
+
+/** The staff took or resolved an incident the user reported (usually on a pickup). */
+const INCIDENT_CODES: ReadonlySet<string> = new Set([
+  "INCIDENCIA_EN_REVISION",
+  "INCIDENCIA_RESUELTA",
+]);
+
+/** The donation detail (`?id=`) of each view. */
+const DONATION_DETAIL_HREF = {
+  DONANTE: "/donante/detalle-donacion",
+  VOLUNTARIO: "/voluntario/detalle-donacion",
+} as const satisfies Record<MobileRole, Href>;
 
 function canOpen(role: MobileRole, { canDonor, canVolunteer }: NotificationAccess): boolean {
   return role === "DONANTE" ? canDonor : canVolunteer;
 }
 
-/** The alerts tab of the active view, else of any view the user has; null without one. */
-function alertsFor(access: NotificationAccess): NotificationTarget | null {
+/** The active view, else any view the user has; null without one. */
+function currentView(access: NotificationAccess): MobileRole | null {
   const roles: MobileRole[] = access.activeRole
     ? [access.activeRole, "DONANTE", "VOLUNTARIO"]
     : ["DONANTE", "VOLUNTARIO"];
-  const role = roles.find((candidate) => canOpen(candidate, access));
+  return roles.find((candidate) => canOpen(candidate, access)) ?? null;
+}
+
+/** The alerts tab of the current view; null without one. */
+function alertsFor(access: NotificationAccess): NotificationTarget | null {
+  const role = currentView(access);
   return role ? { href: ALERTS_HREF[role], role } : null;
 }
 
@@ -85,6 +117,14 @@ function ownScreen(
       : null;
   }
   if (tipo === "DONACION_CANCELADA") return { href: "/voluntario/rutas", role: "VOLUNTARIO" };
+  if (CLOSED_OFFER_CODES.has(tipo)) return { href: "/voluntario", role: "VOLUNTARIO" };
+  if (INCIDENT_CODES.has(tipo)) {
+    // Its donation, in the view the user is in (the notice does not say which one reported it).
+    const role = currentView(access);
+    return donacion_id && role
+      ? { href: { pathname: DONATION_DETAIL_HREF[role], params: { id: donacion_id } }, role }
+      : null;
+  }
   if (tipo === "VERIFICACION_APROBADA" || tipo === "VERIFICACION_RECHAZADA") {
     // Without the volunteer role yet (a rejected application), the account screen.
     return access.canVolunteer

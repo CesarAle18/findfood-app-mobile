@@ -22,7 +22,7 @@ Cada pantalla con datos remotos muestra un indicador de carga, un estado de erro
 Los datos ilustrativos de `src/data/preview.ts` ya no existen: la actividad reciente y la bandeja de avisos leen `GET /me/notificaciones`. Siguen pendientes, fuera de la app:
 
 - Crear la ruta al aceptar una oferta (API-09): mientras tanto, el voluntario arma la ruta en la pestaña Rutas.
-- Tiempo de viaje en la oferta (API-05) y tiempo real por websocket: las ofertas llegan por push y por sondeo.
+- Tiempo de viaje en la oferta (API-05).
 - Aspectos de calificación para el rol DONANTE: el catálogo no trae ninguno, así que la calificación del donante oculta esa sección.
 - Cola sin conexión para las confirmaciones de parada.
 
@@ -33,7 +33,7 @@ Las pantallas del voluntario están integradas con `findfood-api`:
 | Pantalla | Endpoints |
 |---|---|
 | Inicio (`/voluntario`) | `GET /rutas?estado=EN_CURSO&limite=1`, `GET /rutas?estado=PLANIFICADA&limite=1`, `GET /rutas/:id`, `GET /asignaciones/ofertas`, `GET /me/notificaciones`, `PATCH /voluntario/estado` |
-| Oferta (`/voluntario/oferta`) | `GET /asignaciones/ofertas` (sondeo de 15 s mientras hay una OFRECIDA), `POST /asignaciones/:id/aceptar`, `POST /asignaciones/:id/rechazar`, `POST /asignaciones/:id/abandonar` |
+| Oferta (`/voluntario/oferta`) | `GET /asignaciones/ofertas` (sondeo de 15 s mientras hay una OFRECIDA y el canal de sincronización no está conectado), `POST /asignaciones/:id/aceptar`, `POST /asignaciones/:id/rechazar`, `POST /asignaciones/:id/abandonar` |
 | Rutas (`/voluntario/rutas`) | `POST /rutas`, `POST /rutas/:id/iniciar`, `POST /rutas/:id/cancelar`, `POST /paradas/:id/llegada`, `POST /paradas/:id/fallida`, `POST /asignaciones/:id/abandonar` |
 | Registrar recogida | `GET /rutas/:id`, `GET /donaciones/:id` (ítems), `GET /evidencias?parada_id=`, `POST /evidencias/upload-url`, `POST /evidencias`, `POST /paradas/:id/confirmar` |
 | Entrega en banco | `GET /rutas/:id`, `GET /evidencias?parada_id=`, `POST /evidencias`, `POST /paradas/:id/confirmar` (cierra la ruta) |
@@ -42,6 +42,36 @@ Las pantallas del voluntario están integradas con `findfood-api`:
 `POST /paradas/:id/confirmar` exige al menos una evidencia registrada con el `parada_id` y envía `confirmada_en_dispositivo` (hora del dispositivo al confirmar). Sin ubicación o con `precision_m` mayor a 50 m, la app pide confirmar sin GPS preciso y envía `confirmacion_manual: true`; si el servidor responde `precision-insuficiente`, ofrece el mismo reintento manual. En una recogida también envía `peso_confirmado_kg` (la suma de los pesos por ítem), `items` y `estado_producto` (BUENO, REGULAR o MALO), el campo que agrega API-10 en `findfood-api`. Confirmar la entrega cierra la ruta (409 `recogidas-pendientes` si queda una recogida abierta) y la pantalla muestra el resumen y los donantes por calificar. El voluntario califica cuando la asignación está COMPLETADA. El rastreo de ubicación se detiene cuando ya no hay ruta EN_CURSO y el voluntario no está disponible.
 
 Los formularios de nueva donación y de registro de voluntario mantienen sus datos en memoria y aún no los envían.
+
+## Sincronización en tiempo real
+
+Donante y voluntario ven lo que cambian otros (el personal en el panel, otros voluntarios, las tareas programadas) sin salir de la pantalla. El canal solo avisa qué volver a pedir: los datos siguen llegando por REST, donde la API aplica roles y propiedad.
+
+**Requisito de despliegue:** aplicar en el proyecto de Supabase las migraciones `20261108000000` a `20261108000003` de `findfood-api` con `supabase db push`. Sin ellas la app no se une al canal (siguen los sondeos) y la API no envía los avisos nuevos.
+
+| Tema | Comportamiento |
+|---|---|
+| Canal | Tópico privado de Supabase Realtime `usuario:<uid>` (el uid de Supabase Auth), evento `sync`, contrato v1: `{ v: 1, entidad, id?, donacion_id?, ruta_id?, asignacion_id?, tipo? }` con `entidad` `donacion`, `asignacion`, `parada`, `ruta`, `notificacion` o `cuenta`. Un mensaje mal formado o de otra versión se ignora. |
+| Cuándo se une | `useRealtimeSync`, montado en `SignedInEffects`: solo con sesión iniciada, en primer plano y con cliente de Supabase. En segundo plano sale del canal y vuelve a unirse al regresar. `useRealtimeConnected()` (`src/sync/status.ts`) dice si está conectado. |
+| Invalidación | Un solo mapa evento → claves (`src/sync/sync-keys.ts`), compartido con las push recibidas y tocadas. Los eventos se agrupan 300 ms y se invalidan con `cancelRefetch: false`: lo que está en pantalla se vuelve a pedir y el resto queda obsoleto hasta abrir su pantalla. `rutas.detail(id)` se invalida con `exact: true` para no repetir la llegada estimada, que consulta Google. |
+| Puesta al día | El primer `SUBSCRIBED` no invalida nada. Cada `SUBSCRIBED` posterior (regreso al primer plano o reconexión) invalida una vez todas las consultas salvo los catálogos. |
+| Sondeos en pausa con el canal conectado | Detalle e historial de la donación PUBLICADA en espera de voluntario (15 s), ofertas mientras hay una OFRECIDA (15 s) y seguimiento del donante antes de que arranque la ruta (60 s). |
+| Sondeos que siguen | Seguimiento del donante dentro de la ventana en vivo (30 s) y llegada estimada de la ruta del voluntario (30 s): la posición y la llegada estimada no viajan por el canal. |
+| Sin canal | Perfil `local` (sin cliente de Supabase), canal caído o migraciones sin aplicar: siguen las push en primer plano, la recarga al volver al primer plano y los sondeos con sus intervalos normales. |
+
+### Avisos nuevos
+
+Al recibirlos o tocarlos se invalida la donación que nombran (detalle, historial, seguimiento, listas e impacto); los de oferta cerrada también invalidan las ofertas y las listas de rutas.
+
+| Código | Quién lo recibe | Al tocarlo abre |
+|---|---|---|
+| `DONACION_CANCELADA_BANCO` | Donante | Detalle de la donación (`/donante/detalle-donacion`) |
+| `DONACION_REPUBLICADA` | Donante | Detalle de la donación |
+| `RECOGIDA_FALLIDA` | Donante | Detalle de la donación |
+| `ASIGNACION_TOMADA` · `ASIGNACION_RETIRADA` | Voluntario con la oferta | Inicio del voluntario (`/voluntario`): la oferta ya está cerrada |
+| `INCIDENCIA_EN_REVISION` · `INCIDENCIA_RESUELTA` | Quien reportó la incidencia | Detalle de la donación en la vista activa (`/donante/detalle-donacion` o `/voluntario/detalle-donacion`) |
+
+Sin el `donacion_id` que necesitan, o sin la vista de su rol, abren Alertas, igual que un código desconocido. `INCIDENCIA_REPORTADA` es del personal (solo en el panel web) y la app nunca lo recibe. «Importantes» incluye `DONACION_CANCELADA_BANCO` y `RECOGIDA_FALLIDA`.
 
 ## Siguiente integración
 

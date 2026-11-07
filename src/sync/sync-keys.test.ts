@@ -144,6 +144,53 @@ describe("keysForPushData", () => {
     ]);
   });
 
+  const donationEverywhere = [
+    prefix(donaciones.detail(DON)),
+    prefix(donaciones.historial(DON)),
+    prefix(donaciones.seguimiento(DON)),
+    prefix(donaciones.lists()),
+    prefix(perfil.impacto()),
+  ];
+
+  it.each(["DONACION_CANCELADA_BANCO", "DONACION_REPUBLICADA", "RECOGIDA_FALLIDA"])(
+    "a staff change to the donor's donation refreshes that donation everywhere (%s)",
+    (tipo) => {
+      expect(keysForPushData({ tipo, donacion_id: DON })).toEqual([
+        prefix(notificaciones.all),
+        ...donationEverywhere,
+      ]);
+    },
+  );
+
+  it.each(["ASIGNACION_TOMADA", "ASIGNACION_RETIRADA"])(
+    "a closed offer refreshes the offers and the route lists, never a route's ETA (%s)",
+    (tipo) => {
+      const closed = { tipo, donacion_id: DON, asignacion_id: ASG };
+      expect(keysForPushData(closed)).toEqual([
+        prefix(notificaciones.all),
+        ...donationEverywhere,
+        prefix(asignaciones.ofertas()),
+        prefix(rutas.lists()),
+      ]);
+
+      const client = createTestQueryClient();
+      for (const key of [rutas.detail(RUTA), ETA_KEY]) client.setQueryData(key, "cached");
+      invalidateTargets(client, keysForPushData(closed));
+      expect(client.getQueryState(ETA_KEY)?.isInvalidated).toBe(false);
+    },
+  );
+
+  it.each(["INCIDENCIA_EN_REVISION", "INCIDENCIA_RESUELTA"])(
+    "a reviewed incident refreshes its donation when it names one (%s)",
+    (tipo) => {
+      expect(keysForPushData({ tipo, donacion_id: DON, asignacion_id: ASG })).toEqual([
+        prefix(notificaciones.all),
+        ...donationEverywhere,
+      ]);
+      expect(keysForPushData({ tipo, asignacion_id: ASG })).toEqual([prefix(notificaciones.all)]);
+    },
+  );
+
   it.each(["VERIFICACION_APROBADA", "VERIFICACION_RECHAZADA"])(
     "a reviewed volunteer request refreshes the account (%s)",
     (tipo) => {
@@ -169,6 +216,8 @@ describe("keysForPushData", () => {
     null,
     {},
     { tipo: "ALGO_NUEVO" },
+    // Staff only (IN_APP); the app never gets it, but stays safe if it does.
+    { tipo: "INCIDENCIA_REPORTADA" },
     { tipo: 7 },
     { donacion_id: "" },
     { donacion_id: 7 },

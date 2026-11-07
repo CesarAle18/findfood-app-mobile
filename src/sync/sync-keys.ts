@@ -103,9 +103,11 @@ export function keysForSyncEvent(event: SyncEvent): SyncTarget[] {
 
 /**
  * What a push leaves stale by its `tipo`: a new offer, the offers; a cancelled donation
- * can drop an accepted offer and a stop from a route; a reviewed volunteer request changes
- * `GET /me` (its state and, once approved, the VOLUNTARIO role), which nothing else would
- * fetch again while the app stays open.
+ * can drop an accepted offer and a stop from a route; an offer taken by another volunteer
+ * or by the bank fleet closes it (no route named, so only the route lists); a reviewed
+ * volunteer request changes `GET /me` (its state and, once approved, the VOLUNTARIO role),
+ * which nothing else would fetch again while the app stays open. The donor's and the
+ * incident notices only need their donation, which `keysForPushData` already covers.
  */
 function targetsForTipo(tipo: string | null): SyncTarget[] {
   switch (tipo) {
@@ -114,6 +116,9 @@ function targetsForTipo(tipo: string | null): SyncTarget[] {
       return [prefix(me)];
     case "ASIGNACION_OFRECIDA":
       return [prefix(asignaciones.ofertas())];
+    case "ASIGNACION_TOMADA":
+    case "ASIGNACION_RETIRADA":
+      return [prefix(asignaciones.ofertas()), prefix(rutas.lists())];
     case "DONACION_CANCELADA":
       return [prefix(asignaciones.ofertas()), prefix(rutas.all)];
     default:
