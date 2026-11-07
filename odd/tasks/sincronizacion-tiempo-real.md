@@ -1,0 +1,54 @@
+# Feature · sincronizacion-tiempo-real (app)
+
+**Locator:** `odd/tasks/sincronizacion-tiempo-real.md` (Engram mirror `odd/sincronizacion-tiempo-real/tasks`: pending — Engram tools unavailable in the orchestrator session)
+**Branch:** `feat/sincronizacion-tiempo-real` (from `develop` @ `1b36ce2`)
+**Sibling:** `findfood-api` → `odd/tasks/sincronizacion-tiempo-real.md` (branch `feat/sincronizacion-tiempo-real` from `Conexion_Front` @ `c0ab0c0`)
+**Plan:** `~/.claude/plans/pasted-content-id-a4be-necesito-que-compiled-wall.md`
+
+## Objective
+Donors and volunteers see changes made by other users or processes without leaving the screen, signing out or reopening the app, with minimal battery and data cost.
+
+## Problem / Why
+Other users' changes only arrive through a foreground push (≤60 s late), state-limited polls (15–60 s), returning to the foreground, or mounting a screen with data older than 30 s. Native tabs stay mounted, so switching tabs never refreshes. Stale today: donor Inicio/Donaciones/detail/assigned-volunteer/delivery/impact and Seguimiento while PUBLICADA; volunteer Inicio/Rutas (new offers only via push; staff route/stop changes missed); Alertas badge/inbox; `GET /me` (volunteer approval, suspension). Without push (denied, simulator, `local` profile) there is no signal at all.
+
+## Approach
+Subscribe to the API's new private Supabase Realtime topic `usuario:<auth uid>` (event `sync`, payload contract v1, see the API feature doc) from `SignedInEffects`, only while signed in, foreground and with a Supabase client. One central event → query-keys map (shared with the push foreground handler) feeds a ~300 ms debounced `invalidateQueries` (`cancelRefetch: false`; active queries refetch, inactive ones go stale and refetch on open). Catch-up invalidation on every re-SUBSCRIBED after the first. Event-replaceable polls switch off while connected and remain as fallback; ETA/position polls stay.
+
+## Scope / constraints
+- User decisions (2026-11-07): mobile + API only; all missing notices N1–N7 (app handles N1–N4, N6, N7; N5 is staff/web).
+- Read the Expo v57 docs (https://docs.expo.dev/versions/v57.0.0/) before writing code (AGENTS.md).
+- `src/sync/status` must not import `@/auth/supabase` and must give `useSyncExternalStore` a server snapshot (`scripts/check-render.cjs` runs screens in plain Node).
+- `rutas.detail(id)` invalidated with `exact: true` so the nested Google-backed ETA query is not refetched by events.
+- Conventional commits without Co-Authored-By trailers; tests ship with code; stage only task files (never `.claude/settings.json`, `.env.example`, `docs/MANUAL DE USUARIO FIND FOOD.*`, `docs/capturas-manual/`, `.codegraph/`).
+
+## Acceptance criteria
+- With the channel connected, a change by another user refreshes the visible screen in ~1–2 s and marks other modules stale so they show fresh data on open.
+- No channel in background, after sign-out, or without a Supabase client; reconnect/resume triggers exactly one catch-up; malformed events are ignored.
+- While connected, espera-voluntario (15 s), offers (15 s) and the 60 s idle tracking poll are off; when disconnected they keep today's intervals.
+- Push foreground handling and tap routing use the shared map; tapped pushes refetch their target; impact refreshes after create/cancel.
+
+## Checks
+`npm run lint`, `npm run typecheck`, `npm test`, `npm run test:render`.
+
+## Delivery
+- Forecast ~1,050 authored changed lines (exceeds 400). Strategy `ask-on-risk`; chain strategy asked before any PR is created. Push/PR/merge are the user's decision.
+- RDD: on (global). Review boundary starts at the branch point `1b36ce2`.
+
+## Tasks
+| ID | Task | Route | Status | Commit | Review |
+|---|---|---|---|---|---|
+| APP-1 | `src/sync/sync-event.ts` + `src/sync/sync-keys.ts` (shared map, push mappers moved), push handler + tap invalidation, impact invalidation fix, tests | delegated writer (2+ non-trivial files) | [x] | `65f3efa` | medium · slice_budget_reached (709 lines) · pending |
+| APP-2 | `src/sync/status.ts`, `src/sync/use-realtime-sync.ts`, mount in `SignedInEffects`, `src/test-utils/realtime.ts` (migrate `tracking-screens.test.tsx`), tests | delegated writer | [ ] | — | — |
+| APP-3 | Gate event-replaceable polls on connection status, `scripts/check-render.cjs` stub, tests | delegated writer | [ ] | — | — |
+| APP-4 | New notice types (N1–N4, N6, N7): types, tap routing, keys, inbox; `docs/integracion-backend.md` | delegated writer | [ ] | — | — |
+
+## Progress
+- 2026-11-07: plan approved; branch created; feature document created.
+- 2026-11-07: APP-1 `65f3efa` (writer; RED observed: 4 suites failing on missing modules + 2 impact assertions). Evidence: `npm run lint` exit 0; `npm run typecheck` exit 0; APP-1 suites 4/4, 73/73 (parent re-ran: 73/73); `npm test` 103/104 suites, 1761/1762; `npm run test:render` exit 1. Deviations: null optional payload fields count as absent; `DONACION_CANCELADA` push keeps the `rutas.all` prefix (no `ruta_id` in push data); prefix wins over exact in dedupe.
+
+## Known environmental failures (pre-existing on base `1b36ce2`, untouched by this feature)
+- `src/api/problem-messages.test.ts › problemMessages › has a message for every problem type, and only for those`: `problemMessages` has `fuera-de-radio` and `ubicacion-requerida`, which the test list lacks.
+- `npm run test:render`: `scripts/check-render.cjs:532` (address-picker hint copy "Ubica la dirección escrita, usa tu ubicación o mueve el mapa" no longer exists) and `:660` (volunteer form "Documento (frente)" / "Enviar solicitud" copy).
+
+## Next step
+RDD review of the APP-1 slice; then API-1.
