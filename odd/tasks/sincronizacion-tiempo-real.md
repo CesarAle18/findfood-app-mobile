@@ -37,7 +37,7 @@ Subscribe to the API's new private Supabase Realtime topic `usuario:<auth uid>` 
 ## Tasks
 | ID | Task | Route | Status | Commit | Review |
 |---|---|---|---|---|---|
-| APP-1 | `src/sync/sync-event.ts` + `src/sync/sync-keys.ts` (shared map, push mappers moved), push handler + tap invalidation, impact invalidation fix, tests | delegated writer (2+ non-trivial files) | [x] | `65f3efa` | medium · slice_budget_reached (709 lines) · pending |
+| APP-1 | `src/sync/sync-event.ts` + `src/sync/sync-keys.ts` (shared map, push mappers moved), push handler + tap invalidation, impact invalidation fix, tests | delegated writer (2+ non-trivial files) | [x] | `65f3efa` | medium · slice_budget_reached (709 lines) · native review unavailable (see Review) |
 | APP-2 | `src/sync/status.ts`, `src/sync/use-realtime-sync.ts`, mount in `SignedInEffects`, `src/test-utils/realtime.ts` (migrate `tracking-screens.test.tsx`), tests | delegated writer | [ ] | — | — |
 | APP-3 | Gate event-replaceable polls on connection status, `scripts/check-render.cjs` stub, tests | delegated writer | [ ] | — | — |
 | APP-4 | New notice types (N1–N4, N6, N7): types, tap routing, keys, inbox; `docs/integracion-backend.md` | delegated writer | [ ] | — | — |
@@ -50,5 +50,8 @@ Subscribe to the API's new private Supabase Realtime topic `usuario:<auth uid>` 
 - `src/api/problem-messages.test.ts › problemMessages › has a message for every problem type, and only for those`: `problemMessages` has `fuera-de-radio` and `ubicacion-requerida`, which the test list lacks.
 - `npm run test:render`: `scripts/check-render.cjs:532` (address-picker hint copy "Ubica la dirección escrita, usa tu ubicación o mueve el mapa" no longer exists) and `:660` (volunteer form "Documento (frente)" / "Enviar solicitud" copy).
 
+## Review
+- gentle-ai 4.0.0: the `intended_untracked_selection` collect submission (`--contract … --projection=workspace --intended-untracked-selection=…`) drops `--base-ref/--committed-only`; for this repo the re-entry targeted the user's uncommitted `.claude/settings.json` + `.env.example` instead of the APP-1 commit, so START was not run. User decision (2026-11-07): continue without reporting; affected slices record native review as unavailable and follow the RDD-off tier path (assess tier → writer self-verification + parent spot check; independent verifier for high).
+
 ## Next step
-RDD review of the APP-1 slice; then API-1.
+APP-2 after the API contract tasks (API-2, API-3).
