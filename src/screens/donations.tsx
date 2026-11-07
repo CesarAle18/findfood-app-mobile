@@ -278,9 +278,6 @@ export function NewDonationScreen() {
           }
           error={errors?.pickupDate}
         />
-        <Copy tone="secondary">
-          El voluntario podrá recoger en cualquier momento de ese día.
-        </Copy>
       </Section>
       <Section title="Ubicación de la entrega">
         <Field

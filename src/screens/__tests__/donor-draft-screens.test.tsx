@@ -128,9 +128,6 @@ describe("NewDonationScreen", () => {
     await renderScreen(NewDonationScreen, readyDraft);
 
     expect(await screen.findByLabelText("Fecha de recogida: 16/10/2026")).toBeOnTheScreen();
-    expect(
-      screen.getByText("El voluntario podrá recoger en cualquier momento de ese día."),
-    ).toBeOnTheScreen();
     expect(screen.queryByText("Desde")).toBeNull();
     expect(screen.queryByText("Hasta")).toBeNull();
   });

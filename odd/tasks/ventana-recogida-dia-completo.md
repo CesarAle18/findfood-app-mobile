@@ -33,3 +33,4 @@ The user asked to remove the pickup hours when creating a donation.
   - GREEN: `npm run typecheck` → clean; `npx eslint src/domain src/screens src/state src/test-utils` → exit 0, no findings; `npx jest src/domain src/screens` → 39 suites, 700 tests passed.
   - `npm run lint` (whole project) not run separately; the scoped eslint above covers the changed files.
 - 2026-11-07: review assess (`--base-ref 5d2ff66 --committed-only`, untracked unrelated files excluded): risk `medium`, `review_due: false` (`under_budget`, 288 changed lines). Parent spot check: `npx jest draft-submission donor-draft-screens` 2 suites / 32 tests passed. Full `npm run lint` not run (scoped eslint exit 0).
+- 2026-11-07: removed the date hint "El voluntario podrá recoger en cualquier momento de ese día." at the user's request (inline, one mechanical UI line + its assertion). `npx jest donor-draft-screens` 13 passed; `npm run typecheck` clean; eslint on both files exit 0.
