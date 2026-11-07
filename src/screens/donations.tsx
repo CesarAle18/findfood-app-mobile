@@ -203,6 +203,7 @@ export function NewDonationScreen() {
                     label="Fecha de vencimiento"
                     value={product.expiresOn}
                     onChange={(expiresOn) => update(product.id, { expiresOn })}
+                    disablePast
                     error={productError(product.id, "expiresOn")}
                   />
                   <SelectField
