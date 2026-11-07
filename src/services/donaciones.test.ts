@@ -29,7 +29,7 @@ jest.mock("@/api", () => ({
 
 const mockedApi = api as unknown as ApiMock;
 const signal = new AbortController().signal;
-const { donaciones } = queryKeys;
+const { donaciones, perfil } = queryKeys;
 
 const nueva: CrearDonacionBody = {
   titulo: "Pan del día",
@@ -100,7 +100,11 @@ describe("queries", () => {
 
 describe("mutations invalidate exactly the queries they change", () => {
   it.each([
-    mutationCase("POST /donaciones", useCrearDonacionMutation, nueva, [donaciones.lists()]),
+    // The donor's impact counts every created and every cancelled donation.
+    mutationCase("POST /donaciones", useCrearDonacionMutation, nueva, [
+      donaciones.lists(),
+      perfil.impacto(),
+    ]),
     // Editing records no state change, so the history stays as it is.
     mutationCase("PATCH /donaciones/:id", useActualizarDonacionMutation, { id: "d-1", body: { titulo: "Pan" } }, [
       donaciones.lists(),
@@ -115,6 +119,7 @@ describe("mutations invalidate exactly the queries they change", () => {
       donaciones.lists(),
       donaciones.detail("d-1"),
       donaciones.historial("d-1"),
+      perfil.impacto(),
     ]),
   ])("$name", async ({ invalidated, expected }) => {
     expect(await invalidated()).toEqual(expected);
