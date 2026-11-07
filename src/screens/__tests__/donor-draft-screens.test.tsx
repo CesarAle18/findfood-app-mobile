@@ -17,6 +17,7 @@ import {
   PICKUP_POINT_REQUIRED,
   type DonationDraft,
 } from "@/domain/donation-draft";
+import { clearReverseGeocodeCache } from "@/location/geocode";
 import { NewDonationScreen } from "@/screens/donations";
 import { ReviewDonationScreen } from "@/screens/donor";
 import { MobileProvider } from "@/state/mobile-context";
@@ -27,6 +28,9 @@ import { createTestQueryClient } from "@/test-utils/query";
 jest.mock("@/api", () => ({
   api: jest.requireActual<typeof import("@/test-utils/api")>("@/test-utils/api").createApiMock(),
 }));
+
+// A build with the Maps key: the picker draws the map the donor moves.
+jest.mock("@/config/maps", () => ({ hasGoogleMapsKey: () => true }));
 
 // The Jest build of Reanimated has no LayoutAnimationConfig: render its children as they are.
 jest.mock("@/components/findfood/motion", () => ({
@@ -185,6 +189,50 @@ describe("NewDonationScreen", () => {
     await fireEvent.press(screen.getByText("Continuar"));
     expect(screen.getByText(PICKUP_POINT_REQUIRED)).toBeOnTheScreen();
     expect(screen.queryByText("Revisión")).toBeNull();
+  });
+
+  describe("the address follows the chosen point", () => {
+    const suggested = "Calle 76 #15-20, Bogotá";
+
+    beforeEach(() => {
+      clearReverseGeocodeCache();
+      mockApi.get.mockImplementation(async (path: string) => {
+        if (path === "/catalogos") return catalogosFixture;
+        if (path === "/geo/inversa") return { direccion: suggested };
+        throw new Error(`unexpected GET ${path}`);
+      });
+    });
+
+    it("replaces the typed address once the donor moves the map", async () => {
+      await renderScreen(NewDonationScreen, readyDraft);
+
+      const region = { latitude: 4.7, longitude: -74.1, latitudeDelta: 0.01, longitudeDelta: 0.01 };
+      const map = await screen.findByTestId("location-picker-map");
+      await fireEvent(map, "regionChangeComplete", region, { isGesture: true });
+
+      expect(await screen.findByDisplayValue(suggested, {}, { timeout: 2000 })).toBeOnTheScreen();
+      expect(screen.queryByDisplayValue("Cra 45 #12-30")).toBeNull();
+    });
+
+    it("replaces the typed address with the device position's", async () => {
+      const defaultHook = jest.mocked(Location.useForegroundPermissions).getMockImplementation()!;
+      const granted = { status: "granted", granted: true, canAskAgain: true, expires: "never" };
+      jest.mocked(Location.useForegroundPermissions).mockImplementation(() => [
+        granted as never,
+        jest.fn(async () => granted as never),
+        jest.fn(async () => granted as never),
+      ]);
+      try {
+        await renderScreen(NewDonationScreen, readyDraft);
+
+        await fireEvent.press(await screen.findByRole("button", { name: "Usar mi ubicación" }));
+
+        expect(await screen.findByDisplayValue(suggested)).toBeOnTheScreen();
+        expect(screen.queryByDisplayValue("Cra 45 #12-30")).toBeNull();
+      } finally {
+        jest.mocked(Location.useForegroundPermissions).mockImplementation(defaultHook);
+      }
+    });
   });
 });
 

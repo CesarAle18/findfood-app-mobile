@@ -41,7 +41,10 @@ export interface DonationDraft {
   /** The donation created in the API (BORRADOR); a retry updates it instead of creating another. */
   apiId: string | null;
   products: DraftProduct[];
-  /** The address the donor typed; the map never overwrites it. */
+  /**
+   * The pickup address: typed by the donor, or the address of the last point they chose on
+   * the map or with their location (each such point replaces it).
+   */
   direccion: string;
   /** Optional landmark for the volunteer ("Portería norte"). */
   referencia: string;
@@ -191,9 +194,12 @@ export function setDireccion(draft: DonationDraft, direccion: string): DonationD
   return { ...draft, direccion };
 }
 
-/** Applies an address suggested by the map only while the donor has not typed one. */
+/**
+ * Applies the address of a new map or device point, replacing the one in the field: the
+ * donor chose that point after typing. Such points keep `direccionUbicada` null, so the
+ * point stays.
+ */
 export function suggestDireccion(draft: DonationDraft, suggestion: string): DonationDraft {
-  if (draft.direccion.trim() !== "") return draft;
   return { ...draft, direccion: suggestion };
 }
 

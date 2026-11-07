@@ -54,8 +54,10 @@ export const APPROXIMATE_NOTICE =
  * only moves the map, and an approximate one asks to adjust it, since that point decides
  * which volunteers the hard filters keep.
  *
- * `onAddressSuggestion` reverse-geocodes the chosen point; pass it only while the address
- * field is empty, and apply it without overwriting typed text (`suggestDireccion`).
+ * `onAddressSuggestion` receives the reverse-geocoded address of each point the donor chooses
+ * on the map or with their location (`suggestDireccion` writes it in the field). Only the
+ * latest point's answer arrives, and it is never searched as typed text. Points located from
+ * the address never suggest one.
  *
  * With `address`, `ref.locateAddress()` locates that text (the screen draws the search button
  * next to its address field, see `canLocateAddress`): Google through the API first, the
@@ -105,6 +107,8 @@ export function LocationPicker({
   const [notice, setNotice] = useState<string | null>(null);
   const { gate, request } = usePermissionGate(Location.useForegroundPermissions);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped by every new point: only the latest one's reverse geocode may suggest its address.
+  const pointRef = useRef(0);
   const sessionRef = useRef<string | null>(null);
   const [found, setFound] = useState<{ query: string; items: SugerenciaDto[] }>({
     query: "",
@@ -153,19 +157,31 @@ export function LocationPicker({
 
   const suggestions = searchable && found.query === query && query !== chosen ? found.items : [];
 
-  const suggestAddress = async (point: LatLng, permission: PermissionGate) => {
+  /** Starts a new point: a pending or in-flight suggestion for an older one is dropped. */
+  const newPoint = () => {
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    return ++pointRef.current;
+  };
+
+  const suggestAddress = async (point: LatLng, permission: PermissionGate, request: number) => {
     if (!onAddressSuggestion) return;
+    const suggest = (text: string) => {
+      if (request !== pointRef.current) return;
+      // Chosen first: the autocomplete neither searches nor lists the map's own address.
+      setChosen(text.trim());
+      onAddressSuggestion(text);
+    };
     try {
       const fromApi = await reverseGeocodeWithApi(fromLatLng(point));
       if (fromApi !== undefined) {
-        if (fromApi) onAddressSuggestion(fromApi);
+        if (fromApi) suggest(fromApi);
         return;
       }
       // Android geocodes on the phone only with the location permission.
       if (permission !== "granted") return;
       const [geocoded] = await Location.reverseGeocodeAsync(point);
       const text = formatGeocodedAddress(geocoded);
-      if (text) onAddressSuggestion(text);
+      if (text) suggest(text);
     } catch {
       // A suggestion is optional: the donor types the address.
     }
@@ -187,10 +203,10 @@ export function LocationPicker({
     if (details?.isGesture === false) return;
     onChange(fromLatLng(region), "map");
     setNotice(null);
-    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    const request = newPoint();
     if (onAddressSuggestion) {
       suggestTimer.current = setTimeout(
-        () => void suggestAddress(region, gate),
+        () => void suggestAddress(region, gate, request),
         REVERSE_GEOCODE_DELAY_MS,
       );
     }
@@ -207,9 +223,10 @@ export function LocationPicker({
         accuracy: Location.Accuracy.Balanced,
       });
       const point = { latitude: coords.latitude, longitude: coords.longitude };
+      const request = newPoint();
       moveTo(fromLatLng(point));
       onChange(fromLatLng(point), "device");
-      await suggestAddress(point, current);
+      await suggestAddress(point, current, request);
     } catch {
       setError("No pudimos obtener tu ubicación. Mueve el mapa hasta tu punto de recogida.");
     } finally {
@@ -225,6 +242,8 @@ export function LocationPicker({
       setError("Escribe la dirección de recogida para ubicarla.");
       return;
     }
+    // The donor's text wins over a map move still waiting for its address.
+    newPoint();
     let located: GeocodedPoint | null | undefined = await geocodeWithApi(query);
     if (located === undefined) {
       // The phone geocoder answers instead; on Android it needs the location permission.
@@ -252,6 +271,7 @@ export function LocationPicker({
     // Picking closes the billing session; the next search starts another one.
     const sesion = sessionRef.current ?? randomUUID();
     sessionRef.current = null;
+    newPoint();
     try {
       const lugar = await getLugar(suggestion.place_id, sesion);
       setChosen(lugar.direccion.trim());

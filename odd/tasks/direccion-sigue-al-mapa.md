@@ -17,7 +17,7 @@ Bug report (2026-11-07): the field is filled from the first map point, but later
 - Delivery strategy: `ask-on-risk`. Forecast ≈ 120 authored lines.
 
 ## Tasks
-- [ ] T1 always apply map/device address suggestions in the new-donation form; latest-answer guard and no autocomplete for the applied suggestion in `LocationPicker`; tests. Route: delegated writer (2+ non-trivial files).
+- [x] T1 always apply map/device address suggestions in the new-donation form; latest-answer guard and no autocomplete for the applied suggestion in `LocationPicker`; tests. Route: delegated writer (2+ non-trivial files).
 
 ## Acceptance criteria
 - Move the map → after the reverse-geocode delay the field shows the new address, even if it already had text.
@@ -29,3 +29,7 @@ Bug report (2026-11-07): the field is filled from the first map point, but later
 
 ## Progress
 - 2026-11-07: explored; feature document created.
+- 2026-11-07: T1 done (delegated writer). `NewDonationScreen` always passes `onAddressSuggestion`; `suggestDireccion` replaces the address. `LocationPicker` bumps a point counter on every new point (map gesture, "Usar mi ubicación", "Ubicar dirección", a picked suggestion) and drops answers for older points (this also cancels a pending map suggestion when the donor locates their typed address). It marks the suggested text as chosen before applying it, so the autocomplete neither searches nor lists it. `volunteer-zone.tsx` passes neither `address` nor `onAddressSuggestion`, so it is unchanged. Authored lines: about 220 added, 21 removed, mostly tests (over the ~120 forecast because of the screen and picker tests).
+  - RED (before the fix): 6 failing: `suggestDireccion` replaces typed text; picker ignores a late answer, does not rewrite an address located after a map move, no autocomplete for the map's address; screen replaces the typed address after a map move and after "Usar mi ubicación". "suggests the address of each new point" passed already (regression guard: the picker always re-suggested, the screen gated it).
+  - GREEN: the three touched suites 65/65.
+  - Checks: `npm run typecheck` pass; `npx eslint src/components src/domain src/screens` pass; `npx jest src/components src/domain src/screens` 50 suites, 799 tests pass. The 3 "overlapping act()" console errors in `map.test.tsx` also appear on the base.

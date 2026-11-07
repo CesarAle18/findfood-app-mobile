@@ -305,12 +305,8 @@ export function NewDonationScreen() {
             setDraft((current) => setDireccion(current, direccion))
           }
           onChange={(point, source) => setDraft((current) => setUbicacion(current, point, source))}
-          // Only while the address is empty: a typed address is never replaced.
-          onAddressSuggestion={
-            draft.direccion.trim() === ""
-              ? (text) => setDraft((current) => suggestDireccion(current, text))
-              : undefined
-          }
+          // Each point from the map or the device writes its own address in the field.
+          onAddressSuggestion={(text) => setDraft((current) => suggestDireccion(current, text))}
         />
         <FieldError message={errors?.ubicacionRecogida} />
       </Section>
