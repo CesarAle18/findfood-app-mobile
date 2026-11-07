@@ -38,13 +38,14 @@ Subscribe to the API's new private Supabase Realtime topic `usuario:<auth uid>` 
 | ID | Task | Route | Status | Commit | Review |
 |---|---|---|---|---|---|
 | APP-1 | `src/sync/sync-event.ts` + `src/sync/sync-keys.ts` (shared map, push mappers moved), push handler + tap invalidation, impact invalidation fix, tests | delegated writer (2+ non-trivial files) | [x] | `65f3efa` | medium · slice_budget_reached (709 lines) · native review unavailable (see Review) |
-| APP-2 | `src/sync/status.ts`, `src/sync/use-realtime-sync.ts`, mount in `SignedInEffects`, `src/test-utils/realtime.ts` (migrate `tracking-screens.test.tsx`), tests | delegated writer | [ ] | — | — |
-| APP-3 | Gate event-replaceable polls on connection status, `scripts/check-render.cjs` stub, tests | delegated writer | [ ] | — | — |
+| APP-2 | `src/sync/status.ts`, `src/sync/use-realtime-sync.ts`, mount in `SignedInEffects`, `src/test-utils/realtime.ts` (migrate `tracking-screens.test.tsx`), tests | delegated writer | [x] | `409d8a5` | medium · slice_budget_reached (1,469 lines) · native review unavailable |
+| APP-3 | Gate event-replaceable polls on connection status, `scripts/check-render.cjs` stub, seed `focusManager` from `AppState.currentState` (background launches must not join the channel), tests | delegated writer | [ ] | — | — |
 | APP-4 | New notice types (N1–N4, N6, N7): types, tap routing, keys, inbox; `docs/integracion-backend.md` | delegated writer | [ ] | — | — |
 
 ## Progress
 - 2026-11-07: plan approved; branch created; feature document created.
 - 2026-11-07: APP-1 `65f3efa` (writer; RED observed: 4 suites failing on missing modules + 2 impact assertions). Evidence: `npm run lint` exit 0; `npm run typecheck` exit 0; APP-1 suites 4/4, 73/73 (parent re-ran: 73/73); `npm test` 103/104 suites, 1761/1762; `npm run test:render` exit 1. Deviations: null optional payload fields count as absent; `DONACION_CANCELADA` push keeps the `rutas.all` prefix (no `ruta_id` in push data); prefix wins over exact in dedupe.
+- 2026-11-07: APP-2 `409d8a5` (writer; RED: 3 suites failing on missing modules, then the SignedInEffects mount case; fake extraction kept `tracking-screens` 24/24 with unchanged assertions). Evidence: lint exit 0, typecheck exit 0, focused suites 6/6, 106/106 (parent re-ran: 106/106), `npm test` 105/106 suites, 1784/1785 (only the known `problem-messages` failure), `test:render` exit 1 at the known `check-render.cjs:532`. API: `useRealtimeSync(enabled)`, `SYNC_FLUSH_MS = 300`; status store `idle|connecting|connected|error` with `useRealtimeConnected()` (server snapshot `false`, no `@/auth` imports). Deviation: rejoin waits for the previous `removeChannel` promise (realtime-js returns the leaving channel for the same topic and its `subscribe()` is a no-op). Notes: a server-initiated `CLOSED` is not rejoined until the next background/foreground cycle (fallback polls keep running); `focusManager.isFocused()` reports true until the first AppState change (fixed in APP-3).
 
 ## Known environmental failures (pre-existing on base `1b36ce2`, untouched by this feature)
 - `src/api/problem-messages.test.ts › problemMessages › has a message for every problem type, and only for those`: `problemMessages` has `fuera-de-radio` and `ubicacion-requerida`, which the test list lacks.
@@ -54,4 +55,4 @@ Subscribe to the API's new private Supabase Realtime topic `usuario:<auth uid>` 
 - gentle-ai 4.0.0: the `intended_untracked_selection` collect submission (`--contract … --projection=workspace --intended-untracked-selection=…`) drops `--base-ref/--committed-only`; for this repo the re-entry targeted the user's uncommitted `.claude/settings.json` + `.env.example` instead of the APP-1 commit, so START was not run. User decision (2026-11-07): continue without reporting; affected slices record native review as unavailable and follow the RDD-off tier path (assess tier → writer self-verification + parent spot check; independent verifier for high).
 
 ## Next step
-APP-2 after the API contract tasks (API-2, API-3).
+APP-3 poll gating (+ seed `focusManager` from `AppState.currentState`).
