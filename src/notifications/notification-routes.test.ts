@@ -47,6 +47,11 @@ describe("routeForNotification", () => {
       both,
       target({ pathname: "/donante/seguimiento", params: { id: DONATION } }, "DONANTE"),
     ],
+    [
+      "VOLUNTARIO_EN_SITIO",
+      both,
+      target({ pathname: "/donante/seguimiento", params: { id: DONATION } }, "DONANTE"),
+    ],
     ["DONACION_ENTREGADA", both, delivery],
     ["DONACION_RECIBIDA", both, delivery],
     ["DONACION_RECHAZADA", both, detail],
@@ -69,6 +74,7 @@ describe("routeForNotification", () => {
     const empty = { donacion_id: null, asignacion_id: null };
     expect(routeForNotification({ tipo: "ASIGNACION_OFRECIDA", ...empty }, both)).toEqual(donorAlerts);
     expect(routeForNotification({ tipo: "DONACION_RECOGIDA", ...empty }, both)).toEqual(donorAlerts);
+    expect(routeForNotification({ tipo: "VOLUNTARIO_EN_SITIO", ...empty }, both)).toEqual(donorAlerts);
   });
 
   it("prefers the active role's alerts and ignores an active role the user lacks", () => {

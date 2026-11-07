@@ -48,6 +48,8 @@ export const ALERTS_HREF: Record<MobileRole, Href> = {
 /** Screens of the donor view that show one donation by its `?id=` (UUID). */
 const DONOR_DONATION_SCREENS = {
   ASIGNACION_ACEPTADA: "/donante/voluntario-asignado",
+  // The volunteer marked arrival at the pickup point: follow them live.
+  VOLUNTARIO_EN_SITIO: "/donante/seguimiento",
   DONACION_RECOGIDA: "/donante/seguimiento",
   // Delivery confirmation, with "Calificar voluntario" while not rated yet.
   DONACION_ENTREGADA: "/donante/entrega-donacion",
