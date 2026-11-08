@@ -15,8 +15,11 @@ import { queryKeys } from "@/services/query-keys";
 import { OfferScreen } from "@/screens/volunteer";
 import { MobileProvider } from "@/state/mobile-context";
 import type { ApiMock } from "@/test-utils/api";
+import type { DonacionDetalleDto, DonacionItemDto } from "@/services/donaciones";
 import {
+  DONATION_ID,
   catalogosFixture,
+  detalleFixture,
   meFixture,
   ofertaAceptadaFixture,
   ofertaFixture,
@@ -59,7 +62,25 @@ const mockApi = api as unknown as ApiMock;
 const NOW = Date.parse("2026-10-13T20:00:00Z");
 
 let ofertas: OfertaDto[];
+let detalle: DonacionDetalleDto;
 let client: QueryClient;
+
+function itemFixture(overrides: Partial<DonacionItemDto> = {}): DonacionItemDto {
+  return {
+    id: "item-1",
+    descripcion: null,
+    cantidad: 25,
+    peso_estimado_kg: 25,
+    peso_real_kg: null,
+    fecha_vencimiento: null,
+    requiere_refrigeracion: false,
+    observaciones: null,
+    tipo_alimento: { id: 2, codigo: "PAN", nombre: "Pan" },
+    unidad_medida: { id: 1, codigo: "KG", nombre: "Kilogramos" },
+    foto_url: null,
+    ...overrides,
+  };
+}
 
 async function renderOffer(initialUrl = "/pantalla?asignacionId=asg-7") {
   client = createTestQueryClient();
@@ -86,8 +107,10 @@ async function renderOffer(initialUrl = "/pantalla?asignacionId=asg-7") {
 beforeEach(() => {
   jest.useFakeTimers({ now: NOW });
   ofertas = [ofertaFixture()];
+  detalle = detalleFixture({ estado: "PUBLICADA", items: [] });
   mockApi.get.mockReset().mockImplementation(async (path: string) => {
     if (path === "/asignaciones/ofertas") return ofertas;
+    if (path === `/donaciones/${DONATION_ID}`) return detalle;
     if (path === "/catalogos") return { motivos: [] };
     throw new Error(`unexpected GET ${path}`);
   });
@@ -204,6 +227,42 @@ describe("OfferScreen (MOV-41)", () => {
     expect(screen.getByRole("link", { name: "Ver mis rutas" })).toBeOnTheScreen();
     expect(screen.queryByText("Aceptar")).toBeNull();
     expect(screen.queryByText(/^Vence en/)).toBeNull();
+  });
+
+  it("shows the products' photos and opens one full size", async () => {
+    detalle = detalleFixture({
+      estado: "PUBLICADA",
+      items: [
+        itemFixture({ foto_url: "https://storage.test/pan.jpg" }),
+        itemFixture({
+          id: "item-2",
+          descripcion: "Yogur natural",
+          tipo_alimento: { id: 11, codigo: "LACTEO", nombre: "Lácteos" },
+        }),
+      ],
+    });
+
+    await renderOffer();
+
+    const thumbnail = await screen.findByRole("button", { name: "Ver foto de Pan" });
+    expect(screen.getByText("Fotografías")).toBeOnTheScreen();
+    expect(screen.queryByRole("button", { name: "Ver foto de Yogur natural" })).toBeNull();
+
+    await fireEvent.press(thumbnail);
+    expect(screen.getByLabelText("Foto de Pan")).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole("button", { name: "Cerrar foto" }));
+    expect(screen.queryByLabelText("Foto de Pan")).toBeNull();
+  });
+
+  it("leaves out the photos when no product has one", async () => {
+    detalle = detalleFixture({ estado: "PUBLICADA", items: [itemFixture()] });
+
+    await renderOffer();
+
+    expect(await screen.findByText("DON-1048")).toBeOnTheScreen();
+    await act(async () => {});
+    expect(screen.queryByText("Fotografías")).toBeNull();
   });
 
   it("lets the volunteer give up an accepted offer and goes home", async () => {

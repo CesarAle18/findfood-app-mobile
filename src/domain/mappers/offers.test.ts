@@ -46,7 +46,7 @@ describe("offerFromOferta", () => {
       }),
     );
     expect(view).toMatchObject({
-      title: "Donación sin título",
+      title: null,
       summary: "45 kg · Sin refrigeración",
       address: "Calle 5 # 38-25, Cali",
       distance: null,

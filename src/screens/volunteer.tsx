@@ -6,6 +6,7 @@ import { messageFor } from "@/api/problem-messages";
 import type { EstadoProducto, MeVoluntarioDto, VerificacionVoluntarioDto } from "@/api/types";
 import { CallButton } from "@/components/findfood/call-button";
 import { Countdown } from "@/components/findfood/countdown";
+import { DonationPhotos } from "@/components/findfood/donation-photos";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import { PointMap } from "@/components/findfood/map";
 import { ColdChainChoice, OperationZoneFields } from "@/components/findfood/volunteer-zone";
@@ -35,6 +36,7 @@ import {
   type CollectionErrors,
   type CollectionValues,
 } from "@/domain/validation/collection";
+import { useDonacion } from "@/services/donaciones";
 import { useEvidencias } from "@/services/evidencias";
 import { queryKeys } from "@/services/query-keys";
 import {
@@ -482,6 +484,8 @@ function OfferDetails({
   acceptedKg: number;
 }) {
   const [rejecting, setRejecting] = useState(false);
+  // The offer carries no photos: the donation detail signs them for the offered volunteer.
+  const { data: donacion } = useDonacion(offer.donacionId);
   const { mutateAsync: aceptar, isPending: accepting } = useAceptarOfertaMutation();
   const [error, setError] = useState<string>();
   // One route carries the accepted pickups: more than the vehicle holds ends in
@@ -506,7 +510,7 @@ function OfferDetails({
         <Copy weight="bold" style={styles.offerCode}>
           {offer.code}
         </Copy>
-        <Copy weight="medium">{offer.title}</Copy>
+        {offer.title ? <Copy weight="medium">{offer.title}</Copy> : null}
         <Copy tone="secondary">{offer.summary}</Copy>
         <Copy tone="secondary">{`Ventana: ${offer.pickupWindow}`}</Copy>
       </Card>
@@ -545,6 +549,7 @@ function OfferDetails({
           </Card>
         </Section>
       ) : null}
+      {donacion ? <DonationPhotos items={donacion.items} /> : null}
       {offer.accepted ? (
         <>
           <Section title="Contacto del donante">

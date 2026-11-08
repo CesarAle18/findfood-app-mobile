@@ -12,7 +12,8 @@ export interface OfferView {
   id: string;
   /** Human code of the donation (`DON-1048`). */
   code: string;
-  title: string;
+  /** The donation's title, or null when the donor left it blank. */
+  title: string | null;
   /** "45 kg · Refrigeración requerida". */
   summary: string;
   pickupWindow: string;
@@ -51,7 +52,7 @@ export function offerFromOferta(dto: OfertaDto): OfferView {
   return {
     id: dto.id,
     code: dto.codigo,
-    title: dto.titulo?.trim() || "Donación sin título",
+    title: dto.titulo?.trim() || null,
     summary: `${dto.peso_estimado_kg} kg · ${cold}`,
     pickupWindow: windowDisplay(dto),
     address: reference ? `${dto.direccion_recogida} · ${reference}` : dto.direccion_recogida,
