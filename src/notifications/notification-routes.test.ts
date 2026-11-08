@@ -27,6 +27,7 @@ const target = (href: Href, role: MobileRole): NotificationTarget => ({ href, ro
 const donorAlerts = target("/donante/alertas", "DONANTE");
 const volunteerAlerts = target("/voluntario/alertas", "VOLUNTARIO");
 const detail = target({ pathname: "/donante/detalle-donacion", params: { id: DONATION } }, "DONANTE");
+const waiting = target({ pathname: "/donante/espera-voluntario", params: { id: DONATION } }, "DONANTE");
 const delivery = target({ pathname: "/donante/entrega-donacion", params: { id: DONATION } }, "DONANTE");
 const volunteerDetail = target(
   { pathname: "/voluntario/detalle-donacion", params: { id: DONATION } },
@@ -74,7 +75,8 @@ describe("routeForNotification", () => {
     ["DONACION_ENTREGADA", { canDonor: false, canVolunteer: false, activeRole: null }, null],
     // Staff actions on the donor's donation open it, like the other donor notices.
     ["DONACION_CANCELADA_BANCO", both, detail],
-    ["DONACION_REPUBLICADA", both, detail],
+    // Published again (the volunteer backed out): the waiting screen, searching once more.
+    ["DONACION_REPUBLICADA", both, waiting],
     ["RECOGIDA_FALLIDA", both, detail],
     ["RECOGIDA_FALLIDA", volunteerOnly, volunteerAlerts],
     // A closed offer has no screen left: the volunteer's Inicio lists the open ones.

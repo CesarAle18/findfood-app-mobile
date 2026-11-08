@@ -13,7 +13,12 @@ import { Icon } from "@/components/findfood/icon";
 import { PointMap } from "@/components/findfood/map";
 import { assignedVolunteerFromDetalle } from "@/domain/mappers/donations";
 
-import { useDonationDetail, useDonationId, type DonationDetail } from "./donation-queries";
+import {
+  useDonationDetail,
+  useDonationId,
+  useRedirectWhilePublished,
+  type DonationDetail,
+} from "./donation-queries";
 
 const backHome = (
   <NavButton href="/donante" dismissTo showArrow={false}>
@@ -69,10 +74,14 @@ function AssignedVolunteer({ detail: { dto, view } }: { detail: DonationDetail }
   );
 }
 
-/** Opened with `?id=` (donation UUID) once a volunteer accepts the donation. */
+/**
+ * Opened with `?id=` (donation UUID) once a volunteer accepts the donation. Published again
+ * (the volunteer backed out), it gives way to "Donación publicada".
+ */
 export function AssignedVolunteerScreen() {
   const id = useDonationId();
   const detail = useDonationDetail(id);
+  useRedirectWhilePublished(id, detail);
   return (
     <Screen title="Voluntario asignado" subtitle="Un voluntario aceptó tu donación." back>
       {id ? (

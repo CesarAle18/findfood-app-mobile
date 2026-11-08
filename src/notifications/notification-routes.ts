@@ -61,9 +61,10 @@ const DONOR_DONATION_SCREENS = {
   DONACION_RECIBIDA: "/donante/entrega-donacion",
   DONACION_RECHAZADA: "/donante/detalle-donacion",
   DONACION_EXPIRADA: "/donante/detalle-donacion",
-  // Staff cancelled it, published it again for another volunteer, or its pickup failed.
+  // Staff cancelled it, or its pickup failed.
   DONACION_CANCELADA_BANCO: "/donante/detalle-donacion",
-  DONACION_REPUBLICADA: "/donante/detalle-donacion",
+  // Published again for another volunteer: "Donación publicada", searching once more.
+  DONACION_REPUBLICADA: "/donante/espera-voluntario",
   RECOGIDA_FALLIDA: "/donante/detalle-donacion",
 } as const;
 
