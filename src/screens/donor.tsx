@@ -117,8 +117,17 @@ function DonationLinks({ id }: { id: string }) {
   );
 }
 
-/** A donation summary with its links; also the row of the donations list. */
-const DonationCard = memo(function DonationCard({ donation: d }: { donation: DonationView }) {
+/**
+ * A donation summary with its links; also the row of the donations list. The home leaves
+ * out the pickup window (`showPickupWindow`).
+ */
+const DonationCard = memo(function DonationCard({
+  donation: d,
+  showPickupWindow = true,
+}: {
+  donation: DonationView;
+  showPickupWindow?: boolean;
+}) {
   return (
     <Card>
       <Row style={styles.spread}>
@@ -127,7 +136,7 @@ const DonationCard = memo(function DonationCard({ donation: d }: { donation: Don
       </Row>
       <Copy>{d.category}</Copy>
       <Copy tone="secondary">
-        {d.weightKg} kg · {d.pickupWindow}
+        {showPickupWindow ? `${d.weightKg} kg · ${d.pickupWindow}` : `${d.weightKg} kg`}
       </Copy>
       {isTracking(d.estado) ? (
         <DonationLinks id={d.id} />
@@ -281,7 +290,9 @@ export function DonorHomeScreen() {
       )}
       <Section title="Tu última donación">
         <QueryContent query={latest} loadingLabel="Cargando tu última donación">
-          {(donation) => (donation ? <DonationCard donation={donation} /> : <NoDonations />)}
+          {(donation) =>
+            donation ? <DonationCard donation={donation} showPickupWindow={false} /> : <NoDonations />
+          }
         </QueryContent>
       </Section>
       <Section title="Actividad reciente">
@@ -648,7 +659,6 @@ function DonationDetailContent({
       <DonationPhotos items={dto.items} />
       <Section title="Recogida">
         <Card>
-          <Detail label="Ventana de recogida" value={d.pickupWindow} />
           <Detail label="Ubicación" value={d.address} />
           {dto.referencia_recogida ? (
             <Detail label="Referencia" value={dto.referencia_recogida} />
@@ -770,7 +780,9 @@ function useConfirmDonation() {
       }
       await publicar.mutateAsync(id);
       setDraft(initialDonationDraft);
-      router.replace({ pathname: "/donante/espera-voluntario", params: { id } });
+      // Drop the form and its review from the stack: back from the waiting screen goes home.
+      router.dismissTo("/donante");
+      router.push({ pathname: "/donante/espera-voluntario", params: { id } });
     } catch (failure) {
       if (existing && isApiError(failure) && failure.type === "donacion-no-editable") {
         // It may have been published by an attempt whose answer was lost: never retry it

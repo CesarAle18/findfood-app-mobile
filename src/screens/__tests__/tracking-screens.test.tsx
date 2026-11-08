@@ -382,6 +382,15 @@ describe("DonationDetailScreen", () => {
     expect(screen.getByText("Historial")).toBeOnTheScreen();
   });
 
+  it("shows the pickup address without the pickup window", async () => {
+    answer(detalleFixture({ referencia_recogida: "Portería" }));
+    await renderScreen(DonationDetailScreen);
+
+    expect(await screen.findByText("Recogida")).toBeOnTheScreen();
+    expect(screen.getByText("Portería")).toBeOnTheScreen();
+    expect(screen.queryByText("Ventana de recogida")).toBeNull();
+  });
+
   it("says when there is no history yet", async () => {
     answer(detalleFixture({ estado: "PUBLICADA", asignacion: null }), []);
     await renderScreen(DonationDetailScreen);

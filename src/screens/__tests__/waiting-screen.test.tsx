@@ -14,7 +14,12 @@ import type { DonacionDetalleDto } from "@/services/donaciones";
 import { WaitingScreen } from "@/screens/donations";
 import { MobileProvider } from "@/state/mobile-context";
 import type { ApiMock } from "@/test-utils/api";
-import { DONATION_ID, catalogosFixture, detalleFixture } from "@/test-utils/fixtures";
+import {
+  DONATION_ID,
+  catalogosFixture,
+  detalleFixture,
+  donacionItemFixture,
+} from "@/test-utils/fixtures";
 import { createTestQueryClient } from "@/test-utils/query";
 
 jest.mock("@/api", () => ({
@@ -103,6 +108,8 @@ describe("WaitingScreen", () => {
     expect(screen.getByText("DON-1058")).toBeOnTheScreen();
     expect(screen.getByText("Leche")).toBeOnTheScreen();
     expect(screen.getByText("20 Litros · Refrigerado")).toBeOnTheScreen();
+    // The summary leaves out the pickup window.
+    expect(screen.queryByText(/^Recogida:/)).toBeNull();
     expect(screen.getByText("La publicación vence a las 15:55")).toBeOnTheScreen();
     // The screen title and the first step.
     expect(screen.getAllByText("Donación publicada")).toHaveLength(2);
@@ -183,6 +190,37 @@ describe("WaitingScreen", () => {
       }),
     );
     expect(await screen.findByText("Inicio")).toBeOnTheScreen();
+  });
+
+  it("shows the products' photos and opens one full size", async () => {
+    answer({
+      ...published,
+      items: [
+        ...published.items,
+        donacionItemFixture({ id: "item-2", foto_url: "https://storage.test/pan.jpg" }),
+      ],
+    });
+
+    await renderWaiting();
+
+    await fireEvent.press(await screen.findByRole("button", { name: "Ver foto de Pan" }));
+    expect(screen.getByText("Fotografías")).toBeOnTheScreen();
+    // The milk has no photo, and a single photo needs no count.
+    expect(screen.queryByRole("button", { name: "Ver foto de Leche" })).toBeNull();
+    expect(screen.queryByText("1/1")).toBeNull();
+    expect(screen.getByLabelText("Foto de Pan")).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole("button", { name: "Cerrar foto" }));
+    expect(screen.queryByLabelText("Foto de Pan")).toBeNull();
+  });
+
+  it("leaves out the photos when no product has one", async () => {
+    answer(published);
+
+    await renderWaiting();
+
+    expect(await screen.findByText("DON-1058")).toBeOnTheScreen();
+    expect(screen.queryByText("Fotografías")).toBeNull();
   });
 
   it("asks to open the donation again without an id", async () => {

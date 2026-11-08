@@ -4,8 +4,8 @@
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Slot, useLocalSearchParams } from "expo-router";
-import { fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
+import { Slot, Stack, router, useLocalSearchParams } from "expo-router";
+import { act, fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
 import * as Location from "expo-location";
 import { Text } from "react-native";
 
@@ -276,6 +276,45 @@ describe("ReviewDonationScreen", () => {
     expect(mockApi.post).toHaveBeenNthCalledWith(1, "/donaciones", { body: expectedBody });
     expect(mockApi.post).toHaveBeenNthCalledWith(2, "/donaciones/nueva-1/publicar");
     expect(mockApi.patch).not.toHaveBeenCalled();
+  });
+
+  it("goes back from the waiting screen to the home, not to the form", async () => {
+    mockApi.post.mockImplementation(async (path: string) => {
+      if (path === "/donaciones") return detalleFixture({ id: "nueva-1", estado: "BORRADOR" });
+      if (path === "/donaciones/nueva-1/publicar") return publicada("nueva-1");
+      throw new Error(`unexpected POST ${path}`);
+    });
+    client = createTestQueryClient();
+    function Layout() {
+      return (
+        <QueryClientProvider client={client}>
+          <MobileProvider initialDraft={readyDraft}>
+            <Slot />
+          </MobileProvider>
+        </QueryClientProvider>
+      );
+    }
+    await renderRouter(
+      {
+        _layout: Layout,
+        "donante/_layout": () => <Stack />,
+        "donante/(tabs)/index": () => <Text>Inicio del donante</Text>,
+        "donante/nueva-donacion": () => <Text>Formulario de donación</Text>,
+        "donante/revisar-donacion": ReviewDonationScreen,
+        "donante/espera-voluntario": Waiting,
+      },
+      { initialUrl: "/donante" },
+    );
+    await act(() => router.push("/donante/nueva-donacion"));
+    await act(() => router.push("/donante/revisar-donacion"));
+
+    await pressConfirm();
+    expect(await screen.findByText("Esperando voluntario nueva-1")).toBeOnTheScreen();
+
+    // The header's back button and the system back both pop the stack.
+    await act(() => router.back());
+    expect(await screen.findByText("Inicio del donante")).toBeOnTheScreen();
+    expect(screen.queryByText("Formulario de donación")).toBeNull();
   });
 
   it("updates the draft already created in the API instead of creating another", async () => {

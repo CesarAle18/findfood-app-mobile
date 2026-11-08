@@ -138,6 +138,9 @@ describe("DonorHomeScreen", () => {
     expect(await screen.findByText("2")).toBeOnTheScreen();
     expect(screen.getByText("en seguimiento")).toBeOnTheScreen();
     expect(await screen.findByText("DON-1058")).toBeOnTheScreen();
+    // The weight alone: the home leaves out the pickup window.
+    expect(screen.getByText("35 kg")).toBeOnTheScreen();
+    expect(screen.queryByText(/kg · /)).toBeNull();
     expect(screen.getByRole("link", { name: "Hacer seguimiento" })).toBeOnTheScreen();
     expect(mockApi.get).toHaveBeenCalledWith("/donaciones", {
       query: { limite: 1 },

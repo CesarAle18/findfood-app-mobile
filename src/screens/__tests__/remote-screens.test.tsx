@@ -322,7 +322,8 @@ describe("DonationDetailScreen", () => {
     await renderScreen(DonationDetailScreen, withId);
 
     expect(await screen.findByText("DON-1058")).toBeOnTheScreen();
-    expect(screen.getByText(UNKNOWN_PICKUP_WINDOW)).toBeOnTheScreen();
+    // The detail no longer shows the pickup window, readable or not.
+    expect(screen.queryByText(UNKNOWN_PICKUP_WINDOW)).toBeNull();
     expect(screen.getByText("Sin fecha")).toBeOnTheScreen();
     expect(screen.getByText("Carlos Ruiz")).toBeOnTheScreen();
   });

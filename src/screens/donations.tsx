@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { messageFor } from "@/api/problem-messages";
 import type { EstadoDonacion, EstadoParada } from "@/api/types";
 import { DateTimeField } from "@/components/findfood/date-time-field";
+import { DonationPhotos } from "@/components/findfood/donation-photos";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import { PhotoField } from "@/components/findfood/photo-field";
 import { Icon, type IconName } from "@/components/findfood/icon";
@@ -417,9 +418,9 @@ function Waiting({
               </Copy>
             </View>
           ))}
-          <Copy tone="secondary">Recogida: {d.pickupWindow}</Copy>
         </Card>
       </Section>
+      <DonationPhotos items={dto.items} />
       {expiresAt ? (
         <Card soft>
           <Copy weight="semibold">La publicación vence a las {expiresAt}</Copy>
