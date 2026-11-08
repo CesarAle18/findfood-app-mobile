@@ -62,6 +62,7 @@ import {
   COLD_CHAIN_OPTIONS,
   fromRequiereRefrigeracion,
 } from "@/domain/mappers/refrigeration";
+import type { ToneColors } from "@/domain/mappers/statuses";
 import {
   useMotivos,
   useTiposAlimento,
@@ -340,6 +341,16 @@ const WAITING_HEADLINE: Record<EstadoDonacion, [IconName, string, string]> = {
   ],
 };
 
+/** The color of each step of "Estado de la donación"; pending steps stay gray. */
+const STEP_COLORS: Partial<Record<EstadoDonacion, ToneColors>> = {
+  PUBLICADA: { text: colors.info, background: colors.infoSoft },
+  ASIGNADA: { text: colors.warning, background: colors.warningSoft },
+  EN_RECOLECCION: { text: colors.violet, background: colors.violetSoft },
+  ENTREGADA: { text: colors.primary, background: colors.soft },
+};
+
+const DEFAULT_STEP_COLOR: ToneColors = { text: colors.primary, background: colors.soft };
+
 /** From ASIGNADA on, a volunteer has (or had) the donation. */
 const hasVolunteer = (estado: EstadoDonacion) =>
   estado !== "PUBLICADA" && (isTracking(estado) || isDelivered(estado));
@@ -429,25 +440,37 @@ function Waiting({
       {d.estado === "CANCELADA" ? <CancellationReason dto={dto} /> : null}
       <Section title="Estado de la donación">
         <Stack gap={18}>
-          {publishedSteps(dto, historial).map((step) => (
-            <Row key={step.label}>
-              <View
-                style={[
-                  waitingStyles.dot,
-                  step.reached || step.current ? waitingStyles.dotReached : null,
-                ]}
-              />
-              <View style={waitingStyles.stepText}>
-                <Copy
-                  weight={step.current ? "semibold" : "regular"}
-                  tone={step.reached || step.current ? "primary" : "secondary"}
-                >
-                  {step.label}
-                </Copy>
-                {step.at ? <Copy tone="secondary">{step.at}</Copy> : null}
-              </View>
-            </Row>
-          ))}
+          {publishedSteps(dto, historial).map((step) => {
+            const color = STEP_COLORS[step.estado] ?? DEFAULT_STEP_COLOR;
+            const active = step.reached || step.current;
+            return (
+              <Row key={step.label}>
+                <View
+                  style={[
+                    waitingStyles.dot,
+                    step.reached
+                      ? { backgroundColor: color.text, borderColor: color.text }
+                      : step.current
+                        ? [
+                            waitingStyles.dotCurrent,
+                            { backgroundColor: color.background, borderColor: color.text },
+                          ]
+                        : null,
+                  ]}
+                />
+                <View style={waitingStyles.stepText}>
+                  <Copy
+                    weight={step.current ? "semibold" : "regular"}
+                    tone={active ? "default" : "secondary"}
+                    style={active ? { color: color.text } : undefined}
+                  >
+                    {step.label}
+                  </Copy>
+                  {step.at ? <Copy tone="secondary">{step.at}</Copy> : null}
+                </View>
+              </Row>
+            );
+          })}
         </Stack>
       </Section>
       {hasVolunteer(d.estado) ? (
@@ -522,7 +545,7 @@ const waitingStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  dotReached: { backgroundColor: colors.primary, borderColor: colors.primary },
+  dotCurrent: { borderWidth: 2 },
 });
 
 /**

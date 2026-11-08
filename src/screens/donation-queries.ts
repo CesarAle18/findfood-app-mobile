@@ -240,6 +240,8 @@ const FLOW: readonly EstadoDonacion[] = [
 
 export interface PublishedStep {
   label: string;
+  /** The donation state this step stands for. */
+  estado: EstadoDonacion;
   /** When it happened (`DD/MM/AAAA · HH:mm`), or null when unknown or not reached. */
   at: string | null;
   reached: boolean;
@@ -274,6 +276,7 @@ export function publishedSteps(
   ];
   const mapped = steps.map(([label, estado, iso]) => ({
     label,
+    estado,
     at: formatInstant(iso),
     // Off the flow (cancelled, expired…) only what has a timestamp was reached.
     reached: iso !== null || (rank >= 0 && rank >= FLOW.indexOf(estado)),

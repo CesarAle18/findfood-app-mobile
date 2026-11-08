@@ -294,6 +294,16 @@ describe("publishedSteps", () => {
     expect(steps.findIndex((step) => step.current)).toBe(1);
   });
 
+  it("names the donation state of each step", () => {
+    const steps = publishedSteps(detalleFixture({ estado: "PUBLICADA" }), []);
+    expect(steps.map((step) => step.estado)).toEqual([
+      "PUBLICADA",
+      "ASIGNADA",
+      "EN_RECOLECCION",
+      "ENTREGADA",
+    ]);
+  });
+
   it("reads the timestamps the detail lacks from the history", () => {
     const steps = publishedSteps(detalleFixture({ estado: "EN_RECOLECCION" }), [
       historial("PUBLICADA", "2026-09-23T18:55:00.000Z"),

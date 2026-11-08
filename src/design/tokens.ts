@@ -11,6 +11,10 @@ export const colors = {
   warning: "#94651C",
   warningSoft: "#FFF5DD",
   danger: "#B44747",
+  info: "#2F6FB0",
+  infoSoft: "#E6F0FA",
+  violet: "#6B4FA8",
+  violetSoft: "#F0EBFA",
 };
 
 export const fonts = {
