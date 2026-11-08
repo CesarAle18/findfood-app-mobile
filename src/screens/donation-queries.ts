@@ -10,8 +10,9 @@ import {
   useQuery,
   useQueryClient,
   type InfiniteData,
+  type UseQueryResult,
 } from "@tanstack/react-query";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef } from "react";
 
 import type { EstadoDonacion, Paged } from "@/api/types";
@@ -159,6 +160,25 @@ export function useDonationDetail(id: string | undefined, { live = false } = {})
     refetchInterval: live && !connected ? pollWhilePublished : false,
     refetchIntervalInBackground: false,
   });
+}
+
+/**
+ * Sends the donor to "Donación publicada" (the one screen that searches for a volunteer) once
+ * the detail reads PUBLICADA: a volunteer backed out (route cancelled, pickup abandoned) and the
+ * API published it again. Waits for a running fetch, so a stale cached state never redirects,
+ * and runs again whenever a refetch (Realtime, push) changes the state while the screen is open.
+ * No loop: "Donación publicada" only links back here while a volunteer holds the donation.
+ */
+export function useRedirectWhilePublished(
+  id: string | undefined,
+  detail: Pick<UseQueryResult<DonationDetail>, "data" | "isFetching">,
+) {
+  const published = detail.data?.dto.estado === "PUBLICADA" && !detail.isFetching;
+  useEffect(() => {
+    if (id && published) {
+      router.replace({ pathname: "/donante/espera-voluntario", params: { id } });
+    }
+  }, [id, published]);
 }
 
 /** `DD/MM/AAAA · HH:mm` in Bogotá, or null without a (readable) timestamp. */

@@ -201,7 +201,7 @@ export function iniciarRuta(id: string): Promise<RutaDetalleDto> {
   return api.post<RutaDetalleDto>(`${rutaPath(id)}/iniciar`);
 }
 
-/** Only before it starts. */
+/** Only before it starts. Releases its donations: they are published and offered again. */
 export function cancelarRuta(id: string): Promise<RutaDetalleDto> {
   return api.post<RutaDetalleDto>(`${rutaPath(id)}/cancelar`);
 }
@@ -278,8 +278,8 @@ const invalidates = {
   /** Its donations move to EN_RECOLECCION. The detail comes cached from the answer. */
   iniciar: () => [rutas.lists(), asignaciones.ofertas(), donaciones.all],
   /**
-   * The assignments leave the route (the bank fleet's donations are published again). The
-   * detail comes cached from the answer.
+   * The assignments are closed and their donations published again (or expired without
+   * margin). The detail comes cached from the answer.
    */
   cancelar: () => [rutas.lists(), asignaciones.ofertas(), donaciones.all],
   /** The stop changes; a pickup stop also shows in its donation's history. */

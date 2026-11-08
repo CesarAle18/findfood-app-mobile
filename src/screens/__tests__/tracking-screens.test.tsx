@@ -6,9 +6,9 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react-native";
-import { Slot } from "expo-router";
+import { Slot, router, useLocalSearchParams } from "expo-router";
 import { fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
-import { Linking } from "react-native";
+import { Linking, Text } from "react-native";
 
 import { api } from "@/api";
 import type { EstadoDonacion } from "@/api/types";
@@ -124,10 +124,25 @@ async function renderScreen(Component: React.ComponentType) {
     );
   }
   await renderRouter(
-    { _layout: Layout, pantalla: () => <Component /> },
+    {
+      _layout: Layout,
+      pantalla: () => <Component />,
+      "donante/espera-voluntario": WaitingStub,
+    },
     { initialUrl: `/pantalla?id=${DONATION_ID}` },
   );
 }
+
+/** Stands in for "Donación publicada", where a republished donation sends the donor. */
+function WaitingStub() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  return <Text>Esperando voluntario para {id}</Text>;
+}
+
+const toWaiting = { pathname: "/donante/espera-voluntario", params: { id: DONATION_ID } };
+
+/** A volunteer backed out (route cancelled or pickup abandoned): searching again. */
+const republished = detalleFixture({ estado: "PUBLICADA", asignada_at: null, asignacion: null });
 
 // Accepted, but the API has not shared the phone yet.
 const withoutPhone = detalleFixture({
@@ -363,13 +378,54 @@ describe("TrackingScreen · En vivo", () => {
     expect(screen.queryByTestId("donor-map")).toBeNull();
   });
 
-  it("does not ask for the live tracking while the donation waits for a volunteer", async () => {
-    answer(detalleFixture({ estado: "PUBLICADA", asignacion: null }), []);
+  it("does not ask for the live tracking while no volunteer holds the donation", async () => {
+    answer(detalleFixture({ estado: "EXPIRADA", asignacion: null }), []);
     await renderScreen(TrackingScreen);
 
     expect(await screen.findByText("Voluntario: Por asignar")).toBeOnTheScreen();
     expect(mockApi.get).not.toHaveBeenCalledWith(trackingPath, expect.anything());
     expect(screen.queryByText("En vivo")).toBeNull();
+  });
+});
+
+describe("TrackingScreen · republished", () => {
+  let replace: jest.SpyInstance;
+
+  beforeEach(() => {
+    replace = jest.spyOn(router, "replace");
+  });
+
+  afterEach(() => {
+    replace.mockRestore();
+  });
+
+  it("replaces itself with the waiting screen while the donation is PUBLICADA", async () => {
+    answer(republished, []);
+    await renderScreen(TrackingScreen);
+
+    expect(await screen.findByText(`Esperando voluntario para ${DONATION_ID}`)).toBeOnTheScreen();
+    expect(replace).toHaveBeenCalledWith(toWaiting);
+    expect(mockApi.get).not.toHaveBeenCalledWith(trackingPath, expect.anything());
+  });
+
+  it("goes to the waiting screen when a refetch finds the donation published again", async () => {
+    answer(detalleFixture(), HISTORY, NOT_LIVE);
+    await renderScreen(TrackingScreen);
+    expect(await screen.findByText("Voluntario: Carlos Ruiz")).toBeOnTheScreen();
+
+    answer(republished, HISTORY, NOT_LIVE);
+    await act(() => client.invalidateQueries({ queryKey: queryKeys.donaciones.detail(DONATION_ID) }));
+
+    expect(await screen.findByText(`Esperando voluntario para ${DONATION_ID}`)).toBeOnTheScreen();
+    expect(replace).toHaveBeenCalledWith(toWaiting);
+  });
+
+  it("stays while a volunteer holds the donation", async () => {
+    answer(detalleFixture());
+    await renderScreen(TrackingScreen);
+
+    expect(await screen.findByText("Voluntario: Carlos Ruiz")).toBeOnTheScreen();
+    expect(replace).not.toHaveBeenCalled();
   });
 });
 
@@ -454,6 +510,35 @@ describe("AssignedVolunteerScreen", () => {
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Contactar voluntario" })).toBeNull(),
     );
+  });
+
+  describe("republished", () => {
+    let replace: jest.SpyInstance;
+
+    beforeEach(() => {
+      replace = jest.spyOn(router, "replace");
+    });
+
+    afterEach(() => {
+      replace.mockRestore();
+    });
+
+    it("replaces itself with the waiting screen while the donation is PUBLICADA", async () => {
+      answer(republished, []);
+      await renderScreen(AssignedVolunteerScreen);
+
+      expect(await screen.findByText(`Esperando voluntario para ${DONATION_ID}`)).toBeOnTheScreen();
+      expect(replace).toHaveBeenCalledWith(toWaiting);
+      expect(screen.queryByText("Aún no hay voluntario asignado")).toBeNull();
+    });
+
+    it("stays while the donation is ASIGNADA", async () => {
+      answer(detalleFixture({ estado: "ASIGNADA" }));
+      await renderScreen(AssignedVolunteerScreen);
+
+      expect(await screen.findByText("Camioneta · XYZ987")).toBeOnTheScreen();
+      expect(replace).not.toHaveBeenCalled();
+    });
   });
 });
 

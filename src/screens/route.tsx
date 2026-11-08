@@ -192,7 +192,7 @@ function PlannedActions({ rutaId }: { rutaId: string }) {
     confirmAction(
       {
         title: "Cancelar ruta",
-        question: "Tus recogidas vuelven a la lista de aceptadas sin ruta.",
+        question: "Tus recogidas se liberan y vuelven a ofrecerse a otros voluntarios.",
         confirmLabel: "Cancelar ruta",
       },
       () => void run(cancelar),

@@ -83,6 +83,7 @@ import {
   useDonationPages,
   useDonationTracking,
   useLatestDonation,
+  useRedirectWhilePublished,
   type DonationDetail,
   type DonationFilter,
 } from "./donation-queries";
@@ -605,9 +606,11 @@ function Tracking({ detail: { dto, view: d } }: { detail: DonationDetail }) {
   );
 }
 
+/** Published again (the volunteer backed out), it gives way to "Donación publicada". */
 export function TrackingScreen() {
   const id = useDonationId();
   const detail = useDonationDetail(id);
+  useRedirectWhilePublished(id, detail);
   return (
     <Screen
       title="Seguimiento"

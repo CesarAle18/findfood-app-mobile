@@ -375,8 +375,8 @@ describe("AssignedVolunteerScreen", () => {
     expect(await screen.findByText("Carlos Ruiz se encargará de recoger tus productos.")).toBeOnTheScreen();
   });
 
-  it("says when nobody has accepted it yet", async () => {
-    answerGets({ [detailPath]: detalleFixture({ estado: "PUBLICADA", asignacion: null }) });
+  it("says when nobody holds it and it is not searching (PUBLICADA opens the waiting screen)", async () => {
+    answerGets({ [detailPath]: detalleFixture({ estado: "EXPIRADA", asignacion: null }) });
 
     await renderScreen(AssignedVolunteerScreen, withId);
 
