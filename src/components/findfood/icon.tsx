@@ -24,7 +24,9 @@ export type IconName =
   | "eye"
   | "eye-off"
   | "arrow"
-  | "file";
+  | "file"
+  | "expand"
+  | "close";
 
 const paths: Record<IconName, string> = {
   calendar: "M3 5h18v16H3zM3 10h18M7 3v4M17 3v4",
@@ -51,6 +53,8 @@ const paths: Record<IconName, string> = {
     "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0M3 3l18 18",
   arrow: "M5 12h14m-6-6 6 6-6 6",
   file: "M5 2h9l5 5v15H5zM14 2v6h5M8 12h8M8 16h6",
+  expand: "M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7",
+  close: "M6 6l12 12M18 6 6 18",
 };
 
 // Decorative: the label next to it already names the action.

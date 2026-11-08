@@ -13,6 +13,7 @@ import {
   ErrorState,
   QueryContent,
 } from "@/components/findfood/feedback";
+import { DonationPhotos } from "@/components/findfood/donation-photos";
 import { DonationTimeline } from "@/components/findfood/donation-timeline";
 import { Icon } from "@/components/findfood/icon";
 import { DonorTrackingMap, PointMap } from "@/components/findfood/map";
@@ -644,6 +645,7 @@ function DonationDetailContent({
           />
         </Card>
       </Section>
+      <DonationPhotos items={dto.items} />
       <Section title="Recogida">
         <Card>
           <Detail label="Ventana de recogida" value={d.pickupWindow} />

@@ -29,7 +29,12 @@ import type {
 import { queryKeys } from "@/services/query-keys";
 import { MobileProvider } from "@/state/mobile-context";
 import type { ApiMock } from "@/test-utils/api";
-import { DONATION_ID, asignacionFixture, detalleFixture } from "@/test-utils/fixtures";
+import {
+  DONATION_ID,
+  asignacionFixture,
+  detalleFixture,
+  donacionItemFixture,
+} from "@/test-utils/fixtures";
 import { seguimientoDonacionFixture } from "@/test-utils/fixtures/seguimiento";
 import { createQueryWrapper, createTestQueryClient } from "@/test-utils/query";
 import { plugRealtime } from "@/test-utils/realtime";
@@ -382,6 +387,41 @@ describe("DonationDetailScreen", () => {
     await renderScreen(DonationDetailScreen);
 
     expect(await screen.findByText("Aún no hay movimientos registrados.")).toBeOnTheScreen();
+  });
+
+  it("shows the products' photos and opens one full size", async () => {
+    answer(
+      detalleFixture({
+        items: [
+          donacionItemFixture({ foto_url: "https://storage.test/pan.jpg" }),
+          donacionItemFixture({
+            id: "item-2",
+            descripcion: "Yogur natural",
+            foto_url: "https://storage.test/yogur.jpg",
+          }),
+          donacionItemFixture({ id: "item-3", descripcion: "Arroz" }),
+        ],
+      }),
+    );
+    await renderScreen(DonationDetailScreen);
+
+    await fireEvent.press(await screen.findByRole("button", { name: "Ver foto de Pan" }));
+    expect(screen.getByText("Fotografías")).toBeOnTheScreen();
+    expect(screen.getByText("1/2")).toBeOnTheScreen();
+    expect(screen.queryByRole("button", { name: "Ver foto de Arroz" })).toBeNull();
+    expect(screen.getByText("Foto 1 de 2")).toBeOnTheScreen();
+    expect(screen.getByLabelText("Foto de Pan")).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole("button", { name: "Cerrar foto" }));
+    expect(screen.queryByText("Foto 1 de 2")).toBeNull();
+  });
+
+  it("leaves out the photos when no product has one", async () => {
+    answer(detalleFixture({ items: [donacionItemFixture()] }));
+    await renderScreen(DonationDetailScreen);
+
+    expect(await screen.findByText("Historial")).toBeOnTheScreen();
+    expect(screen.queryByText("Fotografías")).toBeNull();
   });
 });
 

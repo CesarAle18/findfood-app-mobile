@@ -6,6 +6,7 @@ import type { MeDto, Paged } from "@/api/types";
 import type {
   AsignacionDonacionDto,
   DonacionDetalleDto,
+  DonacionItemDto,
   DonacionResumenDto,
 } from "@/services/donaciones";
 import type { OfertaDto } from "@/services/asignaciones";
@@ -124,6 +125,24 @@ export function asignacionFixture(
       placa_vehiculo: "XYZ987",
       tipo_vehiculo: "Camioneta",
     },
+    ...overrides,
+  };
+}
+
+/** A product of the donation detail: 25 kg of bread, without a photo. */
+export function donacionItemFixture(overrides: Partial<DonacionItemDto> = {}): DonacionItemDto {
+  return {
+    id: "item-1",
+    descripcion: null,
+    cantidad: 25,
+    peso_estimado_kg: 25,
+    peso_real_kg: null,
+    fecha_vencimiento: null,
+    requiere_refrigeracion: false,
+    observaciones: null,
+    tipo_alimento: { id: 2, codigo: "PAN", nombre: "Pan" },
+    unidad_medida: { id: 1, codigo: "KG", nombre: "Kilogramos" },
+    foto_url: null,
     ...overrides,
   };
 }

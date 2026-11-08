@@ -15,11 +15,12 @@ import { queryKeys } from "@/services/query-keys";
 import { OfferScreen } from "@/screens/volunteer";
 import { MobileProvider } from "@/state/mobile-context";
 import type { ApiMock } from "@/test-utils/api";
-import type { DonacionDetalleDto, DonacionItemDto } from "@/services/donaciones";
+import type { DonacionDetalleDto } from "@/services/donaciones";
 import {
   DONATION_ID,
   catalogosFixture,
   detalleFixture,
+  donacionItemFixture,
   meFixture,
   ofertaAceptadaFixture,
   ofertaFixture,
@@ -64,23 +65,6 @@ const NOW = Date.parse("2026-10-13T20:00:00Z");
 let ofertas: OfertaDto[];
 let detalle: DonacionDetalleDto;
 let client: QueryClient;
-
-function itemFixture(overrides: Partial<DonacionItemDto> = {}): DonacionItemDto {
-  return {
-    id: "item-1",
-    descripcion: null,
-    cantidad: 25,
-    peso_estimado_kg: 25,
-    peso_real_kg: null,
-    fecha_vencimiento: null,
-    requiere_refrigeracion: false,
-    observaciones: null,
-    tipo_alimento: { id: 2, codigo: "PAN", nombre: "Pan" },
-    unidad_medida: { id: 1, codigo: "KG", nombre: "Kilogramos" },
-    foto_url: null,
-    ...overrides,
-  };
-}
 
 async function renderOffer(initialUrl = "/pantalla?asignacionId=asg-7") {
   client = createTestQueryClient();
@@ -233,8 +217,8 @@ describe("OfferScreen (MOV-41)", () => {
     detalle = detalleFixture({
       estado: "PUBLICADA",
       items: [
-        itemFixture({ foto_url: "https://storage.test/pan.jpg" }),
-        itemFixture({
+        donacionItemFixture({ foto_url: "https://storage.test/pan.jpg" }),
+        donacionItemFixture({
           id: "item-2",
           descripcion: "Yogur natural",
           tipo_alimento: { id: 11, codigo: "LACTEO", nombre: "Lácteos" },
@@ -247,6 +231,8 @@ describe("OfferScreen (MOV-41)", () => {
     const thumbnail = await screen.findByRole("button", { name: "Ver foto de Pan" });
     expect(screen.getByText("Fotografías")).toBeOnTheScreen();
     expect(screen.queryByRole("button", { name: "Ver foto de Yogur natural" })).toBeNull();
+    // A single photo needs no count.
+    expect(screen.queryByText("1/1")).toBeNull();
 
     await fireEvent.press(thumbnail);
     expect(screen.getByLabelText("Foto de Pan")).toBeOnTheScreen();
@@ -255,8 +241,30 @@ describe("OfferScreen (MOV-41)", () => {
     expect(screen.queryByLabelText("Foto de Pan")).toBeNull();
   });
 
+  it("counts the photos and opens the viewer on the one tapped", async () => {
+    detalle = detalleFixture({
+      estado: "PUBLICADA",
+      items: [
+        donacionItemFixture({ foto_url: "https://storage.test/pan.jpg" }),
+        donacionItemFixture({
+          id: "item-2",
+          descripcion: "Yogur natural",
+          foto_url: "https://storage.test/yogur.jpg",
+        }),
+      ],
+    });
+
+    await renderOffer();
+
+    await fireEvent.press(await screen.findByRole("button", { name: "Ver foto de Yogur natural" }));
+    expect(screen.getByText("1/2")).toBeOnTheScreen();
+    expect(screen.getByText("2/2")).toBeOnTheScreen();
+    expect(screen.getByText("Foto 2 de 2")).toBeOnTheScreen();
+    expect(screen.getByLabelText("Foto de Yogur natural")).toBeOnTheScreen();
+  });
+
   it("leaves out the photos when no product has one", async () => {
-    detalle = detalleFixture({ estado: "PUBLICADA", items: [itemFixture()] });
+    detalle = detalleFixture({ estado: "PUBLICADA", items: [donacionItemFixture()] });
 
     await renderOffer();
 
