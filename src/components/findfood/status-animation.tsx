@@ -9,7 +9,7 @@ import { colors } from "@/design/tokens";
 const WIDTH = 280;
 const HEIGHT = 200;
 
-export type StatusAnimationKind = "searching" | "expired" | "empty-filter" | "caught-up";
+export type StatusAnimationKind = "searching" | "expired" | "empty-filter" | "caught-up" | "empty-route";
 
 const ANIMATIONS: Record<StatusAnimationKind, { source: AnimationObject; still: IconName }> = {
   // Magnifier searching (from LottieFiles) while the donation waits for a volunteer.
@@ -31,6 +31,11 @@ const ANIMATIONS: Record<StatusAnimationKind, { source: AnimationObject; still: 
   "caught-up": {
     source: require("../../../assets/lottie/caught-up.json"),
     still: "bell",
+  },
+  // A dotted route that draws to an empty pin: no accepted pickups to route yet.
+  "empty-route": {
+    source: require("../../../assets/lottie/empty-route.json"),
+    still: "route",
   },
 };
 

@@ -181,6 +181,9 @@ describe("ActiveRouteScreen · build a route", () => {
     await renderRoutes();
 
     expect(await screen.findByText("No tienes recogidas aceptadas")).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("empty-route-animation", { includeHiddenElements: true }),
+    ).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole("link", { name: "Ver ofertas" }));
     expect(await screen.findByText("Pantalla de oferta")).toBeOnTheScreen();
   });

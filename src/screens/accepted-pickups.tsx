@@ -10,6 +10,7 @@ import { messageFor } from "@/api/problem-messages";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import { Icon } from "@/components/findfood/icon";
 import { Pressing } from "@/components/findfood/motion";
+import { StatusAnimation } from "@/components/findfood/status-animation";
 import { Button, Card, Copy, FormMessage, NavButton, Section } from "@/components/findfood/ui";
 import { colors } from "@/design/tokens";
 import { formatKg } from "@/domain/mappers/profile";
@@ -54,7 +55,7 @@ export function AcceptedPickups({
           <PickupSelection title="Armar ruta" pickups={pickups} onNotice={onNotice} />
         ) : (
           <EmptyState
-            icon="route"
+            illustration={<StatusAnimation kind="empty-route" />}
             title="No tienes recogidas aceptadas"
             description="Acepta una oferta para armar tu ruta."
             action={
