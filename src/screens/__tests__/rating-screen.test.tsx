@@ -114,6 +114,7 @@ describe("RatingScreen", () => {
     await fireEvent.press(submit());
 
     expect(await screen.findByText("¡Gracias! Registramos tu calificación.")).toBeOnTheScreen();
+    expect(screen.getByTestId("rating-sent-animation", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(mockApi.post).toHaveBeenCalledWith(ratingPath, {
       body: { puntaje: 3, comentario: "Llegó tarde", aspectos: ["PUNTUALIDAD"] },
     });
@@ -183,6 +184,7 @@ describe("RatingScreen", () => {
     await fireEvent.press(submit());
 
     expect(await screen.findByText("¡Gracias! Registramos tu calificación.")).toBeOnTheScreen();
+    expect(screen.getByTestId("rating-sent-animation", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(mockApi.post).toHaveBeenCalledWith(ratingPath, {
       body: { puntaje: 4, comentario: "Todo listo" },
     });

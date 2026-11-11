@@ -396,6 +396,7 @@ describe("AssignedVolunteerScreen", () => {
     await renderScreen(AssignedVolunteerScreen, withId);
 
     expect(await screen.findByText("Aún no hay voluntario asignado")).toBeOnTheScreen();
+    expect(screen.getByTestId("searching-animation", { includeHiddenElements: true })).toBeOnTheScreen();
   });
 });
 

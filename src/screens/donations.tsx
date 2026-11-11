@@ -345,6 +345,11 @@ const WAITING_HEADLINE: Record<EstadoDonacion, [IconName, string, string]> = {
 /** States whose headline plays an animation instead of the icon. */
 const WAITING_ANIMATION: Partial<Record<EstadoDonacion, StatusAnimationKind>> = {
   PUBLICADA: "searching",
+  ASIGNADA: "on-the-way",
+  EN_RECOLECCION: "on-the-way",
+  EN_TRANSITO: "on-the-way",
+  ENTREGADA: "delivered",
+  RECIBIDA: "delivered",
   EXPIRADA: "expired",
 };
 
@@ -744,6 +749,7 @@ function RouteCompleted({ ruta }: { ruta: RutaDetalleDto }) {
   );
   return (
     <>
+      <StatusAnimation kind="route-completed" />
       <Card soft>
         <Row>
           <Icon name="check" size={19} />

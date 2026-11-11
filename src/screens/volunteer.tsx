@@ -127,6 +127,7 @@ function VolunteerRequest({ voluntario }: { voluntario: MeVoluntarioDto | null }
 function RequestPending() {
   return (
     <>
+      <StatusAnimation kind="review" />
       <Card soft>
         <Badge warning>En revisión</Badge>
         <Copy weight="bold" style={{ fontSize: 18 }}>

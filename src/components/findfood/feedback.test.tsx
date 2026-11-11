@@ -81,6 +81,18 @@ describe("ErrorState", () => {
     expect(onRetry).not.toHaveBeenCalled();
   });
 
+  it("plays the connection-error animation only when illustrated", async () => {
+    await render(<ErrorState error={null} />);
+    expect(
+      screen.queryByTestId("connection-error-animation", { includeHiddenElements: true }),
+    ).toBeNull();
+
+    await render(<ErrorState error={null} illustrated />);
+    expect(
+      screen.getByTestId("connection-error-animation", { includeHiddenElements: true }),
+    ).toBeOnTheScreen();
+  });
+
   it("has no retry button without onRetry", async () => {
     await render(<ErrorState error={null} />);
 

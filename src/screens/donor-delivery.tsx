@@ -6,7 +6,7 @@
 import { StyleSheet, View } from "react-native";
 
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
-import { Icon } from "@/components/findfood/icon";
+import { StatusAnimation } from "@/components/findfood/status-animation";
 import {
   Badge,
   Card,
@@ -17,7 +17,6 @@ import {
   Screen,
   Section,
 } from "@/components/findfood/ui";
-import { colors } from "@/design/tokens";
 import { assignedVolunteerFromDetalle } from "@/domain/mappers/donations";
 import { formatKg } from "@/domain/mappers/profile";
 
@@ -59,9 +58,7 @@ function Delivered({ detail: { dto, view: d } }: { detail: DonationDetail }) {
   return (
     <>
       <View style={styles.hero}>
-        <View style={styles.heroIcon}>
-          <Icon name="check" size={32} />
-        </View>
+        <StatusAnimation kind="delivered" />
         <Copy weight="semibold" style={styles.heroTitle}>
           Tu donación fue entregada
         </Copy>
@@ -141,14 +138,6 @@ export function DonorDeliveryScreen() {
 
 const styles = StyleSheet.create({
   hero: { alignItems: "center", gap: 16, paddingVertical: 12 },
-  heroIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.soft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   heroTitle: { fontSize: 17, lineHeight: 23, textAlign: "center" },
   heroText: { textAlign: "center", fontSize: 12 },
   spread: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },

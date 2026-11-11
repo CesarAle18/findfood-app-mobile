@@ -133,6 +133,7 @@ describe("WaitingScreen", () => {
     const open = await screen.findByText("Ver voluntario asignado");
     // Once someone accepted there is nothing left to search for.
     expect(screen.queryByTestId("searching-animation", { includeHiddenElements: true })).toBeNull();
+    expect(screen.getByTestId("on-the-way-animation", { includeHiddenElements: true })).toBeOnTheScreen();
     await fireEvent.press(open);
 
     expect(await screen.findByText(`Voluntario de ${DONATION_ID}`)).toBeOnTheScreen();

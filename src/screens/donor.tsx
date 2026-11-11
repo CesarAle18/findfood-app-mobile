@@ -160,6 +160,7 @@ const newDonationAction = (
 function NoDonations() {
   return (
     <EmptyState
+      illustration={<StatusAnimation kind="empty-donations" />}
       title="Aún no tienes donaciones"
       description="Publica tu primera donación y te avisaremos cuando un voluntario la acepte."
       action={newDonationAction}
