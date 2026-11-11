@@ -9,7 +9,7 @@ import { colors } from "@/design/tokens";
 const WIDTH = 280;
 const HEIGHT = 200;
 
-export type StatusAnimationKind = "searching" | "expired" | "empty-filter";
+export type StatusAnimationKind = "searching" | "expired" | "empty-filter" | "caught-up";
 
 const ANIMATIONS: Record<StatusAnimationKind, { source: AnimationObject; still: IconName }> = {
   // Magnifier searching (from LottieFiles) while the donation waits for a volunteer.
@@ -26,6 +26,11 @@ const ANIMATIONS: Record<StatusAnimationKind, { source: AnimationObject; still: 
   "empty-filter": {
     source: require("../../../assets/lottie/empty-filter.json"),
     still: "box",
+  },
+  // A bell that rings and settles, then a check: no unread notifications left.
+  "caught-up": {
+    source: require("../../../assets/lottie/caught-up.json"),
+    still: "bell",
   },
 };
 
