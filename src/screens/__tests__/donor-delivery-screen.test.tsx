@@ -74,6 +74,7 @@ describe("DonorDeliveryScreen", () => {
     await renderDelivery();
 
     expect(await screen.findByText("Tu donación fue entregada")).toBeOnTheScreen();
+    expect(screen.getByTestId("delivered-animation", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(screen.getByText("DON-1058")).toBeOnTheScreen();
     expect(screen.getByText("23/09/2026 · 17:10")).toBeOnTheScreen();
     expect(screen.getByText("Bodega Central")).toBeOnTheScreen();

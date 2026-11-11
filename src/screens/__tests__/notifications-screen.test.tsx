@@ -115,6 +115,24 @@ it("asks the API for unread rows only on Sin leer, and filters Importantes local
   expect(await screen.findByText("Donación recibida")).toBeOnTheScreen();
 });
 
+it("animates every empty tab", async () => {
+  mockApi.get.mockReset().mockResolvedValue(bandejaFixture([]));
+  const animation = () =>
+    screen.getByTestId("caught-up-animation", { includeHiddenElements: true });
+  await renderInbox();
+
+  expect(await screen.findByText("No tienes notificaciones")).toBeOnTheScreen();
+  expect(animation()).toBeOnTheScreen();
+
+  await fireEvent.press(screen.getByRole("radio", { name: "Importantes" }));
+  expect(await screen.findByText("No hay notificaciones importantes")).toBeOnTheScreen();
+  expect(animation()).toBeOnTheScreen();
+
+  await fireEvent.press(screen.getByRole("radio", { name: "Sin leer" }));
+  expect(await screen.findByText("Estás al día")).toBeOnTheScreen();
+  expect(animation()).toBeOnTheScreen();
+});
+
 it("marks an unread row read and opens its donation", async () => {
   const rendered = await renderInbox();
 

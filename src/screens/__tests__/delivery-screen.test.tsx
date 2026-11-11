@@ -137,6 +137,7 @@ describe("DeliveryScreen (MOV-44)", () => {
       },
     });
     expect(await screen.findByText("Ruta R-045 completada")).toBeOnTheScreen();
+    expect(screen.getByTestId("route-completed-animation", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(screen.getByText("1 recogida · 40,5 kg entregados")).toBeOnTheScreen();
     expect(screen.getByText("Duración: 1 h 15 min")).toBeOnTheScreen();
     expect(screen.getByText("Laura Gómez")).toBeOnTheScreen();

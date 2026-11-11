@@ -25,6 +25,7 @@ import {
   TextLink,
 } from "@/components/findfood/ui";
 import { Icon } from "@/components/findfood/icon";
+import { StatusAnimation } from "@/components/findfood/status-animation";
 import {
   Animated,
   Pressing,
@@ -810,6 +811,7 @@ export function RatingScreen({ rater = "DONANTE" }: { rater?: Rater }) {
       />
       {done ? (
         <Animated.View entering={enterItem} layout={itemLayout} style={{ gap: 24 }}>
+          {isSuccess ? <StatusAnimation kind="rating-sent" /> : null}
           <Copy tone="primary">
             {isSuccess ? "¡Gracias! Registramos tu calificación." : "Ya calificaste a este donante."}
           </Copy>

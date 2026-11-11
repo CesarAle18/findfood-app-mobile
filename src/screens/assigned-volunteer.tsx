@@ -10,6 +10,7 @@ import {
   Row,
 } from "@/components/findfood/ui";
 import { Icon } from "@/components/findfood/icon";
+import { StatusAnimation } from "@/components/findfood/status-animation";
 import { PointMap } from "@/components/findfood/map";
 import { assignedVolunteerFromDetalle } from "@/domain/mappers/donations";
 
@@ -36,7 +37,7 @@ function AssignedVolunteer({ detail: { dto, view } }: { detail: DonationDetail }
   if (!volunteer) {
     return (
       <EmptyState
-        icon="user"
+        illustration={<StatusAnimation kind="searching" />}
         title="Aún no hay voluntario asignado"
         description={`${view.code} sigue buscando voluntario. Te avisaremos cuando alguien la acepte.`}
       />

@@ -8,6 +8,7 @@ import { CallButton } from "@/components/findfood/call-button";
 import { Countdown } from "@/components/findfood/countdown";
 import { DonationPhotos } from "@/components/findfood/donation-photos";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
+import { StatusAnimation } from "@/components/findfood/status-animation";
 import { PointMap } from "@/components/findfood/map";
 import { ColdChainChoice, OperationZoneFields } from "@/components/findfood/volunteer-zone";
 import { PhotoField } from "@/components/findfood/photo-field";
@@ -126,6 +127,7 @@ function VolunteerRequest({ voluntario }: { voluntario: MeVoluntarioDto | null }
 function RequestPending() {
   return (
     <>
+      <StatusAnimation kind="review" />
       <Card soft>
         <Badge warning>En revisión</Badge>
         <Copy weight="bold" style={{ fontSize: 18 }}>
@@ -444,6 +446,8 @@ export function OfferScreen() {
           ) : (
             <EmptyState
               icon="truck"
+              // A missing linked offer keeps the icon: nothing is on its way there.
+              illustration={requestedId ? undefined : <StatusAnimation kind="waiting-offers" />}
               title={requestedId ? "Esta oferta ya no está disponible" : "No tienes ofertas pendientes"}
               description={
                 requestedId

@@ -182,6 +182,7 @@ describe("VolunteerRegistrationScreen", () => {
       }),
     );
     expect(await screen.findByText("Tu solicitud está en revisión")).toBeOnTheScreen();
+    expect(screen.getByTestId("review-animation", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(screen.queryByRole("button", { name: "Enviar solicitud" })).toBeNull();
   });
 
@@ -247,6 +248,7 @@ describe("VolunteerRegistrationScreen", () => {
     await renderRegistration(withRequest({ estado_verificacion: "PENDIENTE" }));
 
     expect(await screen.findByText("Tu solicitud está en revisión")).toBeOnTheScreen();
+    expect(screen.getByTestId("review-animation", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(screen.queryByRole("button", { name: "Enviar solicitud" })).toBeNull();
   });
 

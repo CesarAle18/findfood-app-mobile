@@ -224,6 +224,7 @@ describe("DonorHomeScreen", () => {
     await renderHome();
 
     expect(await screen.findByText("Aún no tienes donaciones")).toBeOnTheScreen();
+    expect(screen.getByTestId("empty-donations-animation", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(await screen.findByText("Aún no tienes actividad reciente.")).toBeOnTheScreen();
   });
 });

@@ -7,6 +7,7 @@ import { DateTimeField } from "@/components/findfood/date-time-field";
 import { DonationPhotos } from "@/components/findfood/donation-photos";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import { PhotoField } from "@/components/findfood/photo-field";
+import { StatusAnimation, type StatusAnimationKind } from "@/components/findfood/status-animation";
 import { Icon, type IconName } from "@/components/findfood/icon";
 import {
   canLocateAddress,
@@ -341,6 +342,17 @@ const WAITING_HEADLINE: Record<EstadoDonacion, [IconName, string, string]> = {
   ],
 };
 
+/** States whose headline plays an animation instead of the icon. */
+const WAITING_ANIMATION: Partial<Record<EstadoDonacion, StatusAnimationKind>> = {
+  PUBLICADA: "searching",
+  ASIGNADA: "on-the-way",
+  EN_RECOLECCION: "on-the-way",
+  EN_TRANSITO: "on-the-way",
+  ENTREGADA: "delivered",
+  RECIBIDA: "delivered",
+  EXPIRADA: "expired",
+};
+
 /** The color of each step of "Estado de la donación"; pending steps stay gray. */
 const STEP_COLORS: Partial<Record<EstadoDonacion, ToneColors>> = {
   PUBLICADA: { text: colors.info, background: colors.infoSoft },
@@ -400,12 +412,17 @@ function Waiting({
 }) {
   const [icon, title, description] = WAITING_HEADLINE[d.estado] ?? ["box", d.status, ""];
   const expiresAt = d.estado === "PUBLICADA" ? formatTimeOfDay(dto.expira_publicacion_at) : null;
+  const animation = WAITING_ANIMATION[d.estado];
   return (
     <>
       <View style={waitingStyles.hero}>
-        <View style={waitingStyles.heroIcon}>
-          <Icon name={icon} size={32} />
-        </View>
+        {animation ? (
+          <StatusAnimation kind={animation} />
+        ) : (
+          <View style={waitingStyles.heroIcon}>
+            <Icon name={icon} size={32} />
+          </View>
+        )}
         <Copy weight="semibold" style={waitingStyles.heroTitle}>
           {title}
         </Copy>
@@ -732,6 +749,7 @@ function RouteCompleted({ ruta }: { ruta: RutaDetalleDto }) {
   );
   return (
     <>
+      <StatusAnimation kind="route-completed" />
       <Card soft>
         <Row>
           <Icon name="check" size={19} />

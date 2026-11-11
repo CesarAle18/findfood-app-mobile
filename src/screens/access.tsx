@@ -54,6 +54,7 @@ function StartupError() {
   return (
     <StatusFrame>
       <ErrorState
+        illustrated
         error={error}
         title="No pudimos cargar tu cuenta"
         onRetry={() => void refetch()}

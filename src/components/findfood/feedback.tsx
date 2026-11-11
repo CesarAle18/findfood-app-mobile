@@ -12,6 +12,7 @@ import { colors } from "@/design/tokens";
 
 import { Icon, type IconName } from "./icon";
 import { Animated, fadeIn, fadeOut } from "./motion";
+import { StatusAnimation } from "./status-animation";
 import { Button, Copy } from "./ui";
 
 export function LoadingState({ label }: { label?: string }) {
@@ -37,19 +38,24 @@ export function EmptyState({
   icon = "box",
   title,
   description,
+  illustration,
   action,
 }: {
   icon?: IconName;
   title: string;
   description?: string;
+  /** Takes the icon's place, e.g. a StatusAnimation. */
+  illustration?: ReactNode;
   /** Usually a Button or NavButton that lets the user fill the empty list. */
   action?: ReactNode;
 }) {
   return (
     <View style={styles.center}>
-      <View style={styles.iconWell}>
-        <Icon name={icon} size={28} />
-      </View>
+      {illustration ?? (
+        <View style={styles.iconWell}>
+          <Icon name={icon} size={28} />
+        </View>
+      )}
       <View style={styles.text}>
         <Copy weight="semibold" style={styles.title}>
           {title}
@@ -71,9 +77,15 @@ export function ErrorState({
   onRetry,
   retrying = false,
   secondaryAction,
+  illustrated = false,
 }: {
   error: unknown;
   title?: string;
+  /**
+   * Plays the connection-error animation above the message. Only for errors that take the
+   * whole screen; a list footer or a section keeps the plain message.
+   */
+  illustrated?: boolean;
   onRetry?: () => void;
   /** True while the retry is in flight: the button shows a busy indicator. */
   retrying?: boolean;
@@ -85,6 +97,7 @@ export function ErrorState({
 }) {
   return (
     <View style={styles.center}>
+      {illustrated ? <StatusAnimation kind="connection-error" /> : null}
       <View accessible accessibilityRole="alert" style={styles.text}>
         <Copy weight="semibold" style={styles.title}>
           {title}
@@ -140,6 +153,7 @@ export function QueryContent<T>({
   if (query.error) {
     return (
       <ErrorState
+        illustrated
         error={query.error}
         title={errorTitle}
         onRetry={() => void query.refetch()}

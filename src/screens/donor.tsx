@@ -18,6 +18,7 @@ import { DonationTimeline } from "@/components/findfood/donation-timeline";
 import { Icon } from "@/components/findfood/icon";
 import { DonorTrackingMap, PointMap } from "@/components/findfood/map";
 import { Pressing } from "@/components/findfood/motion";
+import { StatusAnimation } from "@/components/findfood/status-animation";
 import {
   Badge,
   Button,
@@ -159,6 +160,7 @@ const newDonationAction = (
 function NoDonations() {
   return (
     <EmptyState
+      illustration={<StatusAnimation kind="empty-donations" />}
       title="Aún no tienes donaciones"
       description="Publica tu primera donación y te avisaremos cuando un voluntario la acepte."
       action={newDonationAction}
@@ -320,6 +322,7 @@ const renderDonation = ({ item }: ListRenderItemInfo<DonationView>) => (
 const ItemSeparator = () => <View style={styles.separator} />;
 const filterEmpty = (
   <EmptyState
+    illustration={<StatusAnimation kind="empty-filter" />}
     title="No hay donaciones con este filtro"
     description="Prueba con otro filtro para ver el resto de tus donaciones."
   />

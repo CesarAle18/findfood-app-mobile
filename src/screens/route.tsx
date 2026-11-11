@@ -44,6 +44,7 @@ export function ActiveRouteScreen() {
         </>
       ) : current.isError ? (
         <ErrorState
+          illustrated
           error={current.error}
           title="No pudimos cargar tu ruta"
           onRetry={() => void current.refetch()}

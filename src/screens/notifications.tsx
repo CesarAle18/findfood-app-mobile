@@ -10,6 +10,7 @@ import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { EmptyState, ErrorState, QueryContent } from "@/components/findfood/feedback";
 import { Icon, type IconName } from "@/components/findfood/icon";
 import { Pressing } from "@/components/findfood/motion";
+import { StatusAnimation } from "@/components/findfood/status-animation";
 import { Badge, Button, Choices, Copy, Row, Screen } from "@/components/findfood/ui";
 import { colors } from "@/design/tokens";
 import { isImportant } from "@/notifications/notification-routes";
@@ -179,7 +180,14 @@ export function NotificationsScreen() {
 
   const emptyList = useMemo(() => {
     const { title, description } = EMPTY[tab];
-    return <EmptyState icon="bell" title={title} description={description} />;
+    // Every empty tab plays the same bell: nothing is waiting for the user.
+    return (
+      <EmptyState
+        illustration={<StatusAnimation kind="caught-up" />}
+        title={title}
+        description={description}
+      />
+    );
   }, [tab]);
   return (
     <Screen

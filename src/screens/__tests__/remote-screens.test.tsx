@@ -143,6 +143,21 @@ describe("DonationsScreen", () => {
     expect(screen.queryByText("DON-4")).toBeNull();
   });
 
+  it("animates the empty state of a filter that matches nothing", async () => {
+    answerGets({ "/donaciones": pageFixture([rows[0]]) });
+    await renderScreen(DonationsScreen);
+    await screen.findByText("DON-1");
+    expect(screen.queryByTestId("empty-filter-animation", { includeHiddenElements: true })).toBeNull();
+
+    // The only donation is PUBLICADA: nothing is delivered yet.
+    await fireEvent.press(screen.getByRole("radio", { name: "Entregadas" }));
+
+    expect(screen.getByText("No hay donaciones con este filtro")).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("empty-filter-animation", { includeHiddenElements: true }),
+    ).toBeOnTheScreen();
+  });
+
   it("keeps a row whose pickup window cannot be read", async () => {
     answerGets({
       "/donaciones": pageFixture([
@@ -381,6 +396,7 @@ describe("AssignedVolunteerScreen", () => {
     await renderScreen(AssignedVolunteerScreen, withId);
 
     expect(await screen.findByText("Aún no hay voluntario asignado")).toBeOnTheScreen();
+    expect(screen.getByTestId("searching-animation", { includeHiddenElements: true })).toBeOnTheScreen();
   });
 });
 

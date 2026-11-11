@@ -105,6 +105,8 @@ describe("WaitingScreen", () => {
     await renderWaiting();
 
     expect(await screen.findByText("Estamos buscando un voluntario")).toBeOnTheScreen();
+    // While it waits for a volunteer the search plays as an animation.
+    expect(screen.getByTestId("searching-animation", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(screen.getByText("DON-1058")).toBeOnTheScreen();
     expect(screen.getByText("Leche")).toBeOnTheScreen();
     expect(screen.getByText("20 Litros · Refrigerado")).toBeOnTheScreen();
@@ -128,7 +130,11 @@ describe("WaitingScreen", () => {
 
     await renderWaiting();
 
-    await fireEvent.press(await screen.findByText("Ver voluntario asignado"));
+    const open = await screen.findByText("Ver voluntario asignado");
+    // Once someone accepted there is nothing left to search for.
+    expect(screen.queryByTestId("searching-animation", { includeHiddenElements: true })).toBeNull();
+    expect(screen.getByTestId("on-the-way-animation", { includeHiddenElements: true })).toBeOnTheScreen();
+    await fireEvent.press(open);
 
     expect(await screen.findByText(`Voluntario de ${DONATION_ID}`)).toBeOnTheScreen();
   });
@@ -141,7 +147,11 @@ describe("WaitingScreen", () => {
 
     await renderWaiting();
 
-    await fireEvent.press(await screen.findByText("Volver a publicar"));
+    const republish = await screen.findByText("Volver a publicar");
+    // The expired publication plays the timeout animation, not the search.
+    expect(screen.getByTestId("expired-animation", { includeHiddenElements: true })).toBeOnTheScreen();
+    expect(screen.queryByTestId("searching-animation", { includeHiddenElements: true })).toBeNull();
+    await fireEvent.press(republish);
 
     await waitFor(() =>
       expect(mockApi.post).toHaveBeenCalledWith(`/donaciones/${DONATION_ID}/publicar`),
