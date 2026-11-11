@@ -1,11 +1,16 @@
 /**
  * The alerts tab of both views: the user's inbox (`GET /me/notificaciones`), paged, with
- * Todas / Sin leer / Importantes. Tapping a row marks it read at once and opens its screen.
+ * Todas / Sin leer / Importantes. Tapping a row marks it read at once and opens its screen;
+ * swiping it to the left deletes it (at once too, put back if the request fails).
  */
 import { FlashList, type ListRenderItemInfo } from "@shopify/flash-list";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import ReanimatedSwipeable, {
+  SwipeDirection,
+  type SwipeableMethods,
+} from "react-native-gesture-handler/ReanimatedSwipeable";
 
 import { EmptyState, ErrorState, QueryContent } from "@/components/findfood/feedback";
 import { Icon, type IconName } from "@/components/findfood/icon";
@@ -18,6 +23,7 @@ import { relativeTime } from "@/notifications/relative-time";
 import { useOpenNotification } from "@/notifications/use-open-notification";
 import {
   notificacionesQuery,
+  useEliminarNotificacionMutation,
   useMarcarTodasLeidasMutation,
   type BandejaPages,
 } from "@/services/notificaciones";
@@ -105,6 +111,8 @@ export function NotificationsScreen() {
   const { data, error, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage, refetch } =
     inbox;
   const { mutate: markAll, isPending: markingAll } = useMarcarTodasLeidasMutation();
+  // A failed delete puts the row back in place: that is all the feedback it gets.
+  const { mutate: deleteNotification } = useEliminarNotificacionMutation();
   const openNotification = useOpenNotification();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -129,6 +137,8 @@ export function NotificationsScreen() {
     [openNotification],
   );
 
+  const onDeleteItem = useCallback((id: string) => deleteNotification(id), [deleteNotification]);
+
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<InboxRow>) => (
       <NotificationRow
@@ -140,9 +150,10 @@ export function NotificationsScreen() {
         important={item.important}
         tipo={item.tipo}
         onPressItem={onPressItem}
+        onDeleteItem={onDeleteItem}
       />
     ),
-    [onPressItem],
+    [onPressItem, onDeleteItem],
   );
 
   const onRefresh = useCallback(async () => {
@@ -235,6 +246,7 @@ const NotificationRow = memo(function NotificationRow({
   unread,
   important,
   onPressItem,
+  onDeleteItem,
 }: {
   id: string;
   tipo: string;
@@ -244,38 +256,98 @@ const NotificationRow = memo(function NotificationRow({
   unread: boolean;
   important: boolean;
   onPressItem: (id: string) => void;
+  onDeleteItem: (id: string) => void;
 }) {
+  const swipeable = useRef<SwipeableMethods>(null);
+  const opened = useRef(false);
+  const shownId = useRef(id);
+
+  // FlashList recycles rows: the cell of a swiped (deleted) row comes back closed for the
+  // next one. `reset` snaps it shut; `close` then settles the state `reset` leaves behind
+  // (the tap that closes an open row), without moving it.
+  useEffect(() => {
+    if (shownId.current === id) return;
+    shownId.current = id;
+    if (!opened.current) return;
+    opened.current = false;
+    swipeable.current?.reset();
+    swipeable.current?.close();
+  }, [id]);
+
+  const renderRightActions = useCallback(
+    () => (
+      // The row's own "Eliminar" action is what screen readers get; this panel only shows
+      // while swiped.
+      <Pressable
+        onPress={() => onDeleteItem(id)}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={styles.deleteAction}
+      >
+        <Icon name="trash" size={18} color={colors.surface} />
+        <Copy weight="semibold" style={styles.deleteLabel}>
+          Eliminar
+        </Copy>
+      </Pressable>
+    ),
+    [id, onDeleteItem],
+  );
+
   return (
-    <Pressing
-      accessibilityRole="button"
-      accessibilityLabel={unread ? `${titulo}, sin leer` : titulo}
-      accessibilityHint="Abre la notificación"
-      onPress={() => onPressItem(id)}
-      surface={[styles.card, unread ? styles.unreadCard : null]}
+    <ReanimatedSwipeable
+      ref={swipeable}
+      friction={2}
+      overshootRight={false}
+      renderRightActions={renderRightActions}
+      onSwipeableWillOpen={() => {
+        opened.current = true;
+      }}
+      // LEFT: the row moved left, showing the right actions. Released past `rightThreshold`
+      // (half the panel), it opens all the way, and that deletes it.
+      onSwipeableOpen={(direction) => {
+        if (direction === SwipeDirection.LEFT) onDeleteItem(id);
+      }}
+      onSwipeableClose={() => {
+        opened.current = false;
+      }}
     >
-      <Row style={styles.rowContent}>
-        <View style={[styles.iconWell, unread ? styles.unreadIconWell : null]}>
-          <Icon name={iconFor(tipo)} size={17} />
-        </View>
-        <View style={styles.text}>
-          <Copy weight={unread ? "bold" : "semibold"}>{titulo}</Copy>
-          <Copy tone="secondary" style={styles.body}>
-            {cuerpo}
-          </Copy>
-          <View style={styles.meta}>
-            {time ? (
-              <Copy tone="secondary" style={styles.time}>
-                {time}
-              </Copy>
-            ) : null}
-            {important ? <Badge warning>Importante</Badge> : null}
+      <Pressing
+        accessibilityRole="button"
+        accessibilityLabel={unread ? `${titulo}, sin leer` : titulo}
+        accessibilityHint="Abre la notificación"
+        accessibilityActions={DELETE_ACTIONS}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === "delete") onDeleteItem(id);
+        }}
+        onPress={() => onPressItem(id)}
+        surface={[styles.card, unread ? styles.unreadCard : null]}
+      >
+        <Row style={styles.rowContent}>
+          <View style={[styles.iconWell, unread ? styles.unreadIconWell : null]}>
+            <Icon name={iconFor(tipo)} size={17} />
           </View>
-        </View>
-        {unread ? <View style={styles.dot} /> : null}
-      </Row>
-    </Pressing>
+          <View style={styles.text}>
+            <Copy weight={unread ? "bold" : "semibold"}>{titulo}</Copy>
+            <Copy tone="secondary" style={styles.body}>
+              {cuerpo}
+            </Copy>
+            <View style={styles.meta}>
+              {time ? (
+                <Copy tone="secondary" style={styles.time}>
+                  {time}
+                </Copy>
+              ) : null}
+              {important ? <Badge warning>Importante</Badge> : null}
+            </View>
+          </View>
+          {unread ? <View style={styles.dot} /> : null}
+        </Row>
+      </Pressing>
+    </ReanimatedSwipeable>
   );
 });
+
+const DELETE_ACTIONS = [{ name: "delete", label: "Eliminar" }];
 
 const styles = StyleSheet.create({
   separator: { height: 12 },
@@ -310,4 +382,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     marginTop: 6,
   },
+  // As tall and as round as the card; the gap keeps the two shapes apart.
+  deleteAction: {
+    width: 88,
+    marginLeft: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: colors.danger,
+    borderRadius: 14,
+  },
+  deleteLabel: { color: colors.surface, fontSize: 12 },
 });

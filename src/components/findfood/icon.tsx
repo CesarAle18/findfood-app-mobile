@@ -26,7 +26,8 @@ export type IconName =
   | "arrow"
   | "file"
   | "expand"
-  | "close";
+  | "close"
+  | "trash";
 
 const paths: Record<IconName, string> = {
   calendar: "M3 5h18v16H3zM3 10h18M7 3v4M17 3v4",
@@ -55,6 +56,7 @@ const paths: Record<IconName, string> = {
   file: "M5 2h9l5 5v15H5zM14 2v6h5M8 12h8M8 16h6",
   expand: "M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7",
   close: "M6 6l12 12M18 6 6 18",
+  trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
 };
 
 // Decorative: the label next to it already names the action.
