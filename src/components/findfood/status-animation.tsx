@@ -9,7 +9,13 @@ import { colors } from "@/design/tokens";
 const WIDTH = 280;
 const HEIGHT = 200;
 
-export type StatusAnimationKind = "searching" | "expired" | "empty-filter" | "caught-up" | "empty-route";
+export type StatusAnimationKind =
+  | "searching"
+  | "expired"
+  | "empty-filter"
+  | "caught-up"
+  | "empty-route"
+  | "waiting-offers";
 
 const ANIMATIONS: Record<StatusAnimationKind, { source: AnimationObject; still: IconName }> = {
   // Magnifier searching (from LottieFiles) while the donation waits for a volunteer.
@@ -36,6 +42,11 @@ const ANIMATIONS: Record<StatusAnimationKind, { source: AnimationObject; still: 
   "empty-route": {
     source: require("../../../assets/lottie/empty-route.json"),
     still: "route",
+  },
+  // A truck idling on the road under a pinging dot: waiting for an offer to arrive.
+  "waiting-offers": {
+    source: require("../../../assets/lottie/waiting-offers.json"),
+    still: "truck",
   },
 };
 

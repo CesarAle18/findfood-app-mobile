@@ -167,6 +167,23 @@ describe("OfferScreen", () => {
 
     expect(await screen.findByText("Esta oferta ya no está disponible")).toBeOnTheScreen();
     expect(screen.queryByText("Aceptar")).toBeNull();
+    expect(
+      screen.queryByTestId("waiting-offers-animation", { includeHiddenElements: true }),
+    ).toBeNull();
+  });
+
+  it("animates the wait when there is no offer to answer", async () => {
+    mockApi.get.mockImplementation(async (path: string) => {
+      if (path === "/asignaciones/ofertas") return [];
+      throw new Error(`unexpected GET ${path}`);
+    });
+
+    await renderScreen(OfferScreen);
+
+    expect(await screen.findByText("No tienes ofertas pendientes")).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("waiting-offers-animation", { includeHiddenElements: true }),
+    ).toBeOnTheScreen();
   });
 
   it("without a link, shows the first offer waiting for an answer", async () => {
