@@ -146,7 +146,11 @@ describe("WaitingScreen", () => {
 
     await renderWaiting();
 
-    await fireEvent.press(await screen.findByText("Volver a publicar"));
+    const republish = await screen.findByText("Volver a publicar");
+    // The expired publication plays the timeout animation, not the search.
+    expect(screen.getByTestId("expired-animation", { includeHiddenElements: true })).toBeOnTheScreen();
+    expect(screen.queryByTestId("searching-animation", { includeHiddenElements: true })).toBeNull();
+    await fireEvent.press(republish);
 
     await waitFor(() =>
       expect(mockApi.post).toHaveBeenCalledWith(`/donaciones/${DONATION_ID}/publicar`),
