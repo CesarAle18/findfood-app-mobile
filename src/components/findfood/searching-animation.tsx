@@ -27,7 +27,7 @@ function useReduceMotion() {
 }
 
 /**
- * Radar rings pulsing around a magnifier while the donation waits for a volunteer. Decorative:
+ * Looping loader (from LottieFiles) while the donation waits for a volunteer. Decorative:
  * the headline next to it already says what is happening. With "reduce motion" on it is the
  * static search icon instead.
  */
