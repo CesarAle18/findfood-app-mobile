@@ -10,7 +10,7 @@ import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { EmptyState, ErrorState, QueryContent } from "@/components/findfood/feedback";
 import { Icon, type IconName } from "@/components/findfood/icon";
 import { Pressing } from "@/components/findfood/motion";
-import { StatusAnimation, type StatusAnimationKind } from "@/components/findfood/status-animation";
+import { StatusAnimation } from "@/components/findfood/status-animation";
 import { Badge, Button, Choices, Copy, Row, Screen } from "@/components/findfood/ui";
 import { colors } from "@/design/tokens";
 import { isImportant } from "@/notifications/notification-routes";
@@ -73,19 +73,12 @@ const ALL_TAB = 0;
 const UNREAD_TAB = 1;
 const IMPORTANT_TAB = 2;
 
-const EMPTY: Record<
-  number,
-  { title: string; description: string; animation?: StatusAnimationKind }
-> = {
+const EMPTY: Record<number, { title: string; description: string }> = {
   [ALL_TAB]: {
     title: "No tienes notificaciones",
     description: "Aquí verás las novedades de tus donaciones y rutas.",
   },
-  [UNREAD_TAB]: {
-    title: "Estás al día",
-    description: "No tienes notificaciones sin leer.",
-    animation: "caught-up",
-  },
+  [UNREAD_TAB]: { title: "Estás al día", description: "No tienes notificaciones sin leer." },
   [IMPORTANT_TAB]: {
     title: "No hay notificaciones importantes",
     description: "Aquí verás ofertas, cancelaciones y rechazos que requieren tu atención.",
@@ -186,11 +179,11 @@ export function NotificationsScreen() {
   ) : null;
 
   const emptyList = useMemo(() => {
-    const { title, description, animation } = EMPTY[tab];
+    const { title, description } = EMPTY[tab];
+    // Every empty tab plays the same bell: nothing is waiting for the user.
     return (
       <EmptyState
-        icon="bell"
-        illustration={animation ? <StatusAnimation kind={animation} /> : undefined}
+        illustration={<StatusAnimation kind="caught-up" />}
         title={title}
         description={description}
       />
