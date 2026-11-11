@@ -37,19 +37,24 @@ export function EmptyState({
   icon = "box",
   title,
   description,
+  illustration,
   action,
 }: {
   icon?: IconName;
   title: string;
   description?: string;
+  /** Takes the icon's place, e.g. a StatusAnimation. */
+  illustration?: ReactNode;
   /** Usually a Button or NavButton that lets the user fill the empty list. */
   action?: ReactNode;
 }) {
   return (
     <View style={styles.center}>
-      <View style={styles.iconWell}>
-        <Icon name={icon} size={28} />
-      </View>
+      {illustration ?? (
+        <View style={styles.iconWell}>
+          <Icon name={icon} size={28} />
+        </View>
+      )}
       <View style={styles.text}>
         <Copy weight="semibold" style={styles.title}>
           {title}

@@ -5,11 +5,11 @@ import { AccessibilityInfo, StyleSheet, View } from "react-native";
 import { Icon, type IconName } from "@/components/findfood/icon";
 import { colors } from "@/design/tokens";
 
-/** Both animations are 350×250; keep their aspect ratio. */
+/** Every animation is 350×250; keep their aspect ratio. */
 const WIDTH = 280;
 const HEIGHT = 200;
 
-export type StatusAnimationKind = "searching" | "expired";
+export type StatusAnimationKind = "searching" | "expired" | "empty-filter";
 
 const ANIMATIONS: Record<StatusAnimationKind, { source: AnimationObject; still: IconName }> = {
   // Magnifier searching (from LottieFiles) while the donation waits for a volunteer.
@@ -21,6 +21,11 @@ const ANIMATIONS: Record<StatusAnimationKind, { source: AnimationObject; still: 
   expired: {
     source: require("../../../assets/lottie/publication-expired.json"),
     still: "clock",
+  },
+  // Dots that drop into a filter funnel and nothing comes out: no row matches the filter.
+  "empty-filter": {
+    source: require("../../../assets/lottie/empty-filter.json"),
+    still: "box",
   },
 };
 
