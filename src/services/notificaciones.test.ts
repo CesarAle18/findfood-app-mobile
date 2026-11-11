@@ -9,11 +9,13 @@ import { mutationCase, renderWithClient } from "@/test-utils/query";
 
 import {
   NOTIFICACIONES_PAGE_SIZE,
+  eliminarNotificacion,
   getNotificaciones,
   getNotificacionesNoLeidas,
   marcarNotificacionLeida,
   marcarTodasLeidas,
   nextNotificacionesOffset,
+  useEliminarNotificacionMutation,
   useMarcarNotificacionLeidaMutation,
   useMarcarTodasLeidasMutation,
   useNotificaciones,
@@ -58,6 +60,11 @@ describe("requests", () => {
       { method: "post", path: "/me/notificaciones/n-1/leer" },
     ],
     ["marcarTodasLeidas", () => marcarTodasLeidas(), { method: "post", path: "/me/notificaciones/leer-todas" }],
+    [
+      "eliminarNotificacion",
+      () => eliminarNotificacion("n 1"),
+      { method: "delete", path: "/me/notificaciones/n%201" },
+    ],
   ])("%s", async (_name, call, request) => {
     await call();
     expect(sentRequests(mockedApi)).toEqual([request]);
@@ -129,12 +136,15 @@ describe("mutations invalidate the whole inbox when they settle", () => {
     mutationCase("POST /me/notificaciones/leer-todas", useMarcarTodasLeidasMutation, undefined, [
       notificaciones.all,
     ]),
+    mutationCase("DELETE /me/notificaciones/:id", useEliminarNotificacionMutation, "n-1", [
+      notificaciones.all,
+    ]),
   ])("$name", async ({ invalidated, expected }) => {
     expect(await invalidated()).toEqual(expected);
   });
 });
 
-describe("optimistic read", () => {
+describe("optimistic inbox updates", () => {
   type Pages = InfiniteData<BandejaDto, number>;
   const READ_AT = "2026-10-12T10:00:00Z";
   const allKey = notificaciones.list({ soloNoLeidas: false });
@@ -163,17 +173,20 @@ describe("optimistic read", () => {
     data.pages.flatMap((page) => page.datos.filter((row) => row.leida_at !== null).map((row) => row.id));
   const unreadCounts = (data: Pages) => data.pages.map((page) => page.no_leidas);
 
-  /** A POST that stays in flight until the test settles it. */
-  function deferPost() {
+  const ids = (data: Pages) => data.pages.map((page) => page.datos.map((row) => row.id));
+  const totals = (data: Pages) => data.pages.map((page) => page.total);
+
+  /** A request that stays in flight until the test settles it. */
+  function defer(method: "post" | "delete" = "post") {
     let settle!: { resolve: (value?: unknown) => void; reject: (error: unknown) => void };
-    mockedApi.post.mockImplementationOnce(
+    mockedApi[method].mockImplementationOnce(
       () => new Promise((resolve, reject) => (settle = { resolve, reject })),
     );
     return () => settle;
   }
 
   it("marks one row read in every cached list and decrements the unread counts", async () => {
-    const settle = deferPost();
+    const settle = defer();
     const { result, client } = await renderWithClient(() => useMarcarNotificacionLeidaMutation());
     seed(client);
 
@@ -206,7 +219,7 @@ describe("optimistic read", () => {
   });
 
   it("rolls every list and the badge back when the request fails", async () => {
-    const settle = deferPost();
+    const settle = defer();
     const { result, client } = await renderWithClient(() => useMarcarNotificacionLeidaMutation());
     const { all, unread } = seed(client);
     jest.spyOn(client, "invalidateQueries").mockResolvedValue();
@@ -224,7 +237,7 @@ describe("optimistic read", () => {
   });
 
   it("marks everything read at once, and rolls back on failure", async () => {
-    const settle = deferPost();
+    const settle = defer();
     const { result, client } = await renderWithClient(() => useMarcarTodasLeidasMutation());
     const { all } = seed(client);
     jest.spyOn(client, "invalidateQueries").mockResolvedValue();
@@ -243,5 +256,65 @@ describe("optimistic read", () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(pagesOf(client, allKey)).toEqual(all);
     expect(client.getQueryData(notificaciones.unreadCount())).toBe(2);
+  });
+
+  it("removes an unread row from every cached list and lowers the totals and unread counts", async () => {
+    const settle = defer("delete");
+    const { result, client } = await renderWithClient(() => useEliminarNotificacionMutation());
+    seed(client);
+
+    await act(async () => {
+      result.current.mutate("n-1");
+    });
+
+    await waitFor(() => expect(ids(pagesOf(client, allKey))).toEqual([["n-2"], ["n-3"]]));
+    expect(ids(pagesOf(client, unreadKey))).toEqual([["n-3"]]);
+    expect(totals(pagesOf(client, allKey))).toEqual([2, 2]);
+    expect(totals(pagesOf(client, unreadKey))).toEqual([1]);
+    expect(unreadCounts(pagesOf(client, allKey))).toEqual([1, 1]);
+    expect(unreadCounts(pagesOf(client, unreadKey))).toEqual([1]);
+    expect(client.getQueryData(notificaciones.unreadCount())).toBe(1);
+
+    await act(async () => settle().resolve());
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  });
+
+  it("removes a read row without touching the unread counts", async () => {
+    const settle = defer("delete");
+    const { result, client } = await renderWithClient(() => useEliminarNotificacionMutation());
+    const { unread } = seed(client);
+
+    await act(async () => {
+      result.current.mutate("n-2");
+    });
+
+    await waitFor(() => expect(ids(pagesOf(client, allKey))).toEqual([["n-1"], ["n-3"]]));
+    expect(totals(pagesOf(client, allKey))).toEqual([2, 2]);
+    expect(unreadCounts(pagesOf(client, allKey))).toEqual([2, 2]);
+    // The unread list never held it: its pages are left as they were.
+    expect(pagesOf(client, unreadKey)).toEqual(unread);
+    expect(client.getQueryData(notificaciones.unreadCount())).toBe(2);
+
+    await act(async () => settle().resolve());
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  });
+
+  it("puts the row and the counts back when the DELETE fails", async () => {
+    const settle = defer("delete");
+    const { result, client } = await renderWithClient(() => useEliminarNotificacionMutation());
+    const { all, unread } = seed(client);
+    jest.spyOn(client, "invalidateQueries").mockResolvedValue();
+
+    await act(async () => {
+      result.current.mutate("n-1");
+    });
+    await waitFor(() => expect(client.getQueryData(notificaciones.unreadCount())).toBe(1));
+    await act(async () => settle().reject(new Error("offline")));
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(pagesOf(client, allKey)).toEqual(all);
+    expect(pagesOf(client, unreadKey)).toEqual(unread);
+    expect(client.getQueryData(notificaciones.unreadCount())).toBe(2);
+    expect(mockedApi.delete).toHaveBeenCalledWith("/me/notificaciones/n-1");
   });
 });

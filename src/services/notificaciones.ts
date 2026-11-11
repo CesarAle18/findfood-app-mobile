@@ -69,6 +69,11 @@ export function marcarTodasLeidas(): Promise<{ actualizadas: number }> {
   return api.post<{ actualizadas: number }>(`${BANDEJA_PATH}/leer-todas`);
 }
 
+/** Deletes the notification for good (its push too, if still queued). Answers 204. */
+export function eliminarNotificacion(id: string): Promise<void> {
+  return api.delete<void>(`${BANDEJA_PATH}/${encodeURIComponent(id)}`);
+}
+
 // --- Queries -----------------------------------------------------------------------------
 
 export const NOTIFICACIONES_PAGE_SIZE = 20;
@@ -119,7 +124,7 @@ export function useNotificacionesNoLeidas() {
 
 const { notificaciones } = queryKeys;
 
-/** What the cache held before an optimistic read, to restore it if the request fails. */
+/** What the cache held before an optimistic change, to restore it if the request fails. */
 interface InboxSnapshot {
   lists: [QueryKey, BandejaPages | undefined][];
   unread: number | undefined;
@@ -130,19 +135,24 @@ function isUnreadIn(data: BandejaPages | undefined, id: string): boolean {
 }
 
 /**
- * Applies a read to every cached list page and to the badge count, after stopping the
- * fetches that would overwrite it. Returns the previous cache for `restoreInbox`.
+ * Stops the fetches that would overwrite an optimistic change, then returns the cache as it
+ * was, for `restoreInbox`.
  */
+async function snapshotInbox(client: QueryClient): Promise<InboxSnapshot> {
+  await client.cancelQueries({ queryKey: notificaciones.all });
+  return {
+    lists: client.getQueriesData<BandejaPages>({ queryKey: notificaciones.lists() }),
+    unread: client.getQueryData<number>(notificaciones.unreadCount()),
+  };
+}
+
+/** Applies a read to every cached list page and to the badge count. */
 async function readOptimistically(
   client: QueryClient,
   markRow: (row: NotificacionDto) => boolean,
   unreadAfter: (unread: number) => number,
 ): Promise<InboxSnapshot> {
-  await client.cancelQueries({ queryKey: notificaciones.all });
-  const snapshot: InboxSnapshot = {
-    lists: client.getQueriesData<BandejaPages>({ queryKey: notificaciones.lists() }),
-    unread: client.getQueryData<number>(notificaciones.unreadCount()),
-  };
+  const snapshot = await snapshotInbox(client);
   const leidaAt = new Date().toISOString();
   client.setQueriesData<BandejaPages>({ queryKey: notificaciones.lists() }, (data) =>
     data
@@ -190,6 +200,45 @@ export function useMarcarNotificacionLeidaMutation() {
         (unread) => Math.max(0, unread - 1),
       );
     },
+    onError: (_error, _id, snapshot, { client }) => restoreInbox(client, snapshot),
+    onSettled: (_data, _error, _id, _snapshot, { client }) => refetchInbox(client),
+  });
+}
+
+/**
+ * Takes one row out of every cached list page; each list that held it loses one from its
+ * `total`. The unread counts (pages and badge) drop only when the row was unread somewhere
+ * in the cache.
+ */
+async function deleteOptimistically(client: QueryClient, id: string): Promise<InboxSnapshot> {
+  const snapshot = await snapshotInbox(client);
+  const wasUnread = snapshot.lists.some(([, data]) => isUnreadIn(data, id));
+  const unreadAfter = (unread: number) => (wasUnread ? Math.max(0, unread - 1) : unread);
+  client.setQueriesData<BandejaPages>({ queryKey: notificaciones.lists() }, (data) => {
+    if (!data) return data;
+    const held = data.pages.some((page) => page.datos.some((row) => row.id === id));
+    if (!held && !wasUnread) return data;
+    return {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        total: held ? Math.max(0, page.total - 1) : page.total,
+        no_leidas: unreadAfter(page.no_leidas),
+        datos: held ? page.datos.filter((row) => row.id !== id) : page.datos,
+      })),
+    };
+  });
+  if (snapshot.unread !== undefined) {
+    client.setQueryData(notificaciones.unreadCount(), unreadAfter(snapshot.unread));
+  }
+  return snapshot;
+}
+
+/** Removes one notification at once (row and counts); puts it back if the DELETE fails. */
+export function useEliminarNotificacionMutation() {
+  return useMutation({
+    mutationFn: eliminarNotificacion,
+    onMutate: (id: string, { client }) => deleteOptimistically(client, id),
     onError: (_error, _id, snapshot, { client }) => restoreInbox(client, snapshot),
     onSettled: (_data, _error, _id, _snapshot, { client }) => refetchInbox(client),
   });

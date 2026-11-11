@@ -18,6 +18,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -124,26 +125,31 @@ export default function RootLayout() {
     return <ConfigErrorRoot error={configResult.error} fontsReady={fontsLoaded || !!fontError} />;
   }
 
+  // Gestures (the inbox's swipe to delete) only work under GestureHandlerRootView, kept
+  // outermost as Gesture Handler asks; expo-router's native Stack does not add one.
   // KeyboardProvider tracks the keyboard for the screens' keyboard-aware scroll views.
   return (
-    <KeyboardProvider>
-      <QueryClientProvider client={queryClient}>
-        <SessionProvider>
-          <SignedInEffects />
-          <MobileProvider>
-            <StatusBar style="dark" />
-            <View style={styles.root}>
-              <RootNavigator fontsLoaded={fontsLoaded} fontError={fontError} />
-              <OfflineOverlay />
-            </View>
-          </MobileProvider>
-        </SessionProvider>
-      </QueryClientProvider>
-    </KeyboardProvider>
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <KeyboardProvider>
+        <QueryClientProvider client={queryClient}>
+          <SessionProvider>
+            <SignedInEffects />
+            <MobileProvider>
+              <StatusBar style="dark" />
+              <View style={styles.root}>
+                <RootNavigator fontsLoaded={fontsLoaded} fontError={fontError} />
+                <OfflineOverlay />
+              </View>
+            </MobileProvider>
+          </SessionProvider>
+        </QueryClientProvider>
+      </KeyboardProvider>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  gestureRoot: { flex: 1 },
   root: { flex: 1, backgroundColor: colors.background },
   fontError: { flex: 1, padding: 24, justifyContent: "center" },
   overlay: { position: "absolute", top: 0, left: 0, right: 0, pointerEvents: "none" },

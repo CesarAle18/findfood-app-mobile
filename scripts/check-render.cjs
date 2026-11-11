@@ -178,6 +178,13 @@ Module._load = function (name, parent, isMain) {
   // as an empty view here.
   if (name === "lottie-react-native")
     return { __esModule: true, default: () => React.createElement(native.View) };
+  // Needs its native module; an inbox row renders closed here, without its delete panel.
+  if (name === "react-native-gesture-handler/ReanimatedSwipeable")
+    return {
+      __esModule: true,
+      SwipeDirection: { LEFT: "left", RIGHT: "right" },
+      default: ({ children }) => React.createElement(native.View, null, children),
+    };
   if (name === "react-native-safe-area-context")
     return {
       SafeAreaView: ({ edges, ...props }) =>

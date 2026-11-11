@@ -4,7 +4,7 @@
  */
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { Slot } from "expo-router";
-import { fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
+import { act, fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
 
 import { api } from "@/api";
 import { NotificationsScreen } from "@/screens/notifications";
@@ -80,6 +80,7 @@ const inboxQueries = () =>
 beforeEach(() => {
   mockApi.get.mockReset().mockResolvedValue(bandejaFixture([received, offer, delivered]));
   mockApi.post.mockReset().mockResolvedValue(undefined);
+  mockApi.delete.mockReset().mockResolvedValue(undefined);
   mockSetActiveRole.mockClear();
 });
 
@@ -161,4 +162,47 @@ it("marks every notification read from the header action", async () => {
   await fireEvent.press(await screen.findByText("Marcar todas como leídas"));
 
   await waitFor(() => expect(mockApi.post).toHaveBeenCalledWith("/me/notificaciones/leer-todas"));
+});
+
+describe("deleting a notification", () => {
+  /** The gesture's accessible alternative: the row's "delete" action. */
+  const deleteRow = (name: string) =>
+    fireEvent(screen.getByRole("button", { name }), "accessibilityAction", {
+      nativeEvent: { actionName: "delete" },
+    });
+
+  it("offers Eliminar as an accessibility action on each row", async () => {
+    await renderInbox();
+
+    const row = await screen.findByRole("button", { name: "Nueva oferta de recogida" });
+    expect(row.props.accessibilityActions).toEqual([{ name: "delete", label: "Eliminar" }]);
+  });
+
+  it("removes an unread row at once and lowers the unread count", async () => {
+    await renderInbox();
+    await screen.findByText("Donación recibida");
+    // The server no longer lists it once the DELETE lands.
+    mockApi.get.mockResolvedValue(bandejaFixture([offer, delivered]));
+
+    await deleteRow("Donación recibida, sin leer");
+
+    await waitFor(() => expect(screen.queryByText("Donación recibida")).toBeNull());
+    expect(mockApi.delete).toHaveBeenCalledWith("/me/notificaciones/n-1");
+    expect(screen.queryByText("1 sin leer")).toBeNull();
+    expect(screen.getByText("Nueva oferta de recogida")).toBeOnTheScreen();
+  });
+
+  it("puts the row back when the DELETE fails", async () => {
+    let fail!: (error: unknown) => void;
+    mockApi.delete.mockImplementationOnce(() => new Promise((_resolve, reject) => (fail = reject)));
+    await renderInbox();
+    await screen.findByText("Nueva oferta de recogida");
+
+    await deleteRow("Nueva oferta de recogida");
+    await waitFor(() => expect(screen.queryByText("Nueva oferta de recogida")).toBeNull());
+    await act(async () => fail(new Error("offline")));
+
+    expect(await screen.findByText("Nueva oferta de recogida")).toBeOnTheScreen();
+    expect(mockApi.delete).toHaveBeenCalledWith("/me/notificaciones/n-2");
+  });
 });
