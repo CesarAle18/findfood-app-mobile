@@ -14,7 +14,7 @@ While a donation is PUBLICADA, the donor's "Donación publicada" screen (`/donan
 - Delivery strategy: `ask-on-risk`. Forecast ≈ 120 authored lines (JSON asset excluded); one PR.
 
 ## Tasks
-- [x] T1 Dependency + Lottie asset + `SearchingAnimation` (`src/components/findfood/searching-animation.tsx`) shown in `Waiting` only for PUBLICADA; Jest assertions in `waiting-screen.test.tsx`; `lottie-react-native` stub in `scripts/check-render.cjs`. Route: inline (small, understood change).
+- [x] T1 Dependency + Lottie asset + `SearchingAnimation` (`src/components/findfood/searching-animation.tsx`) shown in `Waiting` only for PUBLICADA; Jest assertions in `waiting-screen.test.tsx`; `lottie-react-native` stub in `scripts/check-render.cjs`. Route: inline (small, understood change). Commit `5e9ecb0`.
 
 ## Acceptance criteria
 - PUBLICADA: the animation renders above "Estamos buscando un voluntario".
