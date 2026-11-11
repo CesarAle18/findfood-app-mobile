@@ -6,8 +6,8 @@ import { Icon } from "@/components/findfood/icon";
 import { colors } from "@/design/tokens";
 
 /** The animation is 350×250; keep its aspect ratio. */
-const WIDTH = 210;
-const HEIGHT = 150;
+const WIDTH = 280;
+const HEIGHT = 200;
 
 /** Whether the device asks for reduced motion; follows changes while mounted. */
 function useReduceMotion() {
