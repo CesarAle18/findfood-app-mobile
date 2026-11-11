@@ -5,7 +5,9 @@ import { AccessibilityInfo, StyleSheet, View } from "react-native";
 import { Icon } from "@/components/findfood/icon";
 import { colors } from "@/design/tokens";
 
-const SIZE = 140;
+/** The animation is 350×250; keep its aspect ratio. */
+const WIDTH = 210;
+const HEIGHT = 150;
 
 /** Whether the device asks for reduced motion; follows changes while mounted. */
 function useReduceMotion() {
@@ -27,7 +29,7 @@ function useReduceMotion() {
 }
 
 /**
- * Looping loader (from LottieFiles) while the donation waits for a volunteer. Decorative:
+ * Magnifier searching (from LottieFiles) while the donation waits for a volunteer. Decorative:
  * the headline next to it already says what is happening. With "reduce motion" on it is the
  * static search icon instead.
  */
@@ -57,8 +59,8 @@ export function SearchingAnimation() {
 }
 
 const styles = StyleSheet.create({
-  frame: { width: SIZE, height: SIZE, alignItems: "center", justifyContent: "center" },
-  animation: { width: SIZE, height: SIZE },
+  frame: { width: WIDTH, height: HEIGHT, alignItems: "center", justifyContent: "center" },
+  animation: { width: WIDTH, height: HEIGHT },
   still: {
     width: 80,
     height: 80,
