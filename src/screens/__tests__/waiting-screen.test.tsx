@@ -105,6 +105,8 @@ describe("WaitingScreen", () => {
     await renderWaiting();
 
     expect(await screen.findByText("Estamos buscando un voluntario")).toBeOnTheScreen();
+    // While it waits for a volunteer the search plays as an animation.
+    expect(screen.getByTestId("searching-animation", { includeHiddenElements: true })).toBeOnTheScreen();
     expect(screen.getByText("DON-1058")).toBeOnTheScreen();
     expect(screen.getByText("Leche")).toBeOnTheScreen();
     expect(screen.getByText("20 Litros · Refrigerado")).toBeOnTheScreen();
@@ -128,7 +130,10 @@ describe("WaitingScreen", () => {
 
     await renderWaiting();
 
-    await fireEvent.press(await screen.findByText("Ver voluntario asignado"));
+    const open = await screen.findByText("Ver voluntario asignado");
+    // Once someone accepted there is nothing left to search for.
+    expect(screen.queryByTestId("searching-animation", { includeHiddenElements: true })).toBeNull();
+    await fireEvent.press(open);
 
     expect(await screen.findByText(`Voluntario de ${DONATION_ID}`)).toBeOnTheScreen();
   });

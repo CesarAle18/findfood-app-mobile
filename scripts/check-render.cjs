@@ -174,6 +174,10 @@ Module._load = function (name, parent, isMain) {
       KeyboardAwareScrollView: ({ bottomOffset, ...props }) =>
         React.createElement(native.ScrollView, props),
     };
+  // Needs its native view (or a canvas on web); the waiting screen's search animation renders
+  // as an empty view here.
+  if (name === "lottie-react-native")
+    return { __esModule: true, default: () => React.createElement(native.View) };
   if (name === "react-native-safe-area-context")
     return {
       SafeAreaView: ({ edges, ...props }) =>

@@ -7,6 +7,7 @@ import { DateTimeField } from "@/components/findfood/date-time-field";
 import { DonationPhotos } from "@/components/findfood/donation-photos";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import { PhotoField } from "@/components/findfood/photo-field";
+import { SearchingAnimation } from "@/components/findfood/searching-animation";
 import { Icon, type IconName } from "@/components/findfood/icon";
 import {
   canLocateAddress,
@@ -403,9 +404,13 @@ function Waiting({
   return (
     <>
       <View style={waitingStyles.hero}>
-        <View style={waitingStyles.heroIcon}>
-          <Icon name={icon} size={32} />
-        </View>
+        {d.estado === "PUBLICADA" ? (
+          <SearchingAnimation />
+        ) : (
+          <View style={waitingStyles.heroIcon}>
+            <Icon name={icon} size={32} />
+          </View>
+        )}
         <Copy weight="semibold" style={waitingStyles.heroTitle}>
           {title}
         </Copy>
