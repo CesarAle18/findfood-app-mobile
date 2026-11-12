@@ -171,10 +171,16 @@ describe("mutations invalidate exactly the queries they change", () => {
       perfil.impacto(),
     ]),
     // The stop fails and an incident opens; the donation keeps its state.
-    mutationCase("POST /paradas/:id/fallida", useParadaFallidaMutation, { id: "p-1", body: fallida }, [
-      rutas.detail("r-1"),
-      donaciones.historial("d-1"),
-    ]),
+    mutationCase(
+      "POST /paradas/:id/fallida",
+      useParadaFallidaMutation,
+      { id: "p-1", body: fallida },
+      [
+        rutas.detail("r-1"),
+        rutas.lists(),
+        donaciones.historial("d-1"),
+      ],
+    ),
   ])("$name", async ({ invalidated, expected }) => {
     expect(await invalidated()).toEqual(expected);
   });

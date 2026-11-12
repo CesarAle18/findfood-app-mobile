@@ -296,7 +296,7 @@ const invalidates = {
     perfil.impacto(),
   ],
   /** The stop fails and an incident opens; the donation keeps its state. */
-  fallida: (parada: ParadaDto) => [rutas.detail(parada.ruta_id), ...historialDe(parada)],
+  fallida: (parada: ParadaDto) => [rutas.detail(parada.ruta_id),rutas.lists(), ...historialDe(parada)],
 } satisfies Record<string, Invalidation<never, never>>;
 
 /**

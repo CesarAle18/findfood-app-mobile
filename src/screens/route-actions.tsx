@@ -52,6 +52,7 @@ import { useAbandonarAsignacionMutation, useOfertas } from "@/services/asignacio
 import { useMotivos, useTiposIncidencia, type TipoIncidenciaDto } from "@/services/catalogos";
 import { donacionQuery } from "@/services/donaciones";
 import {
+  getRuta,
   rutaQuery,
   useConfirmarParadaMutation,
   useParadaFallidaMutation,
@@ -314,28 +315,68 @@ function FailedStopForm({
   const [descripcion, setDescripcion] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  
   const send = async () => {
+    setError(null);
+
+    // 1. Registrar la recogida fallida en el backend.
+    let rutaId: string;
+
     try {
-      await reportar({
+      const parada = await reportar({
         id: paradaId,
-        body: { tipo_incidencia_id: Number(tipoId), descripcion: descripcion.trim() },
+        body: {
+          tipo_incidencia_id: Number(tipoId),
+          descripcion: descripcion.trim(),
+        },
       });
+
+      rutaId = parada.ruta_id;
     } catch (failure) {
       setError(messageFor(failure));
       return;
     }
-    onNotice("Reportamos el problema de la parada.");
+
+    // 2. Consultar el estado final de la ruta.
+    // La incidencia ya quedó registrada, incluso si falla
+    // esta consulta posterior.
+    try {
+      const rutaActualizada = await getRuta(rutaId);
+
+      if (rutaActualizada.estado === "CANCELADA") {
+        onNotice(
+          "La recogida fue reportada como fallida. " +
+          "Como no quedan donaciones por recoger ni alimentos " +
+          "para entregar, tu ruta fue cancelada automáticamente."
+        );
+      } else {
+        onNotice(
+          "La recogida fue reportada como fallida. " +
+          "Puedes continuar con las siguientes paradas."
+        );
+      }
+    } catch {
+      onNotice(
+        "La recogida fallida quedó registrada. " +
+        "Consulta tus rutas para verificar el estado actualizado."
+      );
+    }
+
     onBack();
   };
+
 
   const submit = () => {
     const invalid = validateFailedStop({ tipoId, descripcion });
     setError(invalid);
-    if (invalid !== null) return;
+    if (invalid !== null) return; 
     confirmAction(
       {
         title: "Reportar parada fallida",
-        question: "La parada quedará como fallida y se abrirá una incidencia.",
+        question:
+          "Se registrará una incidencia por la recogida. " +
+          "Si no quedan más donaciones pendientes ni alimentos " +
+          "para entregar, la ruta será cancelada automáticamente.",
         confirmLabel: "Reportar",
       },
       () => void send(),
