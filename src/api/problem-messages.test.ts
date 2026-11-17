@@ -85,6 +85,8 @@ const PROBLEM_TYPES = [
   "ruta-no-iniciable",
   "ruta-no-en-curso",
   "parada-cerrada",
+  "ubicacion-requerida",
+  "fuera-de-radio",
   "precision-insuficiente",
   "evidencia-requerida",
   "peso-requerido",
