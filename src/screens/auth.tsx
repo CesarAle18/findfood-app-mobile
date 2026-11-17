@@ -25,6 +25,7 @@ import {
 } from "@/components/findfood/ui";
 import { GoogleLogo, Icon } from "@/components/findfood/icon";
 import { Pressing } from "@/components/findfood/motion";
+import { TermsModal } from "@/components/findfood/terms-modal";
 import { colors } from "@/design/tokens";
 import { forgotPasswordSchema, loginSchema, registerSchema } from "@/domain/validation/auth";
 import { useZodForm } from "@/hooks/use-zod-form";
@@ -228,6 +229,14 @@ export function TermsCheckbox({
   disabled: boolean;
   onToggle: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+  // Accepting from the reader only ever checks the box; a disabled form can read, not accept.
+  const accept = disabled
+    ? undefined
+    : () => {
+        if (!checked) onToggle();
+        setOpen(false);
+      };
   return (
     <View style={{ gap: 9 }}>
       <Pressing
@@ -265,6 +274,20 @@ export function TermsCheckbox({
           <Copy style={{ fontSize: 11, lineHeight: 16, color: colors.danger }}>{error}</Copy>
         </View>
       ) : null}
+      {/* A sibling of the checkbox, not inside it, so screen readers reach it on its own. */}
+      <Pressing
+        accessibilityRole="link"
+        accessibilityHint="Abre los Términos y Condiciones completos"
+        onPress={() => setOpen(true)}
+        scale={1}
+        style={{ alignSelf: "flex-start" }}
+        surface={{ minHeight: 44, justifyContent: "center", paddingLeft: 34 }}
+      >
+        <Copy tone="primary" weight="medium" style={{ fontSize: 12 }}>
+          Leer términos y condiciones
+        </Copy>
+      </Pressing>
+      <TermsModal visible={open} onClose={() => setOpen(false)} onAccept={accept} />
     </View>
   );
 }
