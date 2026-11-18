@@ -26,7 +26,8 @@ export interface OfferQueue {
   remaining: number;
 }
 
-function queued(oferta: OfertaDto): QueuedOffer {
+/** One offer row as the alert shows it. */
+export function queuedOffer(oferta: OfertaDto): QueuedOffer {
   return {
     ...offerFromOferta(oferta),
     offeredAtIso: oferta.ofrecida_at,
@@ -58,7 +59,7 @@ export function pendingOffers(
   );
   const [first] = pending;
   return {
-    current: first ? queued(first.oferta) : null,
+    current: first ? queuedOffer(first.oferta) : null,
     remaining: Math.max(0, pending.length - 1),
   };
 }

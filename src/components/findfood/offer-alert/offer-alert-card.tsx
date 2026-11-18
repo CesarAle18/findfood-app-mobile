@@ -22,7 +22,7 @@ import {
 } from "react-native";
 import Animated, {
   useAnimatedStyle,
-  useReducedMotion,
+  ReduceMotion,
   useSharedValue,
   withTiming,
   Easing,
@@ -123,12 +123,14 @@ function AlertCountdown({
 }
 
 function ProgressBar({ share, urgent }: { share: number; urgent: boolean }) {
-  const reduceMotion = useReducedMotion();
   const progress = useSharedValue(share);
   useEffect(() => {
-    // One tick per second: a linear second-long glide keeps the bar moving smoothly.
-    progress.set(reduceMotion ? share : withTiming(share, { duration: 1_000, easing: Easing.linear }));
-  }, [share, reduceMotion, progress]);
+    // One tick per second: a linear second-long glide keeps the bar moving smoothly; with
+    // the system "reduce motion" setting Reanimated jumps straight to the value.
+    progress.set(
+      withTiming(share, { duration: 1_000, easing: Easing.linear, reduceMotion: ReduceMotion.System }),
+    );
+  }, [share, progress]);
   const fill = useAnimatedStyle(() => ({ transform: [{ scaleX: progress.get() }] }));
   return (
     <View style={styles.track} importantForAccessibility="no-hide-descendants">
