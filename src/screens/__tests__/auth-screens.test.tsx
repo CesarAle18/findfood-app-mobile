@@ -335,6 +335,63 @@ describe("RegisterScreen", () => {
     expect(mockAuth.signUp).not.toHaveBeenCalled();
   });
 
+  describe("reading the terms", () => {
+    const openTerms = () =>
+      fireEvent.press(screen.getByRole("link", { name: "Leer términos y condiciones" }));
+
+    it("opens the terms and accepting checks the box", async () => {
+      await renderAt("/registro");
+      await fillRegistration();
+      // fillRegistration checks the box: leave it unchecked, as a user who has not accepted.
+      await fireEvent.press(screen.getByRole("checkbox"));
+
+      await openTerms();
+
+      expect(screen.getByText("Términos y Condiciones")).toBeOnTheScreen();
+      expect(screen.getAllByText(/Ley 1581 de 2012/).length).toBeGreaterThan(0);
+
+      await press("Aceptar");
+
+      expect(screen.getByRole("checkbox")).toBeChecked();
+      expect(screen.queryByText("Términos y Condiciones")).toBeNull();
+      await press("Crear cuenta");
+      expect(mockAuth.signUp).toHaveBeenCalledTimes(1);
+    });
+
+    it("never unchecks an accepted box", async () => {
+      await renderAt("/registro");
+      await fireEvent.press(screen.getByRole("checkbox"));
+
+      await openTerms();
+      await press("Aceptar");
+
+      expect(screen.getByRole("checkbox")).toBeChecked();
+    });
+
+    it.each(["Cerrar", "Cerrar términos"])(
+      "closing the terms with %s leaves the box unchecked",
+      async (name) => {
+        await renderAt("/registro");
+
+        await openTerms();
+        await press(name);
+
+        expect(screen.queryByText("Términos y Condiciones")).toBeNull();
+        expect(screen.getByRole("checkbox")).not.toBeChecked();
+      },
+    );
+
+    it("lets the terms be read but not accepted while the form is disabled", async () => {
+      mockClient = null;
+      await renderAt("/registro");
+
+      await openTerms();
+
+      expect(screen.getByText("Términos y Condiciones")).toBeOnTheScreen();
+      expect(screen.queryByRole("button", { name: "Aceptar" })).toBeNull();
+    });
+  });
+
   it("signs up with the profile metadata and opens the verification", async () => {
     await renderAt("/registro");
     await fillRegistration();
