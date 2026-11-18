@@ -122,6 +122,7 @@ function RouteDetail({
       {enCurso ? (
         <NextStopEta
           seguimiento={live.seguimiento}
+          paradas={paradas}
           gate={gate}
           onRequest={() => void request()}
         />
@@ -141,14 +142,17 @@ function RouteDetail({
 
 /**
  * When the volunteer reaches the next stop, from their position (blue path on the map).
- * Without location permission it offers to share it.
+ * Without location permission it offers to share it. The stop is named by the number its
+ * marker shows (`paradas`, renumbered on screen), else by the API's `orden`.
  */
 function NextStopEta({
   seguimiento,
+  paradas,
   gate,
   onRequest,
 }: {
   seguimiento: SeguimientoDto | null;
+  paradas: readonly Pick<ParadaRutaDto, "id" | "orden">[];
   gate: PermissionGate;
   onRequest: () => void;
 }) {
@@ -163,12 +167,14 @@ function NextStopEta({
     );
   }
   const tramo = seguimiento?.tramo;
-  if (!seguimiento?.parada || !tramo) return null;
+  const parada = seguimiento?.parada;
+  if (!parada || !tramo) return null;
+  const numero = paradas.find((shown) => shown.id === parada.id)?.orden ?? parada.orden;
   const km = String(Math.round(tramo.distancia_km * 10) / 10).replace(".", ",");
   return (
     <Card soft>
       <Copy weight="medium">
-        {`Llegas a la parada ${seguimiento.parada.orden} hacia las ${fromIsoToBogota(tramo.llegada_estimada).time}`}
+        {`Llegas a la parada ${numero} hacia las ${fromIsoToBogota(tramo.llegada_estimada).time}`}
       </Copy>
       <Copy tone="secondary">
         {`${tramo.duracion_min} min · ${km} km${tramo.proveedor === "ESTIMADO" ? " · estimado sin tráfico" : ""}`}

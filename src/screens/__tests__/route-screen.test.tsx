@@ -319,6 +319,18 @@ describe("ActiveRouteScreen · route in progress", () => {
     expect(screen.getByLabelText("Mapa de la ruta con 3 paradas")).toBeOnTheScreen();
   });
 
+  it("names the next stop by the number its marker shows, after a given-up pickup", async () => {
+    // The API still numbers the second pickup 2; on screen it is the first stop left.
+    trackWith(withStops({ ...first, estado: "OMITIDA" }, second, entrega), {
+      parada: second,
+      tramo: leg("GOOGLE"),
+    });
+
+    await renderRoutes();
+
+    expect(await screen.findByText("Llegas a la parada 1 hacia las 15:15")).toBeOnTheScreen();
+  });
+
   it("leaves a given-up pickup out of the map, the list and the stop count", async () => {
     answerGets({ enCurso, detalle: withStops({ ...first, estado: "OMITIDA" }, second, entrega) });
 
