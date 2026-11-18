@@ -52,6 +52,7 @@ Today a volunteer only finds out from the push banner, the Home card, or by open
   - suppress the foreground banner for `ASIGNACION_OFRECIDA` in `push.ts`
   - Plus tests.
 - [x] T6 Full verification: `typecheck`, `lint`, `test`, `test:render` (`test:render` fails on the base too, see evidence).
+- [x] T7 Review finding R3-dismiss-during-accept: the close X and the scrim no longer hide the card while its accept is in flight. Route: inline (2 small, already-understood edits plus tests).
 
 ## Acceptance criteria
 - An offer arriving in the foreground shows the card on any screen in volunteer mode. It doesn't show on `/voluntario/oferta`, and it doesn't show in donor mode.
@@ -76,6 +77,8 @@ Today a volunteer only finds out from the push banner, the Home card, or by open
   - `npm run lint`: exit 0.
   - `npm test`: exit 0, 110 suites / 1931 tests passed (base: 106 / 1874).
   - `npm run test:render`: exit 1, **pre-existing**. `assert(newHtml.includes("Ubica la dirección escrita, usa tu ubicación o mueve el mapa"))` (check-render.cjs:547) fails identically on the base `3991807`, run in a temporary worktree that was removed afterwards. With that line skipped in memory, a second stale check fails: `requestFormHtml.includes("Documento (frente)") && …"Enviar solicitud"`. Neither string exists anywhere in `src/` (the script drifted from the donor and volunteer-registration copy). The offer screen's render checks (check-render.cjs:452) run before both and pass. The root layout, and so the host, is not part of the render check.
+- Native review (RDD): `3991807..6f5152c`, risk medium, `slice_budget_reached` (1940 lines). Consent granted → 1 lens (review-reliability) → **approved**; acknowledged, authority burned (lineage `review-3cf320bd8428648a`). Advisory finding `R3-dismiss-during-accept` (WARNING, informational): the X and the scrim could still dismiss during an accept, so the navigation or 409 answer landed after the card was gone. The user accepted the fix within the requested scope ("evita múltiples pulsaciones").
+- T7 · route: inline · RED: the card test (X during accepting) and the new host test (scrim during an in-flight accept, then 409 shows "Ya no está disponible") → 2 failed, 28 passed. GREEN: `dismiss` returns early while `acceptingId === shown.offer.id`, and the X is `disabled={accepting}` → 30 passed. `npx jest`: 110 suites / 1932 tests passed; `npm run lint` exit 0; `npm run typecheck` exit 0.
 - Engram mirror `odd/oferta-modal-voluntario/tasks`: **pending**, because the writer session has no Engram tools.
 - Manual, pending (needs a new dev build with expo-blur and expo-haptics): the five device scenarios in the plan's Verification section, plus the glass on iOS and the opaque fallback on Android.
 - Next step: the user decides on push and the single PR to `develop`.

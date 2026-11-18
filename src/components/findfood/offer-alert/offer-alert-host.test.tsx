@@ -219,6 +219,20 @@ describe("OfferAlertHost", () => {
     expect(screen.queryByText("Nueva recogida")).toBeNull();
   });
 
+  it("stays open while accepting, so a tap outside cannot hide the answer", async () => {
+    let fail: (reason: unknown) => void = () => {};
+    mockApi.post.mockReturnValue(new Promise((_, reject) => (fail = reject)));
+    await renderApp();
+
+    await fireEvent.press(accept());
+    await fireEvent.press(screen.getByTestId("offer-alert-scrim"));
+    expect(screen.getByText("Nueva recogida")).toBeOnTheScreen();
+
+    await act(async () => fail(new ApiError({ type: "oferta-tomada", status: 409, title: "Conflict" })));
+
+    expect(await screen.findByText("Ya no está disponible")).toBeOnTheScreen();
+  });
+
   it("says the offer is no longer available when another volunteer won it", async () => {
     mockApi.post.mockRejectedValue(
       new ApiError({ type: "oferta-tomada", status: 409, title: "Conflict" }),

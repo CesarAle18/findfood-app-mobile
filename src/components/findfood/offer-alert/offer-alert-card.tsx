@@ -286,6 +286,7 @@ export function OfferAlertCard({
           <Pressing
             accessibilityRole="button"
             accessibilityLabel="Cerrar oferta"
+            disabled={accepting}
             hitSlop={8}
             onPress={onDismiss}
             scale={0.92}

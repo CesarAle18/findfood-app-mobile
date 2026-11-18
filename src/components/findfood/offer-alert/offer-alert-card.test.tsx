@@ -215,6 +215,7 @@ describe("OfferAlertCard", () => {
     const { onDismiss } = await renderCard({ accepting: true });
 
     await fireEvent.press(screen.getByRole("button", { name: "Ahora no" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Cerrar oferta" }));
 
     expect(onDismiss).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Aceptar donación" })).toBeDisabled();

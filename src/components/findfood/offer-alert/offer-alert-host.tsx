@@ -160,6 +160,8 @@ function OfferAlertQueue({
     setShown(null);
   };
   const dismiss = () => {
+    // An accept in flight owns the card: hiding it would lose the answer (navigation or 409).
+    if (acceptingId === shown.offer.id) return;
     buzz(light);
     setAside();
   };
