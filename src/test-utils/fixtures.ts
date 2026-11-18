@@ -417,7 +417,7 @@ export function rutaDetalleFixture(overrides: Partial<RutaDetalleDto> = {}): Rut
     duracion_estimada_min: 48,
     duracion_real_min: null,
     peso_total_estimado_kg: 70,
-    proveedor_ruteo: "osrm",
+    proveedor_ruteo: "GOOGLE",
     iniciada_at: null,
     finalizada_at: null,
     cancelada_at: null,

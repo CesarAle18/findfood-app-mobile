@@ -11,8 +11,9 @@ import { Alert, Text } from "react-native";
 
 import { api } from "@/api";
 import { supabase } from "@/auth/supabase";
+import { hasGoogleMapsKey } from "@/config/maps";
 import type { OfertaDto } from "@/services/asignaciones";
-import type { RutaDetalleDto, RutaResumenDto } from "@/services/rutas";
+import type { RutaDetalleDto, RutaResumenDto, SeguimientoDto } from "@/services/rutas";
 import { ActiveRouteScreen } from "@/screens/route";
 import { queryKeys } from "@/services/query-keys";
 import type { ApiMock } from "@/test-utils/api";
@@ -30,6 +31,9 @@ import { createTestQueryClient } from "@/test-utils/query";
 jest.mock("@/api", () => ({
   api: jest.requireActual<typeof import("@/test-utils/api")>("@/test-utils/api").createApiMock(),
 }));
+
+// No Maps key (a placeholder instead of the map) unless a test draws the map.
+jest.mock("@/config/maps", () => ({ hasGoogleMapsKey: jest.fn(() => false) }));
 
 const mockGetCurrentFix = jest.fn();
 
@@ -110,6 +114,7 @@ beforeEach(() => {
 afterEach(() => {
   client.clear();
   jest.restoreAllMocks();
+  jest.mocked(hasGoogleMapsKey).mockReturnValue(false);
 });
 
 describe("ActiveRouteScreen · build a route", () => {
@@ -249,7 +254,16 @@ describe("ActiveRouteScreen · route in progress", () => {
     expect(screen.getByRole("button", { name: "Usar mi ubicación" })).toBeOnTheScreen();
   });
 
-  it("with the location shows the way and the arrival time to the next stop", async () => {
+  const leg = (proveedor: "GOOGLE" | "ESTIMADO") => ({
+    trayecto: { type: "LineString" as const, coordinates: [[-76.54, 3.42], [-76.53, 3.43]] as [number, number][] },
+    distancia_km: 2.84,
+    duracion_min: 11,
+    llegada_estimada: "2026-10-21T20:15:00Z",
+    proveedor,
+  });
+
+  /** Location granted, and `GET /rutas/:id/seguimiento` answering `seguimiento`. */
+  function trackWith(detalle: RutaDetalleDto, seguimiento: Pick<SeguimientoDto, "parada" | "tramo">) {
     const granted = { status: "granted", granted: true, canAskAgain: true, expires: "never" };
     jest.mocked(Location.useForegroundPermissions).mockImplementation(() => [
       granted as never,
@@ -260,22 +274,15 @@ describe("ActiveRouteScreen · route in progress", () => {
     const channel = { subscribe: jest.fn(), send: jest.fn(async () => "ok") };
     jest.spyOn(supabase!, "channel").mockReturnValue(channel as never);
     jest.spyOn(supabase!, "removeChannel").mockResolvedValue("ok");
-    answerGets({ enCurso, detalle: withStops(first, second, entrega) });
+    answerGets({ enCurso, detalle });
     const answer = mockApi.get.getMockImplementation()!;
     mockApi.get.mockImplementation(async (path: string, options?: never) =>
-      path.endsWith("/seguimiento")
-        ? {
-            parada: { ...first, orden: 1 },
-            tramo: {
-              trayecto: { type: "LineString", coordinates: [[-76.54, 3.42], [-76.53, 3.43]] },
-              distancia_km: 2.84,
-              duracion_min: 11,
-              llegada_estimada: "2026-10-21T20:15:00Z",
-              proveedor: "GOOGLE",
-            },
-          }
-        : answer(path, options),
+      path.endsWith("/seguimiento") ? seguimiento : answer(path, options),
     );
+  }
+
+  it("with the location shows the way and the arrival time to the next stop", async () => {
+    trackWith(withStops(first, second, entrega), { parada: { ...first, orden: 1 }, tramo: leg("GOOGLE") });
 
     await renderRoutes();
 
@@ -285,6 +292,31 @@ describe("ActiveRouteScreen · route in progress", () => {
     expect(supabase!.channel).toHaveBeenCalledWith(expect.stringMatching(/^ruta:/), {
       config: { private: true },
     });
+  });
+
+  it("draws Google's planned path and leg to the next stop", async () => {
+    jest.mocked(hasGoogleMapsKey).mockReturnValue(true);
+    trackWith(withStops(first, second, entrega), { parada: first, tramo: leg("GOOGLE") });
+
+    await renderRoutes();
+
+    expect(await screen.findByTestId("route-next-leg")).toBeOnTheScreen();
+    expect(screen.getByTestId("route-path")).toBeOnTheScreen();
+  });
+
+  it("keeps an estimated straight leg and an untraced path off the map, but shows the ETA", async () => {
+    jest.mocked(hasGoogleMapsKey).mockReturnValue(true);
+    trackWith(
+      rutaDetalleFixture({ estado: "EN_CURSO", proveedor_ruteo: null, paradas: [first, second, entrega] }),
+      { parada: first, tramo: leg("ESTIMADO") },
+    );
+
+    await renderRoutes();
+
+    expect(await screen.findByText("11 min · 2,8 km · estimado sin tráfico")).toBeOnTheScreen();
+    expect(screen.queryByTestId("route-next-leg")).toBeNull();
+    expect(screen.queryByTestId("route-path")).toBeNull();
+    expect(screen.getByLabelText("Mapa de la ruta con 3 paradas")).toBeOnTheScreen();
   });
 
   it("leaves a given-up pickup out of the map, the list and the stop count", async () => {

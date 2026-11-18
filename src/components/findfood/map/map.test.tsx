@@ -540,8 +540,8 @@ describe("RouteMapView", () => {
     { id: "p1", orden: 1, direccion: "Panadería", lat: 4.65, lng: -74.06 },
   ];
 
-  it("draws the GeoJSON path in {latitude, longitude} order", async () => {
-    await render(<RouteMapView geometria={geometria} paradas={paradas} />);
+  it("draws Google's street path in {latitude, longitude} order", async () => {
+    await render(<RouteMapView geometria={geometria} proveedorRuteo="GOOGLE" paradas={paradas} />);
 
     expect(screen.getByTestId("route-path").props.coordinates).toEqual([
       { latitude: 4.65, longitude: -74.06 },
@@ -554,6 +554,7 @@ describe("RouteMapView", () => {
     await render(
       <RouteMapView
         geometria={geometria}
+        proveedorRuteo="GOOGLE"
         paradas={paradas}
         showsUserLocation
         tramo={{ type: "LineString", coordinates: [[-74.05, 4.64], [-74.06, 4.65]] }}
@@ -570,11 +571,33 @@ describe("RouteMapView", () => {
   });
 
   it("numbers the stops by their order and shows them without geometry", async () => {
-    await render(<RouteMapView geometria={null} paradas={paradas} />);
+    await render(<RouteMapView geometria={null} proveedorRuteo={null} paradas={paradas} />);
 
     expect(screen.queryByTestId("route-path")).toBeNull();
     expect(screen.getAllByText(/^[12]$/).map((node) => node.props.children)).toEqual([1, 2]);
   });
+
+  it.each([null, "GEODESICO"])(
+    "shows only the stops, framed on them, when the path is not Google's (%s)",
+    async (proveedorRuteo) => {
+      // Stored stop-to-stop straight lines would read as a route cutting across blocks.
+      const straight: GeometriaRutaDto = {
+        type: "LineString",
+        coordinates: [
+          [-74.06, 4.65],
+          [-74.2, 4.9],
+          [-74.08, 4.67],
+        ],
+      };
+      await render(
+        <RouteMapView geometria={straight} proveedorRuteo={proveedorRuteo} paradas={paradas} />,
+      );
+
+      expect(screen.queryByTestId("route-path")).toBeNull();
+      expect(screen.getAllByText(/^[12]$/)).toHaveLength(2);
+      expect(screen.getByTestId("route-map").props.initialRegion.latitude).toBeCloseTo(4.66);
+    },
+  );
 });
 
 describe("PointMap", () => {

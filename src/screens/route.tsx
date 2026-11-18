@@ -98,6 +98,8 @@ function RouteDetail({
   const { gate, request } = live;
   // Given-up stops (OMITIDA) leave the map and the list; the rest are numbered 1..n.
   const paradas = routeStops(ruta.paradas).map((parada, i) => ({ ...parada, orden: i + 1 }));
+  // An ESTIMADO leg is a straight line to the stop: its time is shown, its line is not.
+  const tramo = live.seguimiento?.tramo;
   return (
     <>
       <Card>
@@ -112,8 +114,9 @@ function RouteDetail({
       </Card>
       <RouteMapView
         geometria={ruta.geometria}
+        proveedorRuteo={ruta.proveedor_ruteo}
         paradas={paradas}
-        tramo={live.seguimiento?.tramo?.trayecto ?? null}
+        tramo={tramo?.proveedor === "GOOGLE" ? tramo.trayecto : null}
         showsUserLocation={enCurso && gate === "granted"}
       />
       {enCurso ? (
