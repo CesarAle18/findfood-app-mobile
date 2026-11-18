@@ -32,11 +32,11 @@ Today a volunteer only finds out from the push banner, the Home card, or by open
 - The overlay is an absolutely positioned sibling of `RootNavigator`, following the `OfflineOverlay` pattern. It is not an RN `Modal`.
 - Formal rejection (which needs a `motivo_id`) still happens on `/voluntario/oferta`. The card offers it through "Ver detalle".
 - Commits are Conventional, without a Co-Authored-By trailer. Tests ship with the code. Push and opening the PR are the user's decision.
-- Delivery strategy: `ask-on-risk`. Forecast is about 700 authored lines (UI and tests), which is over the ~400-line heuristic. Before the commit that crosses it, ask for the chain strategy.
+- Delivery: single PR to develop, user decision 2026-11-17 (strategy `single-pr`, one commit per task, no slicing). Forecast is about 700 authored lines (UI and tests).
 
 ## Tasks
-- [ ] T1 Dependencies: `npx expo install expo-blur expo-haptics`, plus mocks in `jest.setup.ts`. Route: delegated writer (T1–T5, 2+ non-trivial files).
-- [ ] T2 `src/domain/offer-queue.ts`: queue of pending offers. It keeps live `OFRECIDA` offers, drops the ones the user dismissed, removes duplicates by id, and sorts by `expira_at` ascending. Returns `{current, remaining}`. Test-first.
+- [x] T1 Dependencies: `npx expo install expo-blur expo-haptics`, plus mocks in `jest.setup.ts`. Route: delegated writer (T1–T5, 2+ non-trivial files).
+- [x] T2 `src/domain/offer-queue.ts`: queue of pending offers. It keeps live `OFRECIDA` offers, drops the ones the user dismissed, removes duplicates by id, and sorts by `expira_at` ascending. Returns `{current, remaining}`. Test-first.
 - [ ] T3 `src/screens/use-accept-offer.ts`: extract the accept flow and the capacity calculation from `OfferDetails`, and expose the problem `type`. The existing `OfferScreen` tests must stay green.
 - [ ] T4 `offer-alert-card.tsx`, the glass card:
   - blur with an opaque fallback
@@ -65,4 +65,6 @@ Today a volunteer only finds out from the push banner, the Home card, or by open
 `npm run typecheck`, `npm run lint`, `npm test`, `npm run test:render`.
 
 ## Progress / evidence
-(pending)
+- Base (`3991807`, before any change): `npm run typecheck` exit 0; `npm test` 106 suites / 1874 tests passed.
+- T1 · route: delegated writer · commit `28fa982` `chore(deps): add expo-blur and expo-haptics for the offer alert`. `npx expo install` pinned `expo-blur ~57.0.3` and `expo-haptics ~57.0.3`. Neither package ships a config plugin (no `app.plugin.js`) and the v57 docs list none, so `app.json` is unchanged. Both add native code: **a new dev/store build is required**. Jest mocks: `BlurView`/`BlurTargetView` render as plain Views keeping their props; haptics calls are `jest.fn` resolving, enums stay real. Checks: a throwaway mock test passed (then removed); `npm run typecheck` exit 0. (This doc's T1 entry landed in the T2 commit: the doc edit failed to apply before the T1 commit.)
+- T2 · route: delegated writer · commit: `feat(offers): queue the live offers for the offer alert` (hash in `git log`; recorded in the T3 entry). `pendingOffers(ofertas, dismissed, now)` returns `{current: QueuedOffer | null, remaining}`; `QueuedOffer` extends `OfferView` with `offeredAtIso`, `street`, `reference` and `refrigerated` (the card's progress bar and route block need them, and the mapper stays untouched). RED: `npx jest src/domain/offer-queue.test.ts` against a stub → 6 failed, 4 passed. GREEN: 10 passed. `eslint` on both files exit 0.
