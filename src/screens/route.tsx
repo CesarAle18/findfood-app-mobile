@@ -98,6 +98,8 @@ function RouteDetail({
   const { gate, request } = live;
   // Given-up stops (OMITIDA) leave the map and the list; the rest are numbered 1..n.
   const paradas = routeStops(ruta.paradas).map((parada, i) => ({ ...parada, orden: i + 1 }));
+  // An ESTIMADO leg is a straight line to the stop: its time is shown, its line is not.
+  const tramo = live.seguimiento?.tramo;
   return (
     <>
       <Card>
@@ -112,13 +114,15 @@ function RouteDetail({
       </Card>
       <RouteMapView
         geometria={ruta.geometria}
+        proveedorRuteo={ruta.proveedor_ruteo}
         paradas={paradas}
-        tramo={live.seguimiento?.tramo?.trayecto ?? null}
+        tramo={tramo?.proveedor === "GOOGLE" ? tramo.trayecto : null}
         showsUserLocation={enCurso && gate === "granted"}
       />
       {enCurso ? (
         <NextStopEta
           seguimiento={live.seguimiento}
+          paradas={paradas}
           gate={gate}
           onRequest={() => void request()}
         />
@@ -138,14 +142,17 @@ function RouteDetail({
 
 /**
  * When the volunteer reaches the next stop, from their position (blue path on the map).
- * Without location permission it offers to share it.
+ * Without location permission it offers to share it. The stop is named by the number its
+ * marker shows (`paradas`, renumbered on screen), else by the API's `orden`.
  */
 function NextStopEta({
   seguimiento,
+  paradas,
   gate,
   onRequest,
 }: {
   seguimiento: SeguimientoDto | null;
+  paradas: readonly Pick<ParadaRutaDto, "id" | "orden">[];
   gate: PermissionGate;
   onRequest: () => void;
 }) {
@@ -160,12 +167,14 @@ function NextStopEta({
     );
   }
   const tramo = seguimiento?.tramo;
-  if (!seguimiento?.parada || !tramo) return null;
+  const parada = seguimiento?.parada;
+  if (!parada || !tramo) return null;
+  const numero = paradas.find((shown) => shown.id === parada.id)?.orden ?? parada.orden;
   const km = String(Math.round(tramo.distancia_km * 10) / 10).replace(".", ",");
   return (
     <Card soft>
       <Copy weight="medium">
-        {`Llegas a la parada ${seguimiento.parada.orden} hacia las ${fromIsoToBogota(tramo.llegada_estimada).time}`}
+        {`Llegas a la parada ${numero} hacia las ${fromIsoToBogota(tramo.llegada_estimada).time}`}
       </Copy>
       <Copy tone="secondary">
         {`${tramo.duracion_min} min · ${km} km${tramo.proveedor === "ESTIMADO" ? " · estimado sin tráfico" : ""}`}
