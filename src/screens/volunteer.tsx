@@ -28,7 +28,7 @@ import { useMotivos, useTiposVehiculo, type TipoVehiculoDto } from "@/services/c
 import { useSolicitarVoluntarioMutation } from "@/services/perfil";
 import { offerFromOferta, selectOffer, type OfferView } from "@/domain/mappers/offers";
 import { formatKg } from "@/domain/mappers/profile";
-import { acceptedWithoutRoute, stopProgress } from "@/domain/mappers/routes";
+import { stopProgress } from "@/domain/mappers/routes";
 import {
   OBSERVACIONES_MAX,
   formatWeightInput,
@@ -41,7 +41,6 @@ import { useDonacion } from "@/services/donaciones";
 import { useEvidencias } from "@/services/evidencias";
 import { queryKeys } from "@/services/query-keys";
 import {
-  useAceptarOfertaMutation,
   useOfertas,
   useRechazarOfertaMutation,
 } from "@/services/asignaciones";
@@ -73,6 +72,7 @@ import {
   useStopParams,
   useStopRoute,
 } from "./route-actions";
+import { acceptedLoadKg, exceedsCapacity, useAcceptOffer } from "./use-accept-offer";
 
 /**
  * The catalog vehicle types, keyed by their id as text (the select's value); the request
@@ -438,10 +438,7 @@ export function OfferScreen() {
               offer={offer}
               expired={expired}
               capacityKg={capacityKg}
-              acceptedKg={acceptedWithoutRoute(rows).reduce(
-                (total, row) => total + row.peso_estimado_kg,
-                0,
-              )}
+              acceptedKg={acceptedLoadKg(rows)}
             />
           ) : (
             <EmptyState
@@ -490,23 +487,8 @@ function OfferDetails({
   const [rejecting, setRejecting] = useState(false);
   // The offer carries no photos: the donation detail signs them for the offered volunteer.
   const { data: donacion } = useDonacion(offer.donacionId);
-  const { mutateAsync: aceptar, isPending: accepting } = useAceptarOfertaMutation();
-  const [error, setError] = useState<string>();
-  // One route carries the accepted pickups: more than the vehicle holds ends in
-  // `excede-capacidad` when the route is created.
-  const overCapacity =
-    !offer.accepted && capacityKg !== null && offer.weightKg + acceptedKg > capacityKg;
-
-  const accept = async () => {
-    setError(undefined);
-    try {
-      await aceptar(offer.id);
-    } catch (failure) {
-      setError(messageFor(failure));
-      return;
-    }
-    router.dismissTo("/voluntario/rutas");
-  };
+  const { accept, accepting, error } = useAcceptOffer(offer.id);
+  const overCapacity = exceedsCapacity(offer, capacityKg, acceptedKg);
 
   return (
     <>
