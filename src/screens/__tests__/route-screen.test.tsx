@@ -7,7 +7,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Slot, useLocalSearchParams } from "expo-router";
 import { act, fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
 import * as Location from "expo-location";
-import { Alert, Text } from "react-native";
+import { Alert, Linking, Text } from "react-native";
 
 import { api } from "@/api";
 import { supabase } from "@/auth/supabase";
@@ -209,6 +209,15 @@ describe("ActiveRouteScreen · planned route", () => {
     await fireEvent.press(screen.getByRole("button", { name: "Iniciar ruta" }));
 
     expect(mockApi.post).toHaveBeenCalledWith("/rutas/ruta-1/iniciar");
+  });
+
+  it("offers no Waze before the route starts", async () => {
+    answerGets({ planificadas: [rutaResumenFixture()] });
+
+    await renderRoutes();
+
+    expect(await screen.findByRole("button", { name: "Iniciar ruta" })).toBeOnTheScreen();
+    expect(screen.queryByRole("button", { name: "Ir con Waze" })).toBeNull();
   });
 
   it("cancels it after a native confirmation", async () => {
@@ -427,6 +436,28 @@ describe("ActiveRouteScreen · route in progress", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Llegué al punto" })).not.toBeBusy(),
     );
+  });
+
+  it("opens the pending next stop in Waze", async () => {
+    const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
+    answerGets({ enCurso, detalle: withStops(first, second, entrega) });
+
+    await renderRoutes();
+
+    await fireEvent.press(await screen.findByRole("button", { name: "Ir con Waze" }));
+
+    expect(openURL).toHaveBeenCalledWith(
+      `https://waze.com/ul?ll=${first.lat},${first.lng}&navigate=yes`,
+    );
+  });
+
+  it("offers no Waze once on site", async () => {
+    answerGets({ enCurso, detalle: withStops({ ...first, estado: "EN_SITIO" }, second, entrega) });
+
+    await renderRoutes();
+
+    expect(await screen.findByRole("link", { name: "Registrar recogida" })).toBeOnTheScreen();
+    expect(screen.queryByRole("button", { name: "Ir con Waze" })).toBeNull();
   });
 
   it("opens the pickup registration once on site", async () => {
