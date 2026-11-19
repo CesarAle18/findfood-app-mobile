@@ -23,7 +23,12 @@ import {
 } from "./location-picker";
 import { DonorTrackingMap } from "./donor-tracking-map";
 import { PointMap } from "./point-map";
-import { RouteMapView, STOP_SNAPSHOT_SETTLE_MS, type RouteStop } from "./route-map-view";
+import {
+  RouteMapView,
+  STOP_SNAPSHOT_MAX_MS,
+  STOP_SNAPSHOT_SETTLE_MS,
+  type RouteStop,
+} from "./route-map-view";
 
 // A build with the Maps key of its platform, unless a test says otherwise.
 jest.mock("@/config/maps", () => ({ hasGoogleMapsKey: jest.fn(() => true) }));
@@ -674,15 +679,27 @@ describe("RouteMapView", () => {
       expect(screen.getByTestId("route-stop-p1").props.title).toBe("1. Panadería");
     });
 
+    it("stops tracking after a bounded wait even when the number never reports a layout", async () => {
+      jest.useFakeTimers();
+      await render(<RouteMapView geometria={null} proveedorRuteo={null} paradas={paradas} />);
+      const marker = () => screen.getByTestId("route-stop-p1");
+      expect(marker().props.tracksViewChanges).toBe(true);
+
+      await act(async () => {
+        jest.advanceTimersByTime(STOP_SNAPSHOT_MAX_MS);
+      });
+      expect(marker().props.tracksViewChanges).toBe(false);
+    });
+
     it("keeps tracking the marker's view until its number has laid out and drawn", async () => {
       jest.useFakeTimers();
       await render(<RouteMapView geometria={null} proveedorRuteo={null} paradas={paradas} />);
       const marker = () => screen.getByTestId("route-stop-p1");
       expect(marker().props.tracksViewChanges).toBe(true);
 
-      // Not before the number lays out, however long it takes.
+      // Not before the number lays out (up to the bounded wait).
       await act(async () => {
-        jest.advanceTimersByTime(STOP_SNAPSHOT_SETTLE_MS * 10);
+        jest.advanceTimersByTime(STOP_SNAPSHOT_SETTLE_MS * 2);
       });
       expect(marker().props.tracksViewChanges).toBe(true);
 

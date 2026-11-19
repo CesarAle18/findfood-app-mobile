@@ -134,6 +134,13 @@ describe("mutations invalidate exactly the queries they change", () => {
     ]);
   });
 
+  it("POST /asignaciones/:id/aceptar with an empty body still refreshes the offers", async () => {
+    mockedApi.post.mockResolvedValue(undefined);
+    const { invalidated } = mutationCase("aceptar", useAceptarOfertaMutation, "a-1", []);
+
+    expect(await invalidated()).toEqual([asignaciones.ofertas(), donaciones.all, rutas.lists()]);
+  });
+
   it("POST /asignaciones/:id/aceptar without a route in the response", async () => {
     mockedApi.post.mockResolvedValue({ id: "a-1", estado: "ACEPTADA" });
     const { invalidated } = mutationCase("aceptar", useAceptarOfertaMutation, "a-1", []);

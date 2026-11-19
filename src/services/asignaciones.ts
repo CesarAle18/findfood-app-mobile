@@ -175,11 +175,12 @@ const invalidates = {
    * route the response names: its stops and path change, and so do the stop count and
    * weight in route lists. Not left to Realtime, which may not be joined.
    */
-  aceptar: ({ ruta }: AceptacionDto) => [
+  // Optional: an empty 2xx still refreshes the offers and lists the accept changed.
+  aceptar: (data?: AceptacionDto) => [
     asignaciones.ofertas(),
     donaciones.all,
     rutas.lists(),
-    ...(ruta ? [rutas.detail(ruta.id)] : []),
+    ...(data?.ruta ? [rutas.detail(data.ruta.id)] : []),
   ],
   /**
    * The donation stays PUBLICADA, but its detail no longer shows this offer and its history

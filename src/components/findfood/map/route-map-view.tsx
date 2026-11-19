@@ -23,6 +23,8 @@ type MapStop = Pick<RouteStop, "id" | "orden" | "direccion"> & { coordinate: Lat
 
 /** How long a stop's number gets to draw, after it lays out, before its marker freezes. */
 export const STOP_SNAPSHOT_SETTLE_MS = 300;
+/** The longest a marker tracks its view, in case the number never reports a layout. */
+export const STOP_SNAPSHOT_MAX_MS = 3_000;
 
 /**
  * The React key of a stop's marker: its number too, so a renumbered stop is a new marker
@@ -151,6 +153,12 @@ function StopMarker({ stop }: { stop: MapStop }) {
     const timer = setTimeout(() => setSettled(true), STOP_SNAPSHOT_SETTLE_MS);
     return () => clearTimeout(timer);
   }, [laidOut]);
+  // A bounded fallback: a number that never reports a layout must not keep the marker
+  // re-snapshotting forever.
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(true), STOP_SNAPSHOT_MAX_MS);
+    return () => clearTimeout(timer);
+  }, []);
   return (
     <Marker
       testID={`route-stop-${stop.id}`}
