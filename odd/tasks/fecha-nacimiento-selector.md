@@ -33,3 +33,4 @@ Typing the date by hand invites format mistakes. The user asked (2026-11-19) for
   - GREEN observed: `npm run typecheck` exit 0; `npx eslint` on the 6 touched src files exit 0; `npx jest src/components/findfood src/screens src/domain` 58 suites / 963 tests passed.
   - `scripts/check-render.cjs` does not touch the birth date; left unchanged.
   - Commit: `c5f1a6b` feat(voluntario): pick the birth date with the calendar picker.
+- 2026-11-19 RDD: assess (base `235b4b6`, committed-only, unrelated untracked excluded) medium, 7 paths / 382 lines, `review_due=false` (`under_budget`); stays pending in the slice. Parent spot check: the 3 touched suites re-run, 22 passed. Pending: device check (year list auto-scroll, field layout).
