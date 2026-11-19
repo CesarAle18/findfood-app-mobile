@@ -1,7 +1,7 @@
 /**
- * The floating offer alert over the app: when it shows, the queue, "Ahora no", accepting,
- * losing the offer to another volunteer, expiry, and when it stays away (donor mode, the
- * offer screen). The offers endpoint is mocked; the router is the real expo-router.
+ * The floating offer alert over the app: when it shows, the queue, closing it, accepting,
+ * rejecting with a reason, losing the offer to another volunteer, expiry, and when it stays
+ * away (donor mode, the offer screen). The API is mocked; the router is the real expo-router.
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -17,7 +17,13 @@ import { setOfferAlertActive } from "@/notifications/push";
 import type { OfertaDto } from "@/services/asignaciones";
 import { queryKeys } from "@/services/query-keys";
 import type { ApiMock } from "@/test-utils/api";
-import { DONATION_ID, detalleFixture, meFixture, ofertaFixture } from "@/test-utils/fixtures";
+import {
+  DONATION_ID,
+  catalogosFixture,
+  detalleFixture,
+  meFixture,
+  ofertaFixture,
+} from "@/test-utils/fixtures";
 import { createTestQueryClient } from "@/test-utils/query";
 
 import { CLOSED_CARD_MS, OfferAlertHost } from "./offer-alert-host";
@@ -90,6 +96,15 @@ async function offersChanged(next: OfertaDto[]) {
 }
 
 const accept = () => screen.getByRole("button", { name: "Aceptar donación" });
+const closeButton = () => screen.getByRole("button", { name: "Cerrar oferta" });
+
+/** Rejects the shown offer with "Queda muy lejos" (RECHAZO_ASIGNACION 41). */
+async function rejectWithReason() {
+  await fireEvent.press(screen.getByRole("button", { name: "Rechazar" }));
+  await fireEvent.press(await screen.findByRole("button", { name: /^Motivo/ }));
+  await fireEvent.press(screen.getByRole("radio", { name: "Queda muy lejos" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Confirmar rechazo" }));
+}
 
 beforeEach(() => {
   jest.useFakeTimers({ now: NOW });
@@ -101,6 +116,7 @@ beforeEach(() => {
   mockApi.get.mockReset().mockImplementation(async (path: string) => {
     if (path === "/asignaciones/ofertas") return ofertas;
     if (path === `/donaciones/${DONATION_ID}`) return detalleFixture({ estado: "PUBLICADA", items: [] });
+    if (path === "/catalogos") return catalogosFixture;
     throw new Error(`unexpected GET ${path}`);
   });
   mockApi.post.mockReset().mockResolvedValue({ id: "asg-7", estado: "ACEPTADA" });
@@ -149,7 +165,7 @@ describe("OfferAlertHost", () => {
     expect(screen.getByText("DON-1")).toBeOnTheScreen();
     expect(screen.getByText("+2 más")).toBeOnTheScreen();
 
-    await fireEvent.press(screen.getByRole("button", { name: "Ahora no" }));
+    await fireEvent.press(closeButton());
 
     expect(screen.getByText("DON-2")).toBeOnTheScreen();
     expect(screen.getByText("+1 más")).toBeOnTheScreen();
@@ -168,10 +184,10 @@ describe("OfferAlertHost", () => {
     expect(screen.getByText("+1 más")).toBeOnTheScreen();
   });
 
-  it("sets the offer aside with Ahora no, without answering it", async () => {
+  it("sets the offer aside with the close button, without answering it", async () => {
     await renderApp();
 
-    await fireEvent.press(screen.getByRole("button", { name: "Ahora no" }));
+    await fireEvent.press(closeButton());
 
     expect(screen.queryByText("Nueva recogida")).toBeNull();
     expect(mockApi.post).not.toHaveBeenCalled();
@@ -181,13 +197,107 @@ describe("OfferAlertHost", () => {
     expect(screen.queryByText("Nueva recogida")).toBeNull();
   });
 
-  it("closes with a tap outside the card, like Ahora no", async () => {
+  it("closes with a tap outside the card, like the close button", async () => {
     await renderApp();
 
     await fireEvent.press(screen.getByTestId("offer-alert-scrim"));
 
     expect(screen.queryByText("Nueva recogida")).toBeNull();
     expect(mockApi.post).not.toHaveBeenCalled();
+  });
+
+  it("asks for a reason before rejecting, and sends nothing without one", async () => {
+    await renderApp();
+
+    await fireEvent.press(screen.getByRole("button", { name: "Rechazar" }));
+    expect(await screen.findByText("¿Por qué la rechazas?")).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole("button", { name: "Confirmar rechazo" }));
+
+    expect(screen.getByText("Selecciona un motivo.")).toBeOnTheScreen();
+    expect(mockApi.post).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByRole("button", { name: "Volver" }));
+    expect(accept()).toBeEnabled();
+  });
+
+  it("rejects the offer with a reason, then shows the next one", async () => {
+    let answer: (value: unknown) => void = () => {};
+    mockApi.post.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    ofertas = [
+      ofertaFixture({ id: "asg-soon", codigo: "DON-1", expira_at: "2026-10-13T20:05:00Z" }),
+      ofertaFixture({ id: "asg-late", codigo: "DON-2", expira_at: "2026-10-13T20:10:00Z" }),
+    ];
+    await renderApp();
+
+    await rejectWithReason();
+    expect(mockApi.post).toHaveBeenCalledWith("/asignaciones/asg-soon/rechazar", {
+      body: { motivo_id: 41 },
+    });
+    // The refresh of this very reject drops the offer before the POST answers: not "taken".
+    await offersChanged([ofertas[1]!]);
+    expect(screen.queryByText("Ya no está disponible")).toBeNull();
+    expect(screen.getByText("DON-1")).toBeOnTheScreen();
+
+    await act(async () => answer({ id: "asg-soon", estado: "RECHAZADA" }));
+    await settle();
+
+    expect(screen.queryByText("DON-1")).toBeNull();
+    expect(screen.getByText("DON-2")).toBeOnTheScreen();
+    expect(screen.queryByText("Ya no está disponible")).toBeNull();
+    expect(Haptics.impactAsync).toHaveBeenCalledWith(Haptics.ImpactFeedbackStyle.Light);
+    expect(screen.getByText("Inicio")).toBeOnTheScreen();
+  });
+
+  it("closes the card once the reject lands, without navigating", async () => {
+    await renderApp();
+
+    await rejectWithReason();
+    await settle();
+
+    expect(mockApi.post).toHaveBeenCalledWith("/asignaciones/asg-7/rechazar", {
+      body: { motivo_id: 41 },
+    });
+    expect(screen.queryByText("Nueva recogida")).toBeNull();
+    expect(screen.queryByText("Ya no está disponible")).toBeNull();
+    expect(screen.getByText("Inicio")).toBeOnTheScreen();
+  });
+
+  it("stays open while rejecting, so the close button and a tap outside cannot hide the answer", async () => {
+    let fail: (reason: unknown) => void = () => {};
+    mockApi.post.mockReturnValue(new Promise((_, reject) => (fail = reject)));
+    await renderApp();
+
+    await rejectWithReason();
+    expect(closeButton()).toBeDisabled();
+    await fireEvent.press(closeButton());
+    await fireEvent.press(screen.getByTestId("offer-alert-scrim"));
+    expect(screen.getByText("Nueva recogida")).toBeOnTheScreen();
+
+    await act(async () =>
+      fail(new ApiError({ type: "oferta-ya-respondida", status: 409, title: "Conflict" })),
+    );
+
+    expect(await screen.findByText("Ya no está disponible")).toBeOnTheScreen();
+    expect(screen.getByText("Ya respondiste a esta oferta.")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "Cerrar" })).toBeEnabled();
+    expect(Haptics.notificationAsync).toHaveBeenLastCalledWith(
+      Haptics.NotificationFeedbackType.Error,
+    );
+
+    await act(() => jest.advanceTimersByTimeAsync(CLOSED_CARD_MS));
+    expect(screen.queryByText("Nueva recogida")).toBeNull();
+  });
+
+  it("keeps the reject panel open after a network failure so the volunteer can retry", async () => {
+    mockApi.post.mockRejectedValueOnce(ApiError.network(new TypeError("offline")));
+    await renderApp();
+
+    await rejectWithReason();
+
+    expect(await screen.findByText(/No pudimos conectarnos/)).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "Confirmar rechazo" })).toBeEnabled();
+    expect(screen.queryByText("Ya no está disponible")).toBeNull();
+    expect(closeButton()).toBeEnabled();
   });
 
   it("accepts the offer and goes to the routes", async () => {

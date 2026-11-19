@@ -12,7 +12,7 @@ When a new offer reaches a volunteer (an `asignacion` in state `OFRECIDA`), a fl
 
 It has two actions:
 - **Aceptar donación** runs the existing accept flow unchanged.
-- **Ahora no** closes the card without changing the offer.
+- **Rechazar** (since T8; it was "Ahora no") opens the RECHAZO_ASIGNACION reason picker inside the card and rejects the offer. The close X and the scrim close the card without changing the offer.
 
 ## Problem / Why
 Today a volunteer only finds out from the push banner, the Home card, or by opening `/voluntario/oferta`. Offers are simultaneous and the first to accept wins (409 `oferta-tomada`), so a slow reaction loses the pickup.
@@ -30,7 +30,7 @@ Today a volunteer only finds out from the push banner, the Home card, or by open
   - `Button`, `FormMessage`, `Icon`, `motion` tokens
 - Invalidation from the push and from Realtime already refreshes `["asignaciones","ofertas"]`.
 - The overlay is an absolutely positioned sibling of `RootNavigator`, following the `OfflineOverlay` pattern. It is not an RN `Modal`.
-- Formal rejection (which needs a `motivo_id`) still happens on `/voluntario/oferta`. The card offers it through "Ver detalle".
+- Formal rejection needs a `motivo_id`. Since T8 the card rejects in place, with the same flow as `/voluntario/oferta` (`useRejectOffer` + `RejectOfferForm`); "Ver detalle" still opens the full offer.
 - Commits are Conventional, without a Co-Authored-By trailer. Tests ship with the code. Push and opening the PR are the user's decision.
 - Delivery: single PR to develop, user decision 2026-11-17 (strategy `single-pr`, one commit per task, no slicing). Forecast is about 700 authored lines (UI and tests).
 
@@ -53,12 +53,14 @@ Today a volunteer only finds out from the push banner, the Home card, or by open
   - Plus tests.
 - [x] T6 Full verification: `typecheck`, `lint`, `test`, `test:render` (`test:render` fails on the base too, see evidence).
 - [x] T7 Review finding R3-dismiss-during-accept: the close X and the scrim no longer hide the card while its accept is in flight. Route: inline (2 small, already-understood edits plus tests).
+- [x] T8 Reject from the card (user decision 2026-11-19, after device testing: "Ahora no" left the offer live, and Home kept showing "Tienes una oferta nueva"). "Ahora no" becomes "Rechazar", which opens the RECHAZO_ASIGNACION reason picker inside the card and sends `POST /asignaciones/:id/rechazar`. The reject flow is shared with `RejectOffer` on the offer screen, not duplicated. The X and the scrim still close without answering. Route: delegated writer (4+ non-trivial files).
 
 ## Acceptance criteria
 - An offer arriving in the foreground shows the card on any screen in volunteer mode. It doesn't show on `/voluntario/oferta`, and it doesn't show in donor mode.
 - No duplicates. With several offers, the one closest to expiring shows first, with "+N más".
 - Accept calls `POST /asignaciones/:id/aceptar` and navigates as it does today. A 409 `oferta-tomada` or `donacion-no-disponible` shows "ya no disponible" and disables accept.
-- "Ahora no" sends no request, and the offer stays on Home.
+- The close X and the scrim send no request, and the offer stays on Home.
+- "Rechazar" sends `POST /asignaciones/:id/rechazar` only with a chosen reason (and its comment when the reason requires one). The offer then leaves the list and Home, and the next queued offer shows. A 409 shows the closed state.
 - If the offer disappears from the list (taken or withdrawn), the card switches to unavailable and closes by itself.
 - When the countdown runs out, accept is disabled.
 
@@ -79,6 +81,7 @@ Today a volunteer only finds out from the push banner, the Home card, or by open
   - `npm run test:render`: exit 1, **pre-existing**. `assert(newHtml.includes("Ubica la dirección escrita, usa tu ubicación o mueve el mapa"))` (check-render.cjs:547) fails identically on the base `3991807`, run in a temporary worktree that was removed afterwards. With that line skipped in memory, a second stale check fails: `requestFormHtml.includes("Documento (frente)") && …"Enviar solicitud"`. Neither string exists anywhere in `src/` (the script drifted from the donor and volunteer-registration copy). The offer screen's render checks (check-render.cjs:452) run before both and pass. The root layout, and so the host, is not part of the render check.
 - Native review (RDD): `3991807..6f5152c`, risk medium, `slice_budget_reached` (1940 lines). Consent granted → 1 lens (review-reliability) → **approved**; acknowledged, authority burned (lineage `review-3cf320bd8428648a`). Advisory finding `R3-dismiss-during-accept` (WARNING, informational): the X and the scrim could still dismiss during an accept, so the navigation or 409 answer landed after the card was gone. The user accepted the fix within the requested scope ("evita múltiples pulsaciones").
 - T7 · route: inline · RED: the card test (X during accepting) and the new host test (scrim during an in-flight accept, then 409 shows "Ya no está disponible") → 2 failed, 28 passed. GREEN: `dismiss` returns early while `acceptingId === shown.offer.id`, and the X is `disabled={accepting}` → 30 passed. `npx jest`: 110 suites / 1932 tests passed; `npm run lint` exit 0; `npm run typecheck` exit 0. Commit `9d7925e`. RDD assess `6f5152c..9d7925e`: medium, `under_budget` (21 lines), so no review is due.
+- T8 · route: delegated writer (4+ non-trivial files) · commit `feat(offers): reject an offer from the alert card with a reason` (hash recorded in the follow-up `docs(odd)` commit). Shared flow: `useRejectOffer(id, {onStart, onRejected, onFailed})` in `src/screens/use-reject-offer.ts` (motivos, validation, `motivoBody`, `messageFor`, `closedReasonOf`) and `RejectOfferForm` in `src/components/findfood/reject-offer-form.tsx` (MotivoField, "Confirmar rechazo" danger with loading, "Volver"). `RejectOffer` on the offer screen keeps its Section "Rechazar oferta" and `dismissTo("/voluntario")`. Card: outline "Rechazar" swaps the answer buttons for the panel "¿Por qué la rechazas?" at the end of the scroll body, which scrolls to it on open, on content change (the comment field) and on layout; the card's max height is also capped at `window - keyboard - 96` and the host's `KeyboardStickyView` takes `offset.opened = insets.bottom`, so the panel stays visible above the keyboard. While a reject is in flight, "Aceptar donación", the X, "Volver" and "Ver detalle" are held. Closed states keep "Cerrar" and hide the panel; a 409 from the reject shows its own message in the closed notice. Host: `acceptingId` became `answeringId` (accept or reject), so taken detection and dismiss both respect a reject in flight; success sets the offer aside with the `light` haptic and lets the next queued offer show, without navigating; failure plays `error` and closes the card when `closedReasonOf` gives a reason. RED: card 9 failed / 11 passed, host 5 failed / 17 passed. GREEN: `npx jest src/components/findfood/offer-alert src/screens/__tests__/volunteer-offer-screen.test.tsx src/screens/__tests__/catalog-screens.test.tsx` 4 suites / 66 tests passed. Bite check: dropping `onRejectStart` from the host fails "rejects the offer with a reason, then shows the next one" and "stays open while rejecting…" (restored). `npm run typecheck` exit 0; `npm run lint` exit 0; `npx jest` 110 suites / 1944 tests passed.
 - Engram mirror `odd/oferta-modal-voluntario/tasks`: **pending**, because the writer session has no Engram tools.
-- Manual, pending (needs a new dev build with expo-blur and expo-haptics): the five device scenarios in the plan's Verification section, plus the glass on iOS and the opaque fallback on Android.
+- Manual, pending (needs a new dev build with expo-blur and expo-haptics): the five device scenarios in the plan's Verification section, plus the glass on iOS and the opaque fallback on Android. T8 adds: reject from the card with a reason that requires a comment, with the keyboard open, on a small screen.
 - Next step: the user decides on push and the single PR to `develop`.

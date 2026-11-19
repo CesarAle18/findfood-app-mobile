@@ -1,8 +1,10 @@
 /**
  * The floating card of a new offer: what to pick up, where, when, and how long is left to
- * answer, with "Aceptar donación" and "Ahora no". Presentational: the host owns the queue,
- * the accept request and the closed states; the card only loads the donation detail for
- * what the offer row lacks (a product photo, the notes, the expiry and publish dates).
+ * answer, with "Aceptar donación" and "Rechazar". The host owns the queue, the accept
+ * request and the closed states. The card loads the donation detail for what the offer row
+ * lacks (a product photo, the notes, the expiry and publish dates), and runs the reject
+ * itself: "Rechazar" swaps the answer buttons for a reason panel (the reject flow of the
+ * offer screen), and the host hears when it starts, lands or fails.
  *
  * The glass is a system blur on iOS (and web) under a translucent white wash. Android blur
  * needs the whole navigator wrapped in a `BlurTargetView` (expo-blur v57), so Android, and
@@ -11,7 +13,7 @@
  */
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
   Platform,
@@ -20,6 +22,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { useKeyboardState } from "react-native-keyboard-controller";
 import Animated, {
   useAnimatedStyle,
   ReduceMotion,
@@ -34,11 +37,13 @@ import type { QueuedOffer } from "@/domain/offer-queue";
 import { colors, fonts } from "@/design/tokens";
 import { useDonacion, type DonacionDetalleDto } from "@/services/donaciones";
 import type { OfferClosedReason } from "@/screens/use-accept-offer";
+import { useRejectOffer } from "@/screens/use-reject-offer";
 
 import { formatRemaining, useCountdown } from "../countdown";
 import { photosOf } from "../donation-photos";
 import { Icon } from "../icon";
 import { Pressing } from "../motion";
+import { RejectOfferForm } from "../reject-offer-form";
 import { Button, Copy, FormMessage } from "../ui";
 
 export interface OfferAlertCardProps {
@@ -52,12 +57,27 @@ export interface OfferAlertCardProps {
   /** The message of the last failed accept. */
   error?: string;
   onAccept: () => void;
-  /** "Ahora no", the close button and the scrim: the offer stays live elsewhere. */
+  /**
+   * The close button, the scrim and "Cerrar" on a closed card: closes without answering,
+   * so the offer stays live elsewhere.
+   */
   onDismiss: () => void;
   onOpenDetail: () => void;
   /** The countdown reached `expira_at`. */
   onExpire: () => void;
+  /** A reject with a valid reason is about to be sent. */
+  onRejectStart: () => void;
+  /** The server confirmed the reject. */
+  onRejected: () => void;
+  /** The reject failed; `reason` says whether it found the offer closed. */
+  onRejectFailed: (reason: OfferClosedReason | null) => void;
 }
+
+/**
+ * Room the card keeps free above it while the keyboard is open: the status bar and a gap,
+ * so the reject panel's comment field never slides under the top of the screen.
+ */
+const KEYBOARD_ROOM = 96;
 
 /** Whether this platform draws a real blur behind the card (see the file comment). */
 const PLATFORM_BLURS = Platform.OS === "ios" || Platform.OS === "web";
@@ -235,8 +255,12 @@ export function OfferAlertCard({
   onDismiss,
   onOpenDetail,
   onExpire,
+  onRejectStart,
+  onRejected,
+  onRejectFailed,
 }: OfferAlertCardProps) {
   const { height } = useWindowDimensions();
+  const keyboardHeight = useKeyboardState((state) => state.height);
   const reduceTransparency = useReduceTransparency();
   const blur = PLATFORM_BLURS && !reduceTransparency;
   // The offer row has no photos or notes: the detail signs them for the offered volunteer.
@@ -244,11 +268,34 @@ export function OfferAlertCard({
   const { photo, lines } = detailLines(donacion);
   const title = offer.title ?? "Donación disponible";
 
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const reject = useRejectOffer(offer.id, {
+    onStart: onRejectStart,
+    onRejected,
+    onFailed: onRejectFailed,
+  });
+  const rejecting = reject.rejecting;
+  // An answer in flight owns the card: nothing else may close it or start another one.
+  const answering = accepting || rejecting;
+  // A closed card only lets itself close: the panel gives way to the closed notice.
+  const panelOpen = rejectOpen && closed === null;
+  // Only one failure can close the card: a closed card takes no other answer.
+  const closedMessage = reject.closedReason !== null ? (reject.error ?? undefined) : error;
+
+  const scroll = useRef<ScrollView>(null);
+  // The panel sits at the end of the body: keep it, and its comment field, in view as the
+  // panel opens, the comment field appears or the keyboard shrinks the card.
+  const keepPanelInView = panelOpen ? () => scroll.current?.scrollToEnd({ animated: true }) : undefined;
+
+  // Capped at 70% of the window, and below the top of the screen while the keyboard is open
+  // (the host's KeyboardStickyView lifts the card above it).
+  const maxHeight = Math.round(Math.min(height * 0.7, height - keyboardHeight - KEYBOARD_ROOM));
+
   return (
     <View
       accessibilityViewIsModal
       accessibilityLabel={`Nueva recogida ${offer.code}`}
-      style={[styles.shadow, { maxHeight: Math.round(height * 0.7) }]}
+      style={[styles.shadow, { maxHeight }]}
     >
       <View style={[styles.glass, blur ? styles.glassBorder : styles.solidBorder]}>
         {blur ? (
@@ -286,7 +333,7 @@ export function OfferAlertCard({
           <Pressing
             accessibilityRole="button"
             accessibilityLabel="Cerrar oferta"
-            disabled={accepting}
+            disabled={answering}
             hitSlop={8}
             onPress={onDismiss}
             scale={0.92}
@@ -297,10 +344,14 @@ export function OfferAlertCard({
         </View>
 
         <ScrollView
+          ref={scroll}
           style={styles.scroll}
           contentContainerStyle={styles.body}
           showsVerticalScrollIndicator={false}
           bounces={false}
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={keepPanelInView}
+          onLayout={keepPanelInView}
         >
           <AlertCountdown offer={offer} onExpire={onExpire} />
 
@@ -368,31 +419,54 @@ export function OfferAlertCard({
                 : undefined
             }
           />
+
+          {panelOpen ? (
+            <View style={styles.rejectPanel}>
+              <View accessible accessibilityRole="header">
+                <Copy weight="bold" style={styles.panelTitle}>
+                  ¿Por qué la rechazas?
+                </Copy>
+              </View>
+              <RejectOfferForm reject={reject} onBack={() => setRejectOpen(false)} />
+            </View>
+          ) : null}
         </ScrollView>
 
         <View style={styles.footer}>
           {closed !== null ? (
-            <ClosedNotice closed={closed} error={error} />
-          ) : (
+            <ClosedNotice closed={closed} error={closedMessage} />
+          ) : panelOpen ? null : (
             <FormMessage message={error} />
           )}
-          <View style={styles.actions}>
-            <View style={styles.flex}>
-              <Button variant="outline" disabled={accepting} onPress={onDismiss}>
-                {closed !== null ? "Cerrar" : "Ahora no"}
-              </Button>
+          {panelOpen ? null : (
+            <View style={styles.actions}>
+              <View style={styles.flex}>
+                {closed !== null ? (
+                  <Button variant="outline" disabled={answering} onPress={onDismiss}>
+                    Cerrar
+                  </Button>
+                ) : (
+                  <Button variant="outline" disabled={answering} onPress={() => setRejectOpen(true)}>
+                    Rechazar
+                  </Button>
+                )}
+              </View>
+              <View style={styles.flex}>
+                <Button
+                  loading={accepting}
+                  disabled={closed !== null || rejecting}
+                  onPress={onAccept}
+                >
+                  Aceptar donación
+                </Button>
+              </View>
             </View>
-            <View style={styles.flex}>
-              <Button loading={accepting} disabled={closed !== null} onPress={onAccept}>
-                Aceptar donación
-              </Button>
-            </View>
-          </View>
+          )}
           {closed === null ? (
             <Pressing
               accessibilityRole="link"
-              accessibilityHint="Abre la oferta completa, con el mapa y la opción de rechazarla"
-              disabled={accepting}
+              accessibilityHint="Abre la oferta completa, con el mapa"
+              disabled={answering}
               onPress={onOpenDetail}
               scale={1}
               surface={styles.detailLink}
@@ -503,6 +577,13 @@ const styles = StyleSheet.create({
   window: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   label: { fontSize: 11, lineHeight: 15, fontFamily: fonts.medium, letterSpacing: 0.2 },
   meta: { gap: 2 },
+  rejectPanel: {
+    gap: 12,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  panelTitle: { fontSize: 16, lineHeight: 22 },
   footer: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12, gap: 8 },
   notice: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, gap: 2 },
   noticeUnavailable: { backgroundColor: "rgba(180,71,71,0.08)" },

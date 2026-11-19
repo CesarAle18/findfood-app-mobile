@@ -1,16 +1,19 @@
 /**
  * The floating offer card: what it shows from the offer and the donation detail, its closed
- * states and its actions. The host (queue, accept request) is covered in its own test.
+ * states, its actions and the reject panel with its reason. The host (queue, accept request)
+ * is covered in its own test.
  */
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 
 import { api } from "@/api";
+import { ApiError } from "@/api/errors";
 import { pendingOffers, type QueuedOffer } from "@/domain/offer-queue";
 import type { DonacionDetalleDto } from "@/services/donaciones";
 import type { ApiMock } from "@/test-utils/api";
 import {
   DONATION_ID,
+  catalogosFixture,
   detalleFixture,
   donacionItemFixture,
   ofertaFixture,
@@ -42,6 +45,9 @@ async function renderCard(props: Partial<OfferAlertCardProps> = {}) {
     onDismiss: jest.fn(),
     onOpenDetail: jest.fn(),
     onExpire: jest.fn(),
+    onRejectStart: jest.fn(),
+    onRejected: jest.fn(),
+    onRejectFailed: jest.fn(),
   };
   client = createTestQueryClient();
   await render(
@@ -65,9 +71,18 @@ beforeEach(() => {
   detalle = detalleFixture({ estado: "PUBLICADA", items: [], publicada_at: null, fecha_vencimiento_min: null });
   mockApi.get.mockReset().mockImplementation(async (path: string) => {
     if (path === `/donaciones/${DONATION_ID}`) return detalle;
+    if (path === "/catalogos") return catalogosFixture;
     throw new Error(`unexpected GET ${path}`);
   });
+  mockApi.post.mockReset().mockResolvedValue({ id: "asg-7", estado: "RECHAZADA" });
 });
+
+/** Opens the reject panel and picks a reason from the RECHAZO_ASIGNACION catalog. */
+async function chooseReason(name: string) {
+  await fireEvent.press(screen.getByRole("button", { name: "Rechazar" }));
+  await fireEvent.press(await screen.findByRole("button", { name: /^Motivo/ }));
+  await fireEvent.press(screen.getByRole("radio", { name }));
+}
 
 afterEach(() => {
   client.clear();
@@ -92,7 +107,8 @@ describe("OfferAlertCard", () => {
     expect(screen.getByText("Indicaciones: Muelle de carga")).toBeOnTheScreen();
     expect(screen.getByText("13/10/2026 · 16:00–18:00")).toBeOnTheScreen();
     expect(screen.getByRole("button", { name: "Aceptar donación" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Ahora no" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Rechazar" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Ahora no" })).toBeNull();
     expect(screen.getByRole("link", { name: "Ver detalle" })).toBeOnTheScreen();
     await act(async () => {});
   });
@@ -178,6 +194,8 @@ describe("OfferAlertCard", () => {
 
     expect(screen.getByText("Esta oferta venció")).toBeOnTheScreen();
     expect(screen.getByRole("button", { name: "Aceptar donación" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Rechazar" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Cerrar" })).toBeOnTheScreen();
     await act(async () => {});
   });
 
@@ -202,22 +220,138 @@ describe("OfferAlertCard", () => {
     const { onAccept, onDismiss, onOpenDetail } = await renderCard();
 
     await fireEvent.press(screen.getByRole("button", { name: "Aceptar donación" }));
-    await fireEvent.press(screen.getByRole("button", { name: "Ahora no" }));
     await fireEvent.press(screen.getByRole("button", { name: "Cerrar oferta" }));
     await fireEvent.press(screen.getByRole("link", { name: "Ver detalle" }));
 
     expect(onAccept).toHaveBeenCalledTimes(1);
-    expect(onDismiss).toHaveBeenCalledTimes(2);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
     expect(onOpenDetail).toHaveBeenCalledTimes(1);
   });
 
   it("holds the answer buttons while accepting", async () => {
     const { onDismiss } = await renderCard({ accepting: true });
 
-    await fireEvent.press(screen.getByRole("button", { name: "Ahora no" }));
     await fireEvent.press(screen.getByRole("button", { name: "Cerrar oferta" }));
 
     expect(onDismiss).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Aceptar donación" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Rechazar" })).toBeDisabled();
+  });
+
+  it("opens the reject panel in place of the answer buttons, and Volver goes back", async () => {
+    const { onDismiss } = await renderCard();
+
+    await fireEvent.press(screen.getByRole("button", { name: "Rechazar" }));
+
+    expect(await screen.findByText("¿Por qué la rechazas?")).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: /^Motivo/ })).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "Confirmar rechazo" })).toBeOnTheScreen();
+    expect(screen.queryByRole("button", { name: "Aceptar donación" })).toBeNull();
+
+    await fireEvent.press(screen.getByRole("button", { name: "Volver" }));
+
+    expect(screen.queryByText("¿Por qué la rechazas?")).toBeNull();
+    expect(screen.getByRole("button", { name: "Aceptar donación" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Rechazar" })).toBeEnabled();
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("asks for a reason before rejecting, without a request", async () => {
+    const { onRejectStart } = await renderCard();
+
+    await fireEvent.press(screen.getByRole("button", { name: "Rechazar" }));
+    await screen.findByRole("button", { name: /^Motivo/ });
+    await fireEvent.press(screen.getByRole("button", { name: "Confirmar rechazo" }));
+
+    expect(screen.getByText("Selecciona un motivo.")).toBeOnTheScreen();
+    expect(mockApi.post).not.toHaveBeenCalled();
+    expect(onRejectStart).not.toHaveBeenCalled();
+  });
+
+  it("asks for the comment of a reason that requires one", async () => {
+    await renderCard();
+    await chooseReason("Otro");
+
+    await fireEvent.press(screen.getByRole("button", { name: "Confirmar rechazo" }));
+    expect(screen.getByText("Escribe un comentario para este motivo.")).toBeOnTheScreen();
+    expect(mockApi.post).not.toHaveBeenCalled();
+
+    await fireEvent.changeText(screen.getByLabelText("Comentario *"), "Se dañó el carro");
+    await fireEvent.press(screen.getByRole("button", { name: "Confirmar rechazo" }));
+
+    expect(mockApi.post).toHaveBeenCalledWith("/asignaciones/asg-7/rechazar", {
+      body: { motivo_id: 42, observacion: "Se dañó el carro" },
+    });
+  });
+
+  it("rejects with the chosen reason", async () => {
+    const { onRejectStart, onRejected, onRejectFailed } = await renderCard();
+    await chooseReason("Queda muy lejos");
+
+    await fireEvent.press(screen.getByRole("button", { name: "Confirmar rechazo" }));
+
+    expect(mockApi.post).toHaveBeenCalledWith("/asignaciones/asg-7/rechazar", {
+      body: { motivo_id: 41 },
+    });
+    expect(onRejectStart).toHaveBeenCalledTimes(1);
+    expect(onRejected).toHaveBeenCalledTimes(1);
+    expect(onRejectFailed).not.toHaveBeenCalled();
+  });
+
+  it("holds the card while the reject is in flight", async () => {
+    mockApi.post.mockReturnValue(new Promise(() => {}));
+    const { onDismiss, onOpenDetail } = await renderCard();
+    await chooseReason("Queda muy lejos");
+
+    await fireEvent.press(screen.getByRole("button", { name: "Confirmar rechazo" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Cerrar oferta" }));
+    await fireEvent.press(screen.getByRole("link", { name: "Ver detalle" }));
+
+    expect(screen.getByRole("button", { name: "Cerrar oferta" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Volver" })).toBeDisabled();
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(onOpenDetail).not.toHaveBeenCalled();
+  });
+
+  it("shows a failed reject in the panel and reports why", async () => {
+    mockApi.post.mockRejectedValue(
+      new ApiError({ type: "oferta-ya-respondida", status: 409, title: "Conflict" }),
+    );
+    const { onRejected, onRejectFailed } = await renderCard();
+    await chooseReason("Queda muy lejos");
+
+    await fireEvent.press(screen.getByRole("button", { name: "Confirmar rechazo" }));
+
+    expect(screen.getByText("Ya respondiste a esta oferta.")).toBeOnTheScreen();
+    expect(onRejectFailed).toHaveBeenCalledWith("unavailable");
+    expect(onRejected).not.toHaveBeenCalled();
+  });
+
+  it("keeps the reject's reason when that reject found the offer closed", async () => {
+    mockApi.post.mockRejectedValue(
+      new ApiError({ type: "oferta-ya-respondida", status: 409, title: "Conflict" }),
+    );
+    const handlers = await renderCard();
+    await chooseReason("Queda muy lejos");
+    await fireEvent.press(screen.getByRole("button", { name: "Confirmar rechazo" }));
+
+    // The host answers the failure by closing the card.
+    await screen.rerender(
+      <QueryClientProvider client={client}>
+        <OfferAlertCard
+          offer={offerOf()}
+          remaining={0}
+          closed="unavailable"
+          overCapacity={false}
+          accepting={false}
+          {...handlers}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText("Ya no está disponible")).toBeOnTheScreen();
+    expect(screen.getByText("Ya respondiste a esta oferta.")).toBeOnTheScreen();
+    expect(screen.queryByText("¿Por qué la rechazas?")).toBeNull();
+    expect(screen.getByRole("button", { name: "Cerrar" })).toBeEnabled();
   });
 });

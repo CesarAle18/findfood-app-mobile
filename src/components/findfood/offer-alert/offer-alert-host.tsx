@@ -75,8 +75,9 @@ export function OfferAlertHost() {
   const pathname = usePathname();
   const enabled =
     phase === "app" && canVolunteer && activeRole === "VOLUNTARIO" && pathname !== OFFER_ROUTE;
-  // The offers set aside this session ("Ahora no"), kept here, above the queue, so opening
-  // the offer screen and coming back does not bring them back.
+  // The offers set aside this session (closed, rejected, opened in full or answered), kept
+  // here, above the queue, so opening the offer screen and coming back does not bring them
+  // back.
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
 
   useEffect(() => {
@@ -109,9 +110,10 @@ function OfferAlertQueue({
   const { data: me } = useMe();
   const insets = useSafeAreaInsets();
   const [shown, setShown] = useState<Shown | null>(null);
-  // The offer whose accept is in flight: its row may leave the list (it became ACEPTADA)
-  // before the answer lands, which is not "taken by someone else".
-  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  // The offer whose answer (accept or reject) is in flight: its row may leave the list (it
+  // became ACEPTADA or RECHAZADA) before the answer lands, which is not "taken by someone
+  // else".
+  const [answeringId, setAnsweringId] = useState<string | null>(null);
   const data = ofertas.data;
 
   // The time the queue filters deadlines against, read again whenever its inputs change.
@@ -123,7 +125,7 @@ function OfferAlertQueue({
   const queue = data ? pendingOffers(data, dismissed, clock.at) : NO_QUEUE;
   if (shown === null) {
     if (queue.current) setShown({ offer: queue.current, closed: null });
-  } else if (data && shown.closed !== "unavailable" && acceptingId !== shown.offer.id) {
+  } else if (data && shown.closed !== "unavailable" && answeringId !== shown.offer.id) {
     const row = liveOffers(data).find((oferta) => oferta.id === shown.offer.id);
     if (!row) {
       // Gone while on screen. An expired card stays expired; a live one was taken.
@@ -160,14 +162,24 @@ function OfferAlertQueue({
     setShown(null);
   };
   const dismiss = () => {
-    // An accept in flight owns the card: hiding it would lose the answer (navigation or 409).
-    if (acceptingId === shown.offer.id) return;
+    // An answer in flight owns the card: hiding it would lose the outcome (the navigation
+    // after an accept, a 409, or the failure of a reject).
+    if (answeringId === shown.offer.id) return;
     buzz(light);
     setAside();
   };
   const openDetail = () => {
     setAside();
     router.push({ pathname: OFFER_ROUTE, params: { asignacionId: shown.offer.id } });
+  };
+  /** A failed answer: a 409 closes the card the way the server says; anything else may retry. */
+  const answerFailed = (reason: OfferClosedReason | null) => {
+    setAnsweringId(null);
+    if (reason !== null) {
+      setShown((current) =>
+        current && current.offer.id === shown.offer.id ? { ...current, closed: reason } : current,
+      );
+    }
   };
   const expire = () => {
     setShown((current) =>
@@ -195,7 +207,8 @@ function OfferAlertQueue({
           testID="offer-alert-scrim"
         />
       </Animated.View>
-      <KeyboardStickyView style={styles.dock}>
+      {/* The card already clears the bottom inset; over the keyboard that gap is not needed. */}
+      <KeyboardStickyView offset={{ opened: insets.bottom }} style={styles.dock}>
         <Animated.View
           // A new offer replaces the card: the old one leaves while the new one rises.
           key={shown.offer.id}
@@ -214,19 +227,12 @@ function OfferAlertQueue({
             onDismiss={dismiss}
             onOpenDetail={openDetail}
             onExpire={expire}
-            onAcceptStart={() => setAcceptingId(shown.offer.id)}
-            onAccepted={() => {
-              setAcceptingId(null);
+            onAnswerStart={() => setAnsweringId(shown.offer.id)}
+            onAnswered={() => {
+              setAnsweringId(null);
               setAside();
             }}
-            onFailed={(reason) => {
-              setAcceptingId(null);
-              if (reason !== null) {
-                setShown((current) =>
-                  current && current.offer.id === shown.offer.id ? { ...current, closed: reason } : current,
-                );
-              }
-            }}
+            onFailed={answerFailed}
           />
         </Animated.View>
       </KeyboardStickyView>
@@ -234,7 +240,11 @@ function OfferAlertQueue({
   );
 }
 
-/** One card's accept flow: keyed by the offer, so a failure never carries to the next. */
+/**
+ * One card's answers: the accept flow here, the reject inside the card. Keyed by the offer,
+ * so a failure never carries to the next. A rejected offer leaves no screen behind: the
+ * card closes and the next offer in the queue takes its place.
+ */
 function OfferAlertSession({
   offer,
   closed,
@@ -243,8 +253,8 @@ function OfferAlertSession({
   onDismiss,
   onOpenDetail,
   onExpire,
-  onAcceptStart,
-  onAccepted,
+  onAnswerStart,
+  onAnswered,
   onFailed,
 }: {
   offer: QueuedOffer;
@@ -254,19 +264,22 @@ function OfferAlertSession({
   onDismiss: () => void;
   onOpenDetail: () => void;
   onExpire: () => void;
-  onAcceptStart: () => void;
-  onAccepted: () => void;
+  /** An accept or a reject is about to be sent. */
+  onAnswerStart: () => void;
+  /** The server confirmed the accept or the reject. */
+  onAnswered: () => void;
   onFailed: (reason: OfferClosedReason | null) => void;
 }) {
+  const failed = (reason: OfferClosedReason | null) => {
+    buzz(failure);
+    onFailed(reason);
+  };
   const { accept, accepting, error } = useAcceptOffer(offer.id, {
     onAccepted: () => {
       buzz(success);
-      onAccepted();
+      onAnswered();
     },
-    onFailed: (reason) => {
-      buzz(failure);
-      onFailed(reason);
-    },
+    onFailed: failed,
   });
 
   return (
@@ -278,12 +291,18 @@ function OfferAlertSession({
       accepting={accepting}
       error={error}
       onAccept={() => {
-        onAcceptStart();
+        onAnswerStart();
         void accept();
       }}
       onDismiss={onDismiss}
       onOpenDetail={onOpenDetail}
       onExpire={onExpire}
+      onRejectStart={onAnswerStart}
+      onRejected={() => {
+        buzz(light);
+        onAnswered();
+      }}
+      onRejectFailed={failed}
     />
   );
 }
