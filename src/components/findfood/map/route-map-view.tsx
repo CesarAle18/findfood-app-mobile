@@ -1,9 +1,9 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import type MapView from "react-native-maps";
 
 import { colors, fonts } from "@/design/tokens";
-import { lineStringToLatLngs, regionForPoints, toLatLng } from "@/domain/mappers/geo";
+import { lineStringToLatLngs, regionForPoints, toLatLng, type LatLng } from "@/domain/mappers/geo";
 import type { GeometriaRutaDto, ParadaRutaDto } from "@/services/rutas";
 
 import { FindFoodMap } from "./find-food-map";
@@ -18,8 +18,17 @@ const NEXT_LEG_COLOR = "#1F5FBF";
 /** The only `proveedor_ruteo` whose `geometria` follows the streets. */
 const STREET_ROUTING = "GOOGLE";
 
-/** The React key of a stop's marker. */
-const markerKey = (stop: Pick<RouteStop, "id">) => stop.id;
+/** A stop as the map draws it. */
+type MapStop = Pick<RouteStop, "id" | "orden" | "direccion"> & { coordinate: LatLng };
+
+/** How long a stop's number gets to draw, after it lays out, before its marker freezes. */
+export const STOP_SNAPSHOT_SETTLE_MS = 300;
+
+/**
+ * The React key of a stop's marker: its number too, so a renumbered stop is a new marker
+ * with a fresh bitmap (and, through `childListKey`, a fresh map).
+ */
+const markerKey = (stop: Pick<RouteStop, "id" | "orden">) => `${stop.id}-${stop.orden}`;
 
 /**
  * Names the map's child list: which lines it draws, then its markers in order. The map is
@@ -33,7 +42,7 @@ const markerKey = (stop: Pick<RouteStop, "id">) => stop.id;
 function childListKey(
   drawsPath: boolean,
   drawsLeg: boolean,
-  stops: readonly Pick<RouteStop, "id">[],
+  stops: readonly Pick<RouteStop, "id" | "orden">[],
 ): string {
   return [drawsPath ? "path" : "-", drawsLeg ? "leg" : "-", ...stops.map(markerKey)].join("|");
 }
@@ -72,7 +81,7 @@ export function RouteMapView({
     const path = proveedorRuteo === STREET_ROUTING ? lineStringToLatLngs(geometria) : [];
     const stops = [...paradas]
       .sort((a, b) => a.orden - b.orden)
-      .map((parada) => ({
+      .map((parada): MapStop => ({
         id: parada.id,
         orden: parada.orden,
         direccion: parada.direccion,
@@ -121,18 +130,40 @@ export function RouteMapView({
         />
       ) : null}
       {stops.map((stop) => (
-        <Marker
-          key={markerKey(stop)}
-          coordinate={stop.coordinate}
-          title={`${stop.orden}. ${stop.direccion}`}
-          tracksViewChanges={false}
-        >
-          <View style={styles.stop}>
-            <Text style={styles.stopLabel}>{stop.orden}</Text>
-          </View>
-        </Marker>
+        <StopMarker key={markerKey(stop)} stop={stop} />
       ))}
     </FindFoodMap>
+  );
+}
+
+/**
+ * A stop's numbered circle. Android draws a custom marker into a bitmap, first when the
+ * marker is added, before its number has laid out, and then only when the marker's size
+ * changes, which a fixed circle never does. So the marker tracks its view until the number
+ * has laid out and had `STOP_SNAPSHOT_SETTLE_MS` to draw; turning tracking off takes one
+ * last snapshot. A new number is a new marker (`markerKey`), never a redraw of this one.
+ */
+function StopMarker({ stop }: { stop: MapStop }) {
+  const [laidOut, setLaidOut] = useState(false);
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (!laidOut) return;
+    const timer = setTimeout(() => setSettled(true), STOP_SNAPSHOT_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [laidOut]);
+  return (
+    <Marker
+      testID={`route-stop-${stop.id}`}
+      coordinate={stop.coordinate}
+      title={`${stop.orden}. ${stop.direccion}`}
+      tracksViewChanges={!settled}
+    >
+      <View style={styles.stop}>
+        <Text style={styles.stopLabel} onLayout={() => setLaidOut(true)}>
+          {stop.orden}
+        </Text>
+      </View>
+    </Marker>
   );
 }
 

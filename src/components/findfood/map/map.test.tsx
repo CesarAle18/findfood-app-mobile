@@ -23,7 +23,7 @@ import {
 } from "./location-picker";
 import { DonorTrackingMap } from "./donor-tracking-map";
 import { PointMap } from "./point-map";
-import { RouteMapView, type RouteStop } from "./route-map-view";
+import { RouteMapView, STOP_SNAPSHOT_SETTLE_MS, type RouteStop } from "./route-map-view";
 
 // A build with the Maps key of its platform, unless a test says otherwise.
 jest.mock("@/config/maps", () => ({ hasGoogleMapsKey: jest.fn(() => true) }));
@@ -642,6 +642,78 @@ describe("RouteMapView", () => {
       const { before, after } = await mapAfter(base, { ...base, paradas: paradas.map((p) => ({ ...p })) });
 
       expect(after).toBe(before);
+    });
+  });
+
+  describe("numbered markers", () => {
+    // Android draws a custom marker into a bitmap: it must be taken after the number lays
+    // out, and taken again (a new marker) when the number changes.
+    const layout = { nativeEvent: { layout: { x: 0, y: 0, width: 8, height: 16 } } };
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("draws a new marker when a stop is renumbered", async () => {
+      // The same stops in the same order, numbered again after an earlier one was given up.
+      const before = [
+        { ...paradas[1], orden: 2 },
+        { ...paradas[0], orden: 3 },
+      ];
+      const after = [
+        { ...paradas[1], orden: 1 },
+        { ...paradas[0], orden: 2 },
+      ];
+      const view = await render(<RouteMapView geometria={null} proveedorRuteo={null} paradas={before} />);
+      const marker = screen.getByTestId("route-stop-p1");
+      expect(marker.props.title).toBe("2. Panadería");
+
+      await view.rerender(<RouteMapView geometria={null} proveedorRuteo={null} paradas={after} />);
+
+      expect(screen.getByTestId("route-stop-p1")).not.toBe(marker);
+      expect(screen.getByTestId("route-stop-p1").props.title).toBe("1. Panadería");
+    });
+
+    it("keeps tracking the marker's view until its number has laid out and drawn", async () => {
+      jest.useFakeTimers();
+      await render(<RouteMapView geometria={null} proveedorRuteo={null} paradas={paradas} />);
+      const marker = () => screen.getByTestId("route-stop-p1");
+      expect(marker().props.tracksViewChanges).toBe(true);
+
+      // Not before the number lays out, however long it takes.
+      await act(async () => {
+        jest.advanceTimersByTime(STOP_SNAPSHOT_SETTLE_MS * 10);
+      });
+      expect(marker().props.tracksViewChanges).toBe(true);
+
+      await fireEvent(screen.getByText("1"), "layout", layout);
+      await act(async () => {
+        jest.advanceTimersByTime(STOP_SNAPSHOT_SETTLE_MS - 1);
+      });
+      expect(marker().props.tracksViewChanges).toBe(true);
+
+      await act(async () => {
+        jest.advanceTimersByTime(1);
+      });
+      expect(marker().props.tracksViewChanges).toBe(false);
+      // The other stop has not laid out yet.
+      expect(screen.getByTestId("route-stop-p2").props.tracksViewChanges).toBe(true);
+    });
+
+    it("clears its timer when the map goes away before the number settles", async () => {
+      jest.useFakeTimers();
+      const view = await render(<RouteMapView geometria={null} proveedorRuteo={null} paradas={paradas} />);
+      const set = jest.spyOn(globalThis, "setTimeout");
+      const clear = jest.spyOn(globalThis, "clearTimeout");
+      await fireEvent(screen.getByText("1"), "layout", layout);
+      const settle = set.mock.calls.findIndex(([, delay]) => delay === STOP_SNAPSHOT_SETTLE_MS);
+      expect(settle).not.toBe(-1);
+
+      await view.unmount();
+
+      expect(clear).toHaveBeenCalledWith(set.mock.results[settle].value);
+      set.mockRestore();
+      clear.mockRestore();
     });
   });
 });

@@ -5,13 +5,14 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Slot, useLocalSearchParams } from "expo-router";
-import { fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
+import { act, fireEvent, renderRouter, screen, waitFor } from "expo-router/testing-library";
 import * as Location from "expo-location";
 import { Alert, Text } from "react-native";
 
 import { api } from "@/api";
 import { supabase } from "@/auth/supabase";
 import { hasGoogleMapsKey } from "@/config/maps";
+import { seguimientoKey } from "@/location/live-route";
 import type { OfertaDto } from "@/services/asignaciones";
 import type { RutaDetalleDto, RutaResumenDto, SeguimientoDto } from "@/services/rutas";
 import { ActiveRouteScreen } from "@/screens/route";
@@ -302,6 +303,38 @@ describe("ActiveRouteScreen · route in progress", () => {
 
     expect(await screen.findByTestId("route-next-leg")).toBeOnTheScreen();
     expect(screen.getByTestId("route-path")).toBeOnTheScreen();
+  });
+
+  it("keeps the map, its stops and its frame while the leg to the next stop refreshes", async () => {
+    jest.mocked(hasGoogleMapsKey).mockReturnValue(true);
+    const detalle = withStops(first, second, entrega);
+    trackWith(detalle, { parada: first, tramo: leg("GOOGLE") });
+    await renderRoutes();
+    await screen.findByTestId("route-next-leg");
+    const map = screen.getByTestId("route-map");
+    const frame = map.props.initialRegion;
+    const marker = screen.getByTestId(`route-stop-${first.id}`);
+
+    // The 30 s refetch: the volunteer moved, the leg starts elsewhere.
+    const moved = {
+      ...leg("GOOGLE"),
+      trayecto: { type: "LineString" as const, coordinates: [[-76.55, 3.41], [-76.53, 3.43]] as [number, number][] },
+    };
+    const answer = mockApi.get.getMockImplementation()!;
+    mockApi.get.mockImplementation(async (path: string, options?: never) =>
+      path.endsWith("/seguimiento") ? { parada: first, tramo: moved } : answer(path, options),
+    );
+    await act(() => client.refetchQueries({ queryKey: seguimientoKey(detalle.id), exact: true }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("route-next-leg").props.coordinates[0]).toEqual({
+        latitude: 3.41,
+        longitude: -76.55,
+      }),
+    );
+    expect(screen.getByTestId("route-map")).toBe(map);
+    expect(screen.getByTestId("route-map").props.initialRegion).toBe(frame);
+    expect(screen.getByTestId(`route-stop-${first.id}`)).toBe(marker);
   });
 
   it("keeps an estimated straight leg and an untraced path off the map, but shows the ETA", async () => {

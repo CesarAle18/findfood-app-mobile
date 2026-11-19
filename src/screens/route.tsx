@@ -2,7 +2,7 @@
  * Rutas (MOV-42): the volunteer's current route (in progress, else the next planned one)
  * with its map and stops, or the "Armar ruta" step from the accepted pickups.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { messageFor } from "@/api/problem-messages";
@@ -96,8 +96,12 @@ function RouteDetail({
   const enCurso = ruta.estado === "EN_CURSO";
   const live = useLiveRoute(enCurso ? ruta.id : null);
   const { gate, request } = live;
-  // Given-up stops (OMITIDA) leave the map and the list; the rest are numbered 1..n.
-  const paradas = routeStops(ruta.paradas).map((parada, i) => ({ ...parada, orden: i + 1 }));
+  // Given-up stops (OMITIDA) leave the map and the list; the rest are numbered 1..n. Kept
+  // between renders (the leg refreshes every 30 s), so the map's stops and frame hold still.
+  const paradas = useMemo(
+    () => routeStops(ruta.paradas).map((parada, i) => ({ ...parada, orden: i + 1 })),
+    [ruta.paradas],
+  );
   // An ESTIMADO leg is a straight line to the stop: its time is shown, its line is not.
   const tramo = live.seguimiento?.tramo;
   return (
