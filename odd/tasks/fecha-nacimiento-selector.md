@@ -32,3 +32,4 @@ Typing the date by hand invites format mistakes. The user asked (2026-11-19) for
   - RED observed: picker + helper 9 failed / 4 passed; screen 4 failed / 5 passed (no "Fecha de nacimiento *: Seleccionar" button).
   - GREEN observed: `npm run typecheck` exit 0; `npx eslint` on the 6 touched src files exit 0; `npx jest src/components/findfood src/screens src/domain` 58 suites / 963 tests passed.
   - `scripts/check-render.cjs` does not touch the birth date; left unchanged.
+  - Commit: `c5f1a6b` feat(voluntario): pick the birth date with the calendar picker.
