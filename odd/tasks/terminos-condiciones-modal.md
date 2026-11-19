@@ -10,7 +10,7 @@ Let users read the full Terms and Conditions (including the personal-data policy
 The checkbox says "Acepto los Términos y Condiciones y la Política de Privacidad", but no terms text exists anywhere (mobile, web, API; the API only cites Ley 1581 de 2012 and stores `acepto_terminos_at`). The user chose (2026-11-17) a drafted text and a modal with "Aceptar" (checks the box and closes) and "Cerrar".
 
 ## Scope / constraints
-- Content in `src/content/terminos.ts`: drafted Spanish text for Find Food (Colombia), marked as a draft pending legal review.
+- Content in `src/content/terminos.ts`: drafted Spanish text for FindFood (Colombia), marked as a draft pending legal review.
 - `TermsModal` in `src/components/findfood/terms-modal.tsx`: full-screen RN `Modal` + `SafeAreaView`, scrollable sections, fixed footer with Aceptar / Cerrar; Android back closes.
 - `TermsCheckbox` (`src/screens/auth.tsx`) gets a separate, accessible "Leer términos y condiciones" link; its props stay unchanged; "Aceptar" is hidden while the checkbox is disabled.
 - No new dependencies. Delivery strategy: `ask-on-risk`. Forecast ≈ 300 authored lines (most of it the terms text); one PR.

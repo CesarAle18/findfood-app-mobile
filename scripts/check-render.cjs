@@ -409,7 +409,7 @@ try {
     for (const [name, component] of Object.entries(exports)) {
       if (!name.endsWith("Screen")) continue;
       const html = renderToStaticMarkup(React.createElement(component));
-      assert(html.includes("Find Food"), `${name} did not render its header`);
+      assert(html.includes("FindFood"), `${name} did not render its header`);
       if (name === "VolunteerRegistrationScreen") {
         // The default account is an approved volunteer: the status, not the form.
         assert(html.includes("Ya eres voluntario") && html.includes("Ir al modo voluntario"));

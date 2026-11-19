@@ -143,10 +143,10 @@ export function Screen({
               source={require("../../../assets/brand/findfood-logo.png")}
               style={styles.logo}
               resizeMode="contain"
-              accessibilityLabel="Logotipo de Find Food"
+              accessibilityLabel="Logotipo de FindFood"
             />
             <Copy weight="semibold" style={styles.brandName}>
-              Find Food
+              FindFood
             </Copy>
           </View>
           <Link href="/cuenta" asChild>

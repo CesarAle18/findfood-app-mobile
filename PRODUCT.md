@@ -1,4 +1,4 @@
-# Find Food móvil
+# FindFood móvil
 
 <!-- impeccable:product-schema 1 -->
 
@@ -16,7 +16,7 @@ Donantes y voluntarios representados en el Figma proporcionado.
 
 ## Product Purpose
 
-Representar los recorridos móviles de Find Food y preparar la interfaz para una integración posterior con servicios reales.
+Representar los recorridos móviles de FindFood y preparar la interfaz para una integración posterior con servicios reales.
 
 ## Capabilities and Constraints
 

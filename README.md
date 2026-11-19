@@ -1,4 +1,4 @@
-# Find Food móvil
+# FindFood móvil
 
 Frontend móvil en React Native, Expo SDK 57 y TypeScript, basado en `Mock Up Proyecto de grado.fig`. Incluye 22 pantallas del diseño mediante 21 componentes de pantalla: ambos perfiles comparten implementación. El inventario completo está en [docs/pantallas.md](docs/pantallas.md).
 
