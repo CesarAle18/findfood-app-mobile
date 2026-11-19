@@ -598,6 +598,52 @@ describe("RouteMapView", () => {
       expect(screen.getByTestId("route-map").props.initialRegion.latitude).toBeCloseTo(4.66);
     },
   );
+
+  describe("child list", () => {
+    // Android's map keeps its overlays in a list that a mounted child changes by index
+    // without shifting the rest, so the map is rebuilt whenever its children change.
+    const tramo: GeometriaRutaDto = { type: "LineString", coordinates: [[-74.05, 4.64], [-74.06, 4.65]] };
+    const otherTramo: GeometriaRutaDto = { type: "LineString", coordinates: [[-74.04, 4.63], [-74.06, 4.65]] };
+    const third: RouteStop = { id: "p3", orden: 3, direccion: "Mercado", lat: 4.68, lng: -74.09 };
+    type Props = Parameters<typeof RouteMapView>[0];
+    const base: Props = { geometria, proveedorRuteo: "GOOGLE", paradas, tramo };
+
+    async function mapAfter(from: Props, to: Props) {
+      const view = await render(<RouteMapView {...from} />);
+      const before = screen.getByTestId("route-map");
+      await view.rerender(<RouteMapView {...to} />);
+      return { before, after: screen.getByTestId("route-map") };
+    }
+
+    it.each<[string, Props, Props]>([
+      ["the path appears", { ...base, geometria: null }, base],
+      ["the path disappears", base, { ...base, proveedorRuteo: null }],
+      ["the leg appears", { ...base, tramo: null }, base],
+      ["the leg disappears", base, { ...base, tramo: null }],
+      ["a stop is added", base, { ...base, paradas: [...paradas, third] }],
+      ["a stop is removed", { ...base, paradas: [...paradas, third] }, base],
+    ])("rebuilds the map when %s", async (_change, from, to) => {
+      const { before, after } = await mapAfter(from, to);
+
+      expect(after).not.toBe(before);
+    });
+
+    it("keeps the map when only the leg's coordinates change", async () => {
+      const { before, after } = await mapAfter(base, { ...base, tramo: otherTramo });
+
+      expect(after).toBe(before);
+      expect(screen.getByTestId("route-next-leg").props.coordinates[0]).toEqual({
+        latitude: 4.63,
+        longitude: -74.04,
+      });
+    });
+
+    it("keeps the map when the same stops arrive in a new array", async () => {
+      const { before, after } = await mapAfter(base, { ...base, paradas: paradas.map((p) => ({ ...p })) });
+
+      expect(after).toBe(before);
+    });
+  });
 });
 
 describe("PointMap", () => {

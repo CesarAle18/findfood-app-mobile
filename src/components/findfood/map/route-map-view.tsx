@@ -18,6 +18,26 @@ const NEXT_LEG_COLOR = "#1F5FBF";
 /** The only `proveedor_ruteo` whose `geometria` follows the streets. */
 const STREET_ROUTING = "GOOGLE";
 
+/** The React key of a stop's marker. */
+const markerKey = (stop: Pick<RouteStop, "id">) => stop.id;
+
+/**
+ * Names the map's child list: which lines it draws, then its markers in order. The map is
+ * keyed by it, so any change to that list mounts a fresh map. On Android, react-native-maps
+ * 1.27 keeps its overlays in a list where a child mounted into a live map overwrites the
+ * entry at its index instead of shifting the rest (`MapView.safeAddFeature`), while a
+ * removal does shift. The map then loses overlays, and a tab switch (detach and reattach)
+ * restores that broken list. A fresh map adds its children in order and stays consistent.
+ * New coordinates for the same children (the leg refreshed every 30 s) keep the map.
+ */
+function childListKey(
+  drawsPath: boolean,
+  drawsLeg: boolean,
+  stops: readonly Pick<RouteStop, "id">[],
+): string {
+  return [drawsPath ? "path" : "-", drawsLeg ? "leg" : "-", ...stops.map(markerKey)].join("|");
+}
+
 /**
  * The planned path (`geometria`, GeoJSON `[lng, lat]`) and the numbered stops of a route.
  * The path is drawn only when Google traced it (`proveedorRuteo === "GOOGLE"`): anything
@@ -27,6 +47,9 @@ const STREET_ROUTING = "GOOGLE";
  * With `showsUserLocation` (location permission granted) the map shows the device's
  * position and Android's "my location" button; `tramo` draws the path from there to the
  * next stop (`GET /rutas/:id/seguimiento`): pass it only when it follows the streets.
+ *
+ * Its lines and markers never mount or unmount inside a live map: a change to them mounts a
+ * new map (`childListKey`), which fits itself again once ready.
  */
 export function RouteMapView({
   geometria,
@@ -60,6 +83,8 @@ export function RouteMapView({
   }, [geometria, proveedorRuteo, paradas]);
   const initialRegion = useMemo(() => regionForPoints(bounds), [bounds]);
   const leg = useMemo(() => lineStringToLatLngs(tramo), [tramo]);
+  const drawsPath = path.length > 1;
+  const drawsLeg = leg.length > 1;
 
   const fit = () => {
     if (bounds.length < 2) return;
@@ -68,6 +93,7 @@ export function RouteMapView({
 
   return (
     <FindFoodMap
+      key={childListKey(drawsPath, drawsLeg, stops)}
       ref={mapRef}
       testID="route-map"
       height={height}
@@ -77,7 +103,7 @@ export function RouteMapView({
       showsMyLocationButton={showsUserLocation}
       accessibilityLabel={`Mapa de la ruta con ${stops.length} paradas`}
     >
-      {path.length > 1 ? (
+      {drawsPath ? (
         <Polyline
           testID="route-path"
           coordinates={path}
@@ -85,7 +111,7 @@ export function RouteMapView({
           strokeWidth={5}
         />
       ) : null}
-      {leg.length > 1 ? (
+      {drawsLeg ? (
         <Polyline
           testID="route-next-leg"
           coordinates={leg}
@@ -96,7 +122,7 @@ export function RouteMapView({
       ) : null}
       {stops.map((stop) => (
         <Marker
-          key={stop.id}
+          key={markerKey(stop)}
           coordinate={stop.coordinate}
           title={`${stop.orden}. ${stop.direccion}`}
           tracksViewChanges={false}
