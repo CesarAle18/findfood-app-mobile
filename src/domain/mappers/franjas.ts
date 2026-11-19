@@ -16,15 +16,18 @@ export const MAX_FRANJAS = 42;
 /** The last end a window can have: the API never takes one crossing midnight. */
 export const END_OF_DAY = "23:59";
 
-/** The week as shown, from Monday; `dia` is the API's `dia_semana` (Sunday = 0). */
+/**
+ * The week as shown, from Monday; `dia` is the API's `dia_semana` (Sunday = 0) and `short`
+ * the three-letter label of compact rows (`Lun – Mié`).
+ */
 export const WEEK_DAYS = [
-  { dia: 1, label: "Lunes" },
-  { dia: 2, label: "Martes" },
-  { dia: 3, label: "Miércoles" },
-  { dia: 4, label: "Jueves" },
-  { dia: 5, label: "Viernes" },
-  { dia: 6, label: "Sábado" },
-  { dia: 0, label: "Domingo" },
+  { dia: 1, label: "Lunes", short: "Lun" },
+  { dia: 2, label: "Martes", short: "Mar" },
+  { dia: 3, label: "Miércoles", short: "Mié" },
+  { dia: 4, label: "Jueves", short: "Jue" },
+  { dia: 5, label: "Viernes", short: "Vie" },
+  { dia: 6, label: "Sábado", short: "Sáb" },
+  { dia: 0, label: "Domingo", short: "Dom" },
 ] as const;
 
 export function dayLabel(dia: number): string {
