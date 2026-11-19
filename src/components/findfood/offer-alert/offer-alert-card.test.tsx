@@ -158,9 +158,26 @@ describe("OfferAlertCard", () => {
     expect(screen.getByText("Traer neveras")).toBeOnTheScreen();
     expect(screen.getByText("20/10/2026")).toBeOnTheScreen();
     expect(screen.getByText("a las 14:58")).toBeOnTheScreen();
-    expect(screen.getByLabelText(/^Foto de /)).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: /^Ver foto de / })).toBeOnTheScreen();
     // The donor's name stays private until the offer is accepted.
     expect(screen.queryByText("María García")).toBeNull();
+  });
+
+  it("opens the photos full screen from the thumbnail, like the donation detail", async () => {
+    detalle = detalleFixture({
+      estado: "PUBLICADA",
+      items: [
+        donacionItemFixture({ id: "item-1", descripcion: "Pan", foto_url: "https://storage.test/pan.jpg" }),
+        donacionItemFixture({ id: "item-2", descripcion: "Leche", foto_url: "https://storage.test/leche.jpg" }),
+      ],
+    });
+
+    await renderCard();
+    await fireEvent.press(await screen.findByRole("button", { name: "Ver foto de Pan" }));
+
+    expect(screen.getByText("Foto 1 de 2")).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole("button", { name: "Cerrar foto" }));
+    expect(screen.queryByText("Foto 1 de 2")).toBeNull();
   });
 
   it("warns about the capacity", async () => {

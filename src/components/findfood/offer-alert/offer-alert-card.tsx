@@ -40,7 +40,7 @@ import type { OfferClosedReason } from "@/screens/use-accept-offer";
 import { useRejectOffer } from "@/screens/use-reject-offer";
 
 import { formatRemaining, useCountdown } from "../countdown";
-import { photosOf } from "../donation-photos";
+import { PhotoViewer, photosOf } from "../donation-photos";
 import { Icon } from "../icon";
 import { Pressing } from "../motion";
 import { RejectOfferForm } from "../reject-offer-form";
@@ -165,7 +165,7 @@ function ProgressBar({ share, urgent }: { share: number; urgent: boolean }) {
 
 /** What the donation detail adds; nothing while it loads or when the donor left it out. */
 function detailLines(donacion: DonacionDetalleDto | undefined) {
-  if (!donacion) return { photo: null, lines: [] as { label: string; value: string }[] };
+  if (!donacion) return { photos: [], lines: [] as { label: string; value: string }[] };
   const lines: { label: string; value: string }[] = [];
   const description = donacion.descripcion?.trim();
   if (description) lines.push({ label: "Descripción", value: description });
@@ -190,7 +190,7 @@ function detailLines(donacion: DonacionDetalleDto | undefined) {
       // Same: no line instead of a wrong time.
     }
   }
-  return { photo: photosOf(donacion.items)[0] ?? null, lines };
+  return { photos: photosOf(donacion.items), lines };
 }
 
 /** Uber-like route: where the volunteer is (only with a distance), then the pickup point. */
@@ -267,7 +267,10 @@ export function OfferAlertCard({
   const blur = PLATFORM_BLURS && !reduceTransparency;
   // The offer row has no photos or notes: the detail signs them for the offered volunteer.
   const { data: donacion } = useDonacion(offer.donacionId);
-  const { photo, lines } = detailLines(donacion);
+  const { photos, lines } = detailLines(donacion);
+  const photo = photos[0] ?? null;
+  // The same full-screen viewer as the donation detail, opened from the thumbnail.
+  const [viewerOpen, setViewerOpen] = useState(false);
   const title = offer.title ?? "Donación disponible";
 
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -367,14 +370,28 @@ export function OfferAlertCard({
               <Copy tone="secondary">{formatKg(offer.weightKg)}</Copy>
             </View>
             {photo ? (
-              <Image
-                source={{ uri: photo.uri, cacheKey: `donacion-item-${photo.id}` }}
-                contentFit="cover"
-                accessibilityLabel={`Foto de ${photo.name}`}
-                style={styles.photo}
-              />
+              <Pressing
+                accessibilityRole="button"
+                accessibilityLabel={`Ver foto de ${photo.name}`}
+                accessibilityHint="Abre la foto en pantalla completa"
+                onPress={() => setViewerOpen(true)}
+                scale={0.96}
+                surface={styles.photo}
+              >
+                <Image
+                  source={{ uri: photo.uri, cacheKey: `donacion-item-${photo.id}` }}
+                  contentFit="cover"
+                  style={styles.photoImage}
+                />
+                <View style={styles.photoExpand} pointerEvents="none">
+                  <Icon name="expand" size={12} color="#fff" />
+                </View>
+              </Pressing>
             ) : null}
           </View>
+          {viewerOpen && photos.length > 0 ? (
+            <PhotoViewer photos={photos} initialIndex={0} onClose={() => setViewerOpen(false)} />
+          ) : null}
 
           {offer.products.length > 0 ? (
             <View style={styles.products} accessibilityLabel={`Productos: ${offer.products.join(", ")}`}>
@@ -552,7 +569,25 @@ const styles = StyleSheet.create({
   headline: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   headlineText: { flex: 1, gap: 2 },
   title: { fontSize: 18, lineHeight: 24 },
-  photo: { width: 64, height: 64, borderRadius: 14, backgroundColor: colors.muted },
+  photo: {
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: colors.muted,
+  },
+  photoImage: { width: "100%", height: "100%" },
+  photoExpand: {
+    position: "absolute",
+    right: 4,
+    bottom: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
   products: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   product: {
     backgroundColor: "rgba(240,244,242,0.9)",
