@@ -310,7 +310,7 @@ export function RegisterScreen() {
   return (
     <Screen
       title="Registrarse"
-      subtitle="Crea tu cuenta para comenzar a usar Find Food. Todos los campos son obligatorios."
+      subtitle="Crea tu cuenta para comenzar a usar FindFood. Todos los campos son obligatorios."
       back
     >
       {available ? null : <LocalProfileNotice />}

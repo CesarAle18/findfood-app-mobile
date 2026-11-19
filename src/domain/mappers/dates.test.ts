@@ -13,6 +13,7 @@ import {
   isBeforeTodayInBogota,
   pickupWindowBounds,
   pickupWindowFromNow,
+  bogotaWeekdayAndTime,
 } from "./dates";
 import { errorCode } from "@/test-utils/mapping";
 
@@ -410,5 +411,21 @@ describe("pickupWindowFromNow", () => {
       ventana_recogida_inicio: "2026-12-31T21:30:00-05:00",
       ventana_recogida_fin: "2027-01-01T21:30:00-05:00",
     });
+  });
+});
+
+describe("bogotaWeekdayAndTime", () => {
+  it("reads the weekday (Sunday = 0) and HH:mm in Bogotá", () => {
+    // 19/11/2026 is a Thursday.
+    expect(bogotaWeekdayAndTime(bogota(2026, 11, 19, 8, 5) + 42_000)).toEqual({
+      dia: 4,
+      time: "08:05",
+    });
+    expect(bogotaWeekdayAndTime(bogota(2026, 11, 22, 0, 0))).toEqual({ dia: 0, time: "00:00" });
+  });
+
+  it("keeps the Bogotá day when UTC has already moved to the next one", () => {
+    // 21:30 on Saturday in Bogotá is 02:30 on Sunday in UTC.
+    expect(bogotaWeekdayAndTime(bogota(2026, 11, 21, 21, 30))).toEqual({ dia: 6, time: "21:30" });
   });
 });

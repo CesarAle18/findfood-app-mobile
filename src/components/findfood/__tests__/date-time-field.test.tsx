@@ -60,3 +60,97 @@ describe("DateTimeField (date)", () => {
     expect(onChange).toHaveBeenCalledWith("15/10/2026");
   });
 });
+
+describe("DateTimeField (date) with maxDate", () => {
+  it("opens an empty value on maxDate's month", async () => {
+    await openCalendar({ maxDate: "16/10/2008" });
+
+    expect(
+      screen.getByRole("button", { name: "Elegir año, Octubre 2008" }),
+    ).toBeOnTheScreen();
+  });
+
+  it("blocks the days after maxDate and the months past it", async () => {
+    const onChange = await openCalendar({ maxDate: "16/10/2008" });
+
+    const tooLate = screen.getByRole("button", { name: "17/10/2008" });
+    expect(tooLate).toBeDisabled();
+    await fireEvent.press(tooLate);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Mes siguiente" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Mes anterior" })).toBeEnabled();
+
+    await fireEvent.press(screen.getByRole("button", { name: "16/10/2008" }));
+    expect(onChange).toHaveBeenCalledWith("16/10/2008");
+  });
+
+  it("jumps to a chosen year, within maxDate and 1900", async () => {
+    const onChange = await openCalendar({ maxDate: "16/10/2008" });
+
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Elegir año, Octubre 2008" }),
+    );
+    expect(screen.getByRole("button", { name: "1900" })).toBeOnTheScreen();
+    expect(screen.queryByRole("button", { name: "1899" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "2009" })).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "1995" }));
+
+    expect(
+      screen.getByRole("button", { name: "Elegir año, Octubre 1995" }),
+    ).toBeOnTheScreen();
+    expect(screen.getByRole("button", { name: "Mes siguiente" })).toBeEnabled();
+    await fireEvent.press(screen.getByRole("button", { name: "12/10/1995" }));
+    expect(onChange).toHaveBeenCalledWith("12/10/1995");
+  });
+
+  it("clamps the month of a chosen year to maxDate", async () => {
+    await render(
+      <DateTimeField
+        label="Fecha de nacimiento"
+        value="12/12/1995"
+        onChange={jest.fn()}
+        maxDate="16/10/2008"
+      />,
+    );
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Fecha de nacimiento: 12/12/1995" }),
+    );
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Elegir año, Diciembre 1995" }),
+    );
+    await fireEvent.press(screen.getByRole("button", { name: "2008" }));
+
+    expect(
+      screen.getByRole("button", { name: "Elegir año, Octubre 2008" }),
+    ).toBeOnTheScreen();
+  });
+
+  it("shows the hint below the field", async () => {
+    await render(
+      <DateTimeField
+        label="Fecha de nacimiento"
+        value=""
+        onChange={jest.fn()}
+        hint="Debes tener al menos 18 años."
+      />,
+    );
+
+    expect(screen.getByText("Debes tener al menos 18 años.")).toBeOnTheScreen();
+  });
+});
+
+describe("DateTimeField (date) year list with disablePast", () => {
+  it("starts the years at the current one", async () => {
+    await openCalendar({ disablePast: true });
+
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Elegir año, Octubre 2026" }),
+    );
+    expect(screen.queryByRole("button", { name: "2025" })).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "2027" }));
+
+    expect(
+      screen.getByRole("button", { name: "Elegir año, Octubre 2027" }),
+    ).toBeOnTheScreen();
+  });
+});

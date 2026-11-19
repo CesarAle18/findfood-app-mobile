@@ -146,7 +146,7 @@ export function PhotoField({
       {cameraRefused ? (
         <PermissionNotice
           title="Permite el acceso a la cámara"
-          body="Find Food la necesita para tomar la foto. También puedes elegir una de tu galería."
+          body="FindFood la necesita para tomar la foto. También puedes elegir una de tu galería."
           gate={cameraGate}
           onRequest={() => void requestCamera()}
         />

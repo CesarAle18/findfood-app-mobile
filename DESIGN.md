@@ -1,5 +1,5 @@
 ---
-name: Find Food móvil
+name: FindFood móvil
 description: Sistema visual del frontend móvil basado en el Figma actualizado.
 colors:
   primary: "#1F7A5A"
@@ -87,7 +87,7 @@ components:
     padding: "8px 0px"
 ---
 
-# Design System: Find Food móvil
+# Design System: FindFood móvil
 
 ## Overview
 

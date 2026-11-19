@@ -38,7 +38,7 @@ const CLIENT_MESSAGES = {
 
 const AUTH_MESSAGES = {
   "token-invalido": "Tu sesión no es válida. Inicia sesión de nuevo.",
-  "cuenta-inexistente": "No encontramos una cuenta de Find Food asociada a este usuario.",
+  "cuenta-inexistente": "No encontramos una cuenta de FindFood asociada a este usuario.",
   "cuenta-suspendida": "Tu cuenta está suspendida. Comunícate con soporte para más información.",
   "cuenta-inactiva": "Tu cuenta está inactiva. Comunícate con soporte para reactivarla.",
   "cuenta-pendiente": "Tu cuenta está pendiente de aprobación.",

@@ -26,10 +26,10 @@ function StatusFrame({ children }: PropsWithChildren) {
             source={require("../../assets/brand/findfood-logo.png")}
             style={styles.logo}
             resizeMode="contain"
-            accessibilityLabel="Logotipo de Find Food"
+            accessibilityLabel="Logotipo de FindFood"
           />
           <Copy weight="semibold" style={styles.brandName}>
-            Find Food
+            FindFood
           </Copy>
         </View>
         {children}
@@ -91,7 +91,7 @@ export function NoAccessScreen() {
         description={
           blocked
             ? messageFor(error)
-            : "La app móvil de Find Food es para donantes y voluntarios, y tu cuenta no tiene ninguno de estos roles. Si crees que es un error, comunícate con soporte."
+            : "La app móvil de FindFood es para donantes y voluntarios, y tu cuenta no tiene ninguno de estos roles. Si crees que es un error, comunícate con soporte."
         }
         action={<SignOutButton />}
       />

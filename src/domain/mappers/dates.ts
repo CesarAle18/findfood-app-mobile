@@ -240,6 +240,17 @@ export function todayInBogota(now: number): string {
   return formatDate(bogotaParts(now).date);
 }
 
+/**
+ * The Bogotá weekday (as the API's `dia_semana`: Sunday = 0) and `HH:mm` of `now` (epoch
+ * milliseconds), to compare against the weekly availability windows.
+ */
+export function bogotaWeekdayAndTime(now: number): { dia: number; time: string } {
+  return {
+    dia: new Date(now + BOGOTA_OFFSET_MS).getUTCDay(),
+    time: formatTime(bogotaParts(now).time),
+  };
+}
+
 const dateKey = ({ year, month, day }: CalendarDate) => year * 10000 + month * 100 + day;
 
 /** Whether a `DD/MM/AAAA` date is before the Bogotá calendar day of `now`. */

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Find Food",
+    "name": "FindFood",
     "slug": "findfood-app-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -37,8 +37,8 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Find Food usa la cámara para tomar las fotos de evidencia de tus donaciones y entregas.",
-          "photosPermission": "Find Food accede a tus fotos para que elijas la evidencia de tus donaciones y entregas.",
+          "cameraPermission": "FindFood usa la cámara para tomar las fotos de evidencia de tus donaciones y entregas.",
+          "photosPermission": "FindFood accede a tus fotos para que elijas la evidencia de tus donaciones y entregas.",
           "microphonePermission": false
         }
       ],
@@ -52,8 +52,8 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Find Food usa tu ubicación para mostrarte en el mapa y elegir puntos de recogida.",
-          "locationAlwaysAndWhenInUsePermission": "Find Food usa tu ubicación, también en segundo plano, para ofrecerte donaciones cercanas mientras estás disponible como voluntario.",
+          "locationWhenInUsePermission": "FindFood usa tu ubicación para mostrarte en el mapa y elegir puntos de recogida.",
+          "locationAlwaysAndWhenInUsePermission": "FindFood usa tu ubicación, también en segundo plano, para ofrecerte donaciones cercanas mientras estás disponible como voluntario.",
           "isAndroidBackgroundLocationEnabled": true,
           "isIosBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true

@@ -1,5 +1,5 @@
 /**
- * Terms and Conditions of Find Food, including the personal-data policy, shown by
+ * Terms and Conditions of FindFood, including the personal-data policy, shown by
  * `TermsModal`. DRAFT pending legal review: this file is the single place to replace the
  * text; keep `TERMS_UPDATED_AT` in step with every change of the content.
  */
@@ -15,14 +15,14 @@ export const TERMS_SECTIONS: readonly TermsSection[] = [
   {
     title: "1. Objeto y aceptación",
     paragraphs: [
-      "Estos Términos y Condiciones regulan el acceso y el uso de Find Food, una plataforma que conecta a personas y organizaciones que donan alimentos con voluntarios que los recogen y los entregan a quienes los necesitan en Colombia.",
+      "Estos Términos y Condiciones regulan el acceso y el uso de FindFood, una plataforma que conecta a personas y organizaciones que donan alimentos con voluntarios que los recogen y los entregan a quienes los necesitan en Colombia.",
       "Al crear una cuenta o al marcar la casilla de aceptación, declaras que leíste, entendiste y aceptas estos Términos y Condiciones y la Política de Tratamiento de Datos Personales incluida en ellos. Si no estás de acuerdo, no debes usar la plataforma.",
     ],
   },
   {
     title: "2. Definiciones",
     paragraphs: [
-      "Plataforma: la aplicación móvil, el sitio web y los servicios asociados de Find Food.",
+      "Plataforma: la aplicación móvil, el sitio web y los servicios asociados de FindFood.",
       "Usuario: toda persona que se registra y usa la plataforma, ya sea como donante o como voluntario.",
       "Donante: el usuario que publica alimentos para donarlos.",
       "Voluntario: el usuario que, tras ser verificado, recoge las donaciones y las entrega en su destino.",
@@ -78,7 +78,7 @@ export const TERMS_SECTIONS: readonly TermsSection[] = [
   {
     title: "8. Tratamiento de datos personales",
     paragraphs: [
-      "Find Food es responsable del tratamiento de tus datos personales, que se realiza conforme a la Ley 1581 de 2012, el Decreto 1377 de 2013 y las demás normas colombianas aplicables.",
+      "FindFood es responsable del tratamiento de tus datos personales, que se realiza conforme a la Ley 1581 de 2012, el Decreto 1377 de 2013 y las demás normas colombianas aplicables.",
       "Tratamos datos de identificación (nombres, apellidos y documento de identidad), de contacto (correo electrónico y celular), de ubicación, fotografías de los alimentos y evidencias de recogida y entrega, y los documentos de identidad y del vehículo que aportan los voluntarios para su verificación.",
       "Las finalidades del tratamiento son: crear y administrar tu cuenta; verificar la identidad de los voluntarios; publicar, asignar, rastrear y cerrar las donaciones; comunicar entre sí a donantes y voluntarios en lo necesario para cada donación; enviarte notificaciones del servicio; prevenir fraudes y usos indebidos; atender tus consultas y reclamos, y cumplir las obligaciones legales.",
       "Como titular tienes derecho a conocer, actualizar y rectificar tus datos; solicitar prueba de la autorización otorgada; ser informado sobre el uso que se les ha dado; presentar quejas ante la Superintendencia de Industria y Comercio por infracciones a la ley; revocar la autorización y solicitar la supresión de tus datos cuando no exista un deber legal o contractual de conservarlos, y acceder de forma gratuita a ellos.",
@@ -92,27 +92,27 @@ export const TERMS_SECTIONS: readonly TermsSection[] = [
     title: "9. Gratuidad y ausencia de relación laboral",
     paragraphs: [
       "El uso de la plataforma es gratuito. Las donaciones no se venden ni dan lugar a pago alguno.",
-      "El voluntariado es una actividad libre y sin remuneración. Su ejercicio no crea relación laboral, de subordinación ni de prestación de servicios entre el voluntario y Find Food.",
+      "El voluntariado es una actividad libre y sin remuneración. Su ejercicio no crea relación laboral, de subordinación ni de prestación de servicios entre el voluntario y FindFood.",
     ],
   },
   {
     title: "10. Limitación de responsabilidad",
     paragraphs: [
-      "Find Food es un intermediario tecnológico que facilita el contacto entre donantes y voluntarios. No produce, almacena, transporta ni inspecciona los alimentos, y no garantiza su calidad, su inocuidad ni su estado.",
-      "Cada donante responde por los alimentos que dona y cada voluntario por su manipulación y entrega. Find Food no responde por los daños que se deriven del incumplimiento de estos términos por parte de los usuarios, salvo en los casos en que la ley disponga otra cosa.",
+      "FindFood es un intermediario tecnológico que facilita el contacto entre donantes y voluntarios. No produce, almacena, transporta ni inspecciona los alimentos, y no garantiza su calidad, su inocuidad ni su estado.",
+      "Cada donante responde por los alimentos que dona y cada voluntario por su manipulación y entrega. FindFood no responde por los daños que se deriven del incumplimiento de estos términos por parte de los usuarios, salvo en los casos en que la ley disponga otra cosa.",
     ],
   },
   {
     title: "11. Suspensión de cuentas",
     paragraphs: [
-      "Find Food puede suspender o cancelar una cuenta cuando detecte información falsa, incumplimiento de estos términos, conductas que pongan en riesgo a otros usuarios o a quienes reciben las donaciones, o usos contrarios a la ley.",
+      "FindFood puede suspender o cancelar una cuenta cuando detecte información falsa, incumplimiento de estos términos, conductas que pongan en riesgo a otros usuarios o a quienes reciben las donaciones, o usos contrarios a la ley.",
       "Cuando sea posible, te informaremos el motivo y podrás pedir la revisión de la decisión a través del canal de contacto.",
     ],
   },
   {
     title: "12. Modificaciones de los términos",
     paragraphs: [
-      "Find Food puede modificar estos términos. La fecha de la última actualización aparece al inicio del documento. Cuando los cambios sean relevantes te lo informaremos en la aplicación y, si es necesario, te pediremos aceptarlos de nuevo para seguir usando la plataforma.",
+      "FindFood puede modificar estos términos. La fecha de la última actualización aparece al inicio del documento. Cuando los cambios sean relevantes te lo informaremos en la aplicación y, si es necesario, te pediremos aceptarlos de nuevo para seguir usando la plataforma.",
     ],
   },
   {

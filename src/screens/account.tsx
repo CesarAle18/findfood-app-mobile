@@ -3,11 +3,14 @@ import { Alert, Platform, StyleSheet, TextInput, View } from "react-native";
 import { isAuthError } from "@supabase/supabase-js";
 import { router, useLocalSearchParams, type Href } from "expo-router";
 import { messageFor } from "@/api/problem-messages";
-import type { EstadoVerificacion, MeDto } from "@/api/types";
+import type { EstadoVerificacion, MeDto, MeVoluntarioDto } from "@/api/types";
 import type { MobileRole } from "@/auth/access";
 import { resendSignupOtp, verifyEmailOtp } from "@/auth/email-auth";
 import { OTP_LENGTH, otpSchema } from "@/domain/validation/auth";
+import { useNow } from "@/hooks/use-now";
 import { useZodForm } from "@/hooks/use-zod-form";
+import { AvailabilitySchedule } from "@/components/findfood/availability-schedule";
+import { LiveStatusBadge } from "@/components/findfood/live-status-badge";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import {
   Badge,
@@ -34,13 +37,9 @@ import {
   fadeOut,
   itemLayout,
 } from "@/components/findfood/motion";
+import { liveAvailability } from "@/domain/mappers/availability-summary";
 import { assignedVolunteerFromDetalle } from "@/domain/mappers/donations";
-import {
-  formatFranjas,
-  formatKg,
-  formatRating,
-  profileFromMe,
-} from "@/domain/mappers/profile";
+import { formatKg, formatRating, profileFromMe } from "@/domain/mappers/profile";
 import { useCalificarAsignacionMutation } from "@/services/asignaciones";
 import {
   useAspectosCalificacion,
@@ -219,17 +218,32 @@ function VolunteerProfile({ me }: { me: MeDto }) {
         />
         <EditProfileAction />
       </Section>
-      <Section title="Disponibilidad">
-        <Card soft>
-          <Copy>{formatFranjas(voluntario.disponibilidad)}</Copy>
-        </Card>
-        {voluntario.estado_verificacion === "APROBADA" ? (
-          <NavButton href="/voluntario/editar-disponibilidad" variant="outline" showArrow={false}>
-            Editar disponibilidad
-          </NavButton>
-        ) : null}
-      </Section>
+      <AvailabilitySection voluntario={voluntario} />
     </>
+  );
+}
+
+/**
+ * The live status (toggle + schedule, Bogotá time) above the grouped weekly schedule. Its
+ * own component so the minute clock re-renders only this section.
+ */
+function AvailabilitySection({ voluntario }: { voluntario: MeVoluntarioDto }) {
+  const now = useNow();
+  const status = liveAvailability({
+    disponible: voluntario.disponible,
+    franjas: voluntario.disponibilidad,
+    now,
+  });
+  return (
+    <Section title="Disponibilidad">
+      <LiveStatusBadge state={status.state} label={status.label} />
+      <AvailabilitySchedule franjas={voluntario.disponibilidad} now={now} />
+      {voluntario.estado_verificacion === "APROBADA" ? (
+        <NavButton href="/voluntario/editar-disponibilidad" variant="outline" showArrow={false}>
+          Editar disponibilidad
+        </NavButton>
+      ) : null}
+    </Section>
   );
 }
 

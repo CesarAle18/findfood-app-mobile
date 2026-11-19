@@ -421,8 +421,26 @@ describe("ProfileScreen", () => {
 
     expect(screen.getByText("Voluntario verificado")).toBeOnTheScreen();
     expect(screen.getByText("ABC123")).toBeOnTheScreen();
-    expect(screen.getByText("Lun 08:00–18:00")).toBeOnTheScreen();
+    // Monday 08:00–18:00 only: one row for Monday, the rest of the week grouped without hours.
+    expect(screen.getByLabelText(/^Lun: 08:00 – 18:00/)).toBeOnTheScreen();
+    expect(screen.getByLabelText(/^Mar – Dom: Sin horario/)).toBeOnTheScreen();
+    // The toggle is on; whether inside the window depends on the real clock.
+    expect(
+      screen.getByLabelText(/^(En línea · hasta 18:00|Fuera de horario · vuelve (hoy|mañana|Lun) 08:00)$/),
+    ).toBeOnTheScreen();
     expect(await screen.findByText("1200 kg")).toBeOnTheScreen();
+  });
+
+  it("reads the volunteer as not available with the toggle off", async () => {
+    mockMe.data = meFixture({
+      voluntario: { ...meFixture().voluntario!, disponible: false },
+    });
+    answerGets({ "/me/impacto": impactoFixture() });
+
+    await renderScreen(() => <ProfileScreen volunteer />);
+
+    expect(screen.getByLabelText("No disponible")).toBeOnTheScreen();
+    await screen.findByText("1200 kg");
   });
 
   it("shows the volunteer's names and phone with the volunteer information", async () => {
