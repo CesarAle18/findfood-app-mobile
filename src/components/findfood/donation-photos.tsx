@@ -21,7 +21,7 @@ import { Icon } from "./icon";
 import { Pressing } from "./motion";
 import { Copy, Section } from "./ui";
 
-interface Photo {
+export interface Photo {
   id: string;
   name: string;
   uri: string;
@@ -125,7 +125,7 @@ export function DonationPhotos({
 }
 
 /** Full-screen, paged viewer opened on `initialIndex`; mounted only while open. */
-function PhotoViewer({
+export function PhotoViewer({
   photos,
   initialIndex,
   onClose,

@@ -3,10 +3,12 @@ import * as Notifications from "expo-notifications";
 import { registrarDispositivo } from "@/services/perfil";
 
 import {
+  configureNotificationHandler,
   permissionStep,
   pushRegistrationPlan,
   registerForPush,
   resetPushSession,
+  setOfferAlertActive,
 } from "./push";
 
 const mockDevice = { isDevice: true, modelName: "iPhone 15" as string | null };
@@ -192,5 +194,47 @@ describe("registerForPush", () => {
   it("shares one attempt between concurrent calls", async () => {
     await Promise.all([registerForPush(), registerForPush()]);
     expect(mocked.getExpoPushTokenAsync).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("configureNotificationHandler", () => {
+  /** What the installed handler answers for a push carrying `data`. */
+  async function presentationOf(data: Record<string, unknown>) {
+    const install = jest.spyOn(Notifications, "setNotificationHandler").mockImplementation(() => {});
+    configureNotificationHandler();
+    const handler = install.mock.calls[0]?.[0];
+    install.mockRestore();
+    const notification = { request: { content: { data } } } as unknown as Notifications.Notification;
+    return handler?.handleNotification(notification);
+  }
+
+  afterEach(() => setOfferAlertActive(false));
+
+  it("shows a foreground push as a banner, in the list and with sound", async () => {
+    expect(await presentationOf({ tipo: "ASIGNACION_OFRECIDA" })).toEqual({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    });
+  });
+
+  it("leaves a new offer to the offer alert while it is on screen, keeping list and sound", async () => {
+    setOfferAlertActive(true);
+
+    expect(await presentationOf({ tipo: "ASIGNACION_OFRECIDA" })).toEqual({
+      shouldShowBanner: false,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    });
+  });
+
+  it("still shows the banner of any other push while the offer alert is on screen", async () => {
+    setOfferAlertActive(true);
+
+    expect(await presentationOf({ tipo: "ASIGNACION_TOMADA" })).toMatchObject({
+      shouldShowBanner: true,
+    });
   });
 });

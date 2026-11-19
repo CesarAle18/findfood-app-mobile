@@ -12,23 +12,18 @@ import { StatusAnimation } from "@/components/findfood/status-animation";
 import { PointMap } from "@/components/findfood/map";
 import { ColdChainChoice, OperationZoneFields } from "@/components/findfood/volunteer-zone";
 import { PhotoField } from "@/components/findfood/photo-field";
-import {
-  MotivoField,
-  motivoBody,
-  validateMotivo,
-  type MotivoSelection,
-} from "@/components/findfood/motivo-field";
+import { RejectOfferForm } from "@/components/findfood/reject-offer-form";
 import {
   initialVolunteerRequest,
   volunteerRequestSchema,
   type VolunteerRequestForm,
 } from "@/domain/volunteer-request";
 import { useZodForm } from "@/hooks/use-zod-form";
-import { useMotivos, useTiposVehiculo, type TipoVehiculoDto } from "@/services/catalogos";
+import { useTiposVehiculo, type TipoVehiculoDto } from "@/services/catalogos";
 import { useSolicitarVoluntarioMutation } from "@/services/perfil";
 import { offerFromOferta, selectOffer, type OfferView } from "@/domain/mappers/offers";
 import { formatKg } from "@/domain/mappers/profile";
-import { acceptedWithoutRoute, stopProgress } from "@/domain/mappers/routes";
+import { stopProgress } from "@/domain/mappers/routes";
 import {
   OBSERVACIONES_MAX,
   formatWeightInput,
@@ -40,11 +35,7 @@ import {
 import { useDonacion } from "@/services/donaciones";
 import { useEvidencias } from "@/services/evidencias";
 import { queryKeys } from "@/services/query-keys";
-import {
-  useAceptarOfertaMutation,
-  useOfertas,
-  useRechazarOfertaMutation,
-} from "@/services/asignaciones";
+import { useOfertas } from "@/services/asignaciones";
 import { useAccess, useMe } from "@/state/session";
 import { StyleSheet, View } from "react-native";
 import {
@@ -73,6 +64,8 @@ import {
   useStopParams,
   useStopRoute,
 } from "./route-actions";
+import { acceptedLoadKg, exceedsCapacity, useAcceptOffer } from "./use-accept-offer";
+import { useRejectOffer } from "./use-reject-offer";
 
 /**
  * The catalog vehicle types, keyed by their id as text (the select's value); the request
@@ -438,10 +431,7 @@ export function OfferScreen() {
               offer={offer}
               expired={expired}
               capacityKg={capacityKg}
-              acceptedKg={acceptedWithoutRoute(rows).reduce(
-                (total, row) => total + row.peso_estimado_kg,
-                0,
-              )}
+              acceptedKg={acceptedLoadKg(rows)}
             />
           ) : (
             <EmptyState
@@ -490,23 +480,8 @@ function OfferDetails({
   const [rejecting, setRejecting] = useState(false);
   // The offer carries no photos: the donation detail signs them for the offered volunteer.
   const { data: donacion } = useDonacion(offer.donacionId);
-  const { mutateAsync: aceptar, isPending: accepting } = useAceptarOfertaMutation();
-  const [error, setError] = useState<string>();
-  // One route carries the accepted pickups: more than the vehicle holds ends in
-  // `excede-capacidad` when the route is created.
-  const overCapacity =
-    !offer.accepted && capacityKg !== null && offer.weightKg + acceptedKg > capacityKg;
-
-  const accept = async () => {
-    setError(undefined);
-    try {
-      await aceptar(offer.id);
-    } catch (failure) {
-      setError(messageFor(failure));
-      return;
-    }
-    router.dismissTo("/voluntario/rutas");
-  };
+  const { accept, accepting, error } = useAcceptOffer(offer.id);
+  const overCapacity = exceedsCapacity(offer, capacityKg, acceptedKg);
 
   return (
     <>
@@ -604,39 +579,12 @@ function OfferDetails({
 
 /** Rejects the offer with a RECHAZO_ASIGNACION reason (`POST /asignaciones/:id/rechazar`). */
 function RejectOffer({ asignacionId, onBack }: { asignacionId: string; onBack: () => void }) {
-  const { data: motivos } = useMotivos("RECHAZO_ASIGNACION");
-  const { mutateAsync: rechazar, isPending } = useRechazarOfertaMutation();
-  const [selection, setSelection] = useState<MotivoSelection>({ comentario: "" });
-  const [error, setError] = useState<string | null>(null);
-
-  const confirm = async () => {
-    const invalid = validateMotivo(selection, motivos ?? []);
-    setError(invalid);
-    const { motivoId } = selection;
-    if (invalid !== null || motivoId === undefined) return;
-    try {
-      await rechazar({ id: asignacionId, body: motivoBody({ ...selection, motivoId }) });
-    } catch (failure) {
-      setError(messageFor(failure));
-      return;
-    }
-    router.dismissTo("/voluntario");
-  };
-
+  const reject = useRejectOffer(asignacionId, {
+    onRejected: () => router.dismissTo("/voluntario"),
+  });
   return (
     <Section title="Rechazar oferta">
-      <MotivoField
-        ambito="RECHAZO_ASIGNACION"
-        value={selection}
-        onChange={setSelection}
-        error={error}
-      />
-      <Button variant="danger" loading={isPending} onPress={() => void confirm()}>
-        Confirmar rechazo
-      </Button>
-      <Button variant="outline" disabled={isPending} onPress={onBack}>
-        Volver
-      </Button>
+      <RejectOfferForm reject={reject} onBack={onBack} />
     </Section>
   );
 }

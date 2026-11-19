@@ -116,12 +116,39 @@ describe("pollWhileOffered", () => {
 });
 
 describe("mutations invalidate exactly the queries they change", () => {
-  it.each([
-    // The donation becomes ASIGNADA: its lists, detail and history change.
-    mutationCase("POST /asignaciones/:id/aceptar", useAceptarOfertaMutation, "a-1", [
+  // The donation becomes ASIGNADA (its lists, detail and history change) and joins the
+  // route the response names, so that route's stops, path and summary change too.
+  it("POST /asignaciones/:id/aceptar", async () => {
+    mockedApi.post.mockResolvedValue({
+      id: "a-1",
+      estado: "ACEPTADA",
+      ruta: { id: "r-1", estado: "EN_CURSO", actualizada: true },
+    });
+    const { invalidated } = mutationCase("aceptar", useAceptarOfertaMutation, "a-1", []);
+
+    expect(await invalidated()).toEqual([
       asignaciones.ofertas(),
       donaciones.all,
-    ]),
+      rutas.lists(),
+      rutas.detail("r-1"),
+    ]);
+  });
+
+  it("POST /asignaciones/:id/aceptar with an empty body still refreshes the offers", async () => {
+    mockedApi.post.mockResolvedValue(undefined);
+    const { invalidated } = mutationCase("aceptar", useAceptarOfertaMutation, "a-1", []);
+
+    expect(await invalidated()).toEqual([asignaciones.ofertas(), donaciones.all, rutas.lists()]);
+  });
+
+  it("POST /asignaciones/:id/aceptar without a route in the response", async () => {
+    mockedApi.post.mockResolvedValue({ id: "a-1", estado: "ACEPTADA" });
+    const { invalidated } = mutationCase("aceptar", useAceptarOfertaMutation, "a-1", []);
+
+    expect(await invalidated()).toEqual([asignaciones.ofertas(), donaciones.all, rutas.lists()]);
+  });
+
+  it.each([
     // The donation stays PUBLICADA, but its detail no longer shows this offer and its history
     // records the rejected assignment (the response carries no donation id).
     mutationCase("POST /asignaciones/:id/rechazar", useRechazarOfertaMutation, { id: "a-1", body: motivo }, [

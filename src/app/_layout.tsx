@@ -24,6 +24,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { queryClient, setupQueryManagers } from "@/api/query-client";
 import { LoadingState, OfflineBanner } from "@/components/findfood/feedback";
+import { OfferAlertHost } from "@/components/findfood/offer-alert/offer-alert-host";
 import { configResult, type ConfigError } from "@/config/env";
 import { colors } from "@/design/tokens";
 // For its side effect: defines the background location task, which must exist when the OS
@@ -138,6 +139,8 @@ export default function RootLayout() {
               <StatusBar style="dark" />
               <View style={styles.root}>
                 <RootNavigator fontsLoaded={fontsLoaded} fontError={fontError} />
+                {/* Over every screen in volunteer mode; below the offline banner. */}
+                <OfferAlertHost />
                 <OfflineOverlay />
               </View>
             </MobileProvider>

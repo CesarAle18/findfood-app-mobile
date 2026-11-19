@@ -9,6 +9,7 @@ import { act, fireEvent, renderRouter, screen } from "expo-router/testing-librar
 import { Alert, Text } from "react-native";
 
 import { api } from "@/api";
+import { ApiError } from "@/api/errors";
 import type { MeDto } from "@/api/types";
 import type { OfertaDto } from "@/services/asignaciones";
 import { queryKeys } from "@/services/query-keys";
@@ -271,6 +272,29 @@ describe("OfferScreen (MOV-41)", () => {
     expect(await screen.findByText("DON-1048")).toBeOnTheScreen();
     await act(async () => {});
     expect(screen.queryByText("Fotografías")).toBeNull();
+  });
+
+  it("accepts the offer and goes to the routes", async () => {
+    await renderOffer();
+
+    await fireEvent.press(await screen.findByRole("button", { name: "Aceptar" }));
+
+    expect(mockApi.post).toHaveBeenCalledWith("/asignaciones/asg-7/aceptar");
+    expect(await screen.findByText("Mis rutas")).toBeOnTheScreen();
+  });
+
+  it("explains a lost race and stays on the offer", async () => {
+    mockApi.post.mockRejectedValue(
+      new ApiError({ type: "oferta-tomada", status: 409, title: "Conflict" }),
+    );
+    await renderOffer();
+
+    await fireEvent.press(await screen.findByRole("button", { name: "Aceptar" }));
+
+    expect(await screen.findByText("Otro voluntario ya aceptó esta donación.")).toBeOnTheScreen();
+    expect(screen.queryByText("Mis rutas")).toBeNull();
+    // The screen keeps the button: the next poll decides whether the offer is still there.
+    expect(screen.getByRole("button", { name: "Aceptar" })).toBeEnabled();
   });
 
   it("lets the volunteer give up an accepted offer and goes home", async () => {

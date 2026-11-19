@@ -16,11 +16,27 @@ import { registrarDispositivo, type PlataformaDispositivo } from "@/services/per
 /** The channel the API names in every push (`channelId: "default"`). */
 export const PUSH_CHANNEL_ID = "default";
 
-/** Foreground pushes show as a banner and in the list, with sound; the badge is left alone. */
+/**
+ * Whether the floating offer alert is on screen (volunteer mode, outside the offer screen):
+ * set by its host on mount and cleared on unmount. While it is, a new offer's push would
+ * only repeat the card as a banner over it.
+ */
+let offerAlertActive = false;
+
+export function setOfferAlertActive(active: boolean): void {
+  offerAlertActive = active;
+}
+
+/**
+ * Foreground pushes show as a banner and in the list, with sound; the badge is left alone.
+ * A new offer (`ASIGNACION_OFRECIDA`) skips the banner while the offer alert shows it.
+ */
 export function configureNotificationHandler(): void {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
+    handleNotification: async (notification) => ({
+      shouldShowBanner: !(
+        offerAlertActive && notification.request.content.data?.tipo === "ASIGNACION_OFRECIDA"
+      ),
       shouldShowList: true,
       shouldPlaySound: true,
       shouldSetBadge: false,

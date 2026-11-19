@@ -175,3 +175,25 @@ jest.mock("react-native-maps", () => {
     PROVIDER_DEFAULT: undefined,
   };
 });
+
+// expo-blur draws through a native view. Under Jest every blur surface renders as a plain
+// View that keeps its props (tint, intensity), so the card's glass layer stays queryable.
+jest.mock("expo-blur", () => {
+  const { createElement } = jest.requireActual<typeof import("react")>("react");
+  const { View } = jest.requireActual<typeof import("react-native")>("react-native");
+  const BlurView = (props: object) => createElement(View, props);
+  BlurView.displayName = "BlurView";
+  const BlurTargetView = (props: object) => createElement(View, props);
+  BlurTargetView.displayName = "BlurTargetView";
+  return { __esModule: true, BlurView, BlurTargetView };
+});
+
+// expo-haptics talks to the Taptic Engine / vibrator. The enums stay real; each call only
+// records itself and resolves, so tests can assert which feedback a flow asked for.
+jest.mock("expo-haptics", () => ({
+  ...jest.requireActual("expo-haptics"),
+  impactAsync: jest.fn(async () => undefined),
+  notificationAsync: jest.fn(async () => undefined),
+  selectionAsync: jest.fn(async () => undefined),
+  performAndroidHapticsAsync: jest.fn(async () => undefined),
+}));
