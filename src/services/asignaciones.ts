@@ -5,7 +5,7 @@
 import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api";
-import type { EstadoAsignacion, EstadoDonacion } from "@/api/types";
+import type { EstadoAsignacion, EstadoDonacion, EstadoRuta } from "@/api/types";
 import { useRealtimeConnected } from "@/sync/status";
 
 import { invalidateOnSuccess, queryKeys, type Invalidation } from "./query-keys";
@@ -80,6 +80,12 @@ export interface RespuestaAsignacionDto {
   estado: EstadoAsignacion;
 }
 
+/** `POST /asignaciones/:id/aceptar`: the accepted pickup joins a route in progress. */
+export interface AceptacionDto extends RespuestaAsignacionDto {
+  /** The route the pickup joined, with its new stop and path. */
+  ruta?: { id: string; estado: EstadoRuta; actualizada: boolean };
+}
+
 export interface AbandonoDto extends RespuestaAsignacionDto {
   /** False when the window left no room: the donation expired instead. */
   donacion_republicada: boolean;
@@ -101,8 +107,8 @@ export function getOfertas(signal?: AbortSignal): Promise<OfertaDto[]> {
   return api.get<OfertaDto[]>("/asignaciones/ofertas", { signal });
 }
 
-export function aceptarOferta(id: string): Promise<RespuestaAsignacionDto> {
-  return api.post<RespuestaAsignacionDto>(`${asignacionPath(id)}/aceptar`);
+export function aceptarOferta(id: string): Promise<AceptacionDto> {
+  return api.post<AceptacionDto>(`${asignacionPath(id)}/aceptar`);
 }
 
 export function rechazarOferta(
@@ -164,8 +170,17 @@ const { asignaciones, donaciones, rutas } = queryKeys;
 
 /** What each mutation leaves stale. */
 const invalidates = {
-  /** The donation becomes ASIGNADA: its lists, detail and history change. */
-  aceptar: () => [asignaciones.ofertas(), donaciones.all],
+  /**
+   * The donation becomes ASIGNADA (its lists, detail and history change) and joins the
+   * route the response names: its stops and path change, and so do the stop count and
+   * weight in route lists. Not left to Realtime, which may not be joined.
+   */
+  aceptar: ({ ruta }: AceptacionDto) => [
+    asignaciones.ofertas(),
+    donaciones.all,
+    rutas.lists(),
+    ...(ruta ? [rutas.detail(ruta.id)] : []),
+  ],
   /**
    * The donation stays PUBLICADA, but its detail no longer shows this offer and its history
    * records the rejected assignment. The response carries no donation id, so every history.
