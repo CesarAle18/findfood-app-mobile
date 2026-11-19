@@ -1,6 +1,5 @@
-import type { FranjaDto } from "@/api/types";
 
-import { formatFranjas, formatKg, formatRating, profileChanges, profileFromMe } from "./profile";
+import { formatKg, formatRating, profileChanges, profileFromMe } from "./profile";
 
 const me = {
   email: "maria@correo.com",
@@ -60,28 +59,6 @@ describe("formatRating", () => {
 
   it("says when there are no ratings yet", () => {
     expect(formatRating(null)).toBe("Sin calificaciones");
-  });
-});
-
-describe("formatFranjas", () => {
-  const franja = (dia_semana: number, hora_inicio: string, hora_fin: string): FranjaDto => ({
-    dia_semana,
-    hora_inicio,
-    hora_fin,
-  });
-
-  it("lists each window with its day (0 = Sunday)", () => {
-    expect(formatFranjas([franja(1, "08:00", "12:00"), franja(0, "14:00", "18:00")])).toBe(
-      "Lun 08:00–12:00 · Dom 14:00–18:00",
-    );
-  });
-
-  it("drops the seconds the API may send", () => {
-    expect(formatFranjas([franja(3, "08:00:00", "10:30:00")])).toBe("Mié 08:00–10:30");
-  });
-
-  it("says when there is no schedule", () => {
-    expect(formatFranjas([])).toBe("Sin horario registrado");
   });
 });
 

@@ -1,11 +1,10 @@
-import { useEffect } from "react";
-import { StyleSheet, View } from "react-native";
+import { useEffect, useState } from "react";
+import { AccessibilityInfo, StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
   ReduceMotion,
   cancelAnimation,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withRepeat,
   withTiming,
@@ -49,12 +48,38 @@ export function LiveStatusBadge({ state, label }: LiveAvailability) {
 }
 
 /**
- * The dot breathes (opacity and scale, on the UI thread) only while online; otherwise, and
- * under the system "reduce motion" setting, it stays still at full opacity.
+ * Whether the device asks for reduced motion, following changes while mounted; null until
+ * the first answer. Read from AccessibilityInfo rather than Reanimated's `useReducedMotion`,
+ * which only reports the setting at app start (and is missing from Reanimated's Jest mock).
+ */
+function useReduceMotion(): boolean | null {
+  const [reduce, setReduce] = useState<boolean | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) setReduce(enabled);
+      })
+      .catch(() => {
+        if (mounted) setReduce(true);
+      });
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduce);
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+  return reduce;
+}
+
+/**
+ * The dot breathes (opacity and scale, on the UI thread) only while online; otherwise, under
+ * the system "reduce motion" setting, and until that setting is known, it stays still at full
+ * opacity.
  */
 function Dot({ color, pulsing }: { color: string; pulsing: boolean }) {
-  const reduceMotion = useReducedMotion();
-  const animate = pulsing && !reduceMotion;
+  const reduceMotion = useReduceMotion();
+  const animate = pulsing && reduceMotion === false;
   const pulse = useSharedValue(0);
   useEffect(() => {
     if (!animate) {

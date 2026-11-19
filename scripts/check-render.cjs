@@ -154,6 +154,10 @@ const reanimatedStub = {
   }),
   useAnimatedStyle: (factory) => factory(),
   withTiming: (value) => value,
+  withRepeat: (animation) => animation,
+  cancelAnimation() {},
+  useReducedMotion: () => false,
+  ReduceMotion: { System: "system", Always: "always", Never: "never" },
   interpolateColor: (_progress, _input, output) => output[0],
 };
 reanimatedStub.default = reanimatedStub;
@@ -419,6 +423,14 @@ try {
   );
   assert(volunteerProfileHtml.includes("María García López"));
   assert(volunteerProfileHtml.includes("Camioneta"));
+  // Disponibilidad: Monday alone, the rest of the week grouped without hours, and the live
+  // badge (the toggle is on; inside or outside the window depends on the real clock).
+  assert(volunteerProfileHtml.includes("Mar – Dom") && volunteerProfileHtml.includes("Sin horario"));
+  assert(volunteerProfileHtml.includes("08:00 – 18:00"));
+  assert(
+    /En línea · hasta 18:00|Fuera de horario · vuelve (hoy|mañana|Lun) 08:00/.test(volunteerProfileHtml),
+    "the volunteer profile did not render its live status badge",
+  );
   count++;
   // The volunteer view of the profile editor adds the vehicle (read-only) and the zone.
   const { EditProfileScreen } = require("../src/screens/edit-profile.tsx");
