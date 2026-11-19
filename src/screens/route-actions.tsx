@@ -34,6 +34,7 @@ import {
   SelectField,
   TextLink,
 } from "@/components/findfood/ui";
+import { WazeButton } from "@/components/findfood/waze-button";
 import { colors } from "@/design/tokens";
 import {
   asignacionByDonacion,
@@ -128,6 +129,10 @@ export function NextStop({
           <Detail label="Donante" value={parada.contacto_nombre} icon="user" />
         ) : null}
       </Card>
+      {/* Keyed by stop: a failed open's message never carries over to the next stop. */}
+      {parada.estado === "PENDIENTE" ? (
+        <WazeButton key={`waze-${parada.id}`} destino={{ lat: parada.lat, lng: parada.lng }} />
+      ) : null}
       {parada.estado === "PENDIENTE" ? (
         <ArrivalButton
           key={`llegada-${parada.id}`}
