@@ -38,5 +38,7 @@ The route screen draws the plan on Google Maps but has no navigation. Volunteers
 
 - **Review assessment** (`gentle-ai review assess --base-ref develop --committed-only`, unrelated untracked files excluded): tier `medium` (`executable_change`), 5 paths, 180 lines, `review_due: false`, reason `under_budget`. No native review was due. Parent spot check: the focused jest run passed 37/37.
 
+- **T3** (user request 2026-11-19, route: inline, one mechanical component plus a one-line swap). `WazeLogo` in `src/components/findfood/icon.tsx`: the mascot drawn in SVG, decorative, following the `GoogleLogo` pattern. `WazeButton` now uses it instead of the generic `route` icon. There was no meaningful runnable RED, because the icon is hidden from accessibility. Checks: jest for waze-button, route-screen and auth-screens passed 81/81, `npm run typecheck` exit 0, `npm run lint` exit 0. The look still needs checking on a device.
+
 ## Next step
-T1 and T2 are done. Next: test on a device, then push and a single PR to develop (the user's decision).
+T1, T2 and T3 are done. Next: test on a device, then push and a single PR to develop (the user's decision).

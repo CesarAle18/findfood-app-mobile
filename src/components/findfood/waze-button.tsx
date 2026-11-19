@@ -3,6 +3,7 @@ import { Linking } from "react-native";
 
 import type { Coordenada } from "@/api/types";
 
+import { WazeLogo } from "./icon";
 import { Button, FormMessage } from "./ui";
 
 /** Waze's universal link that starts turn-by-turn navigation to `lat,lng`. */
@@ -42,7 +43,7 @@ export function WazeButton({
       <FormMessage
         message={failed ? "No pudimos abrir Waze. Instálalo o usa otra app de mapas." : undefined}
       />
-      <Button variant={variant} icon="route" onPress={() => void open()}>
+      <Button variant={variant} icon={<WazeLogo />} onPress={() => void open()}>
         {label}
       </Button>
     </>

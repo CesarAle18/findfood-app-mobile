@@ -92,6 +92,38 @@ export function GoogleLogo({ size = 19 }: { size?: number }) {
   );
 }
 
+/**
+ * Waze's mascot (the white speech bubble with eyes, smile and wheels), drawn with the brand
+ * outline, for the "Ir con Waze" button.
+ */
+export function WazeLogo({ size = 19 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 48 48" {...hiddenFromAccessibility}>
+      <Path
+        fill="#FFFFFF"
+        stroke="#1C1C1C"
+        strokeWidth={3}
+        strokeLinejoin="round"
+        d="M7 31c3-1 4.5-3 4.5-7.5C11.5 13 18 5.5 26 5.5c8 0 14.5 6.5 14.5 14.5 0 9-7 15-15.5 15h-6c-4.5 0-9-1.5-12-4z"
+      />
+      <Path fill="#1C1C1C" d="M23.5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0M32.5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0" />
+      <Path
+        fill="none"
+        stroke="#1C1C1C"
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        d="M20 23.5c2.5 4 9.5 4 12 0"
+      />
+      <Path
+        fill="#1C1C1C"
+        stroke="#FFFFFF"
+        strokeWidth={1.5}
+        d="M21 38.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0M35 38.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0"
+      />
+    </Svg>
+  );
+}
+
 export function Icon({
   name,
   size = 22,
