@@ -6,6 +6,7 @@ import { messageFor } from "@/api/problem-messages";
 import type { EstadoProducto, MeVoluntarioDto, VerificacionVoluntarioDto } from "@/api/types";
 import { CallButton } from "@/components/findfood/call-button";
 import { Countdown } from "@/components/findfood/countdown";
+import { DateTimeField } from "@/components/findfood/date-time-field";
 import { DonationPhotos } from "@/components/findfood/donation-photos";
 import { EmptyState, QueryContent } from "@/components/findfood/feedback";
 import { StatusAnimation } from "@/components/findfood/status-animation";
@@ -15,6 +16,7 @@ import { PhotoField } from "@/components/findfood/photo-field";
 import { RejectOfferForm } from "@/components/findfood/reject-offer-form";
 import {
   initialVolunteerRequest,
+  latestAdultBirthDate,
   volunteerRequestSchema,
   type VolunteerRequestForm,
 } from "@/domain/volunteer-request";
@@ -217,8 +219,11 @@ const GROUP = ["A título personal", "Con una organización"];
 export { coverageKm } from "@/components/findfood/volunteer-zone";
 
 function VolunteerRequestFormView({ onSent }: { onSent: () => void }) {
-  // Read once: the age is checked against the day the form was opened.
-  const [schema] = useState(() => volunteerRequestSchema(Date.now()));
+  // Read once: the age is checked, and the picker bounded, against the day the form was opened.
+  const [{ schema, latestBirthDate }] = useState(() => {
+    const now = Date.now();
+    return { schema: volunteerRequestSchema(now), latestBirthDate: latestAdultBirthDate(now) };
+  });
   const form = useZodForm(schema, initialVolunteerRequest);
   const { values, errors } = form;
   const tiposVehiculo = useTiposVehiculo();
@@ -303,13 +308,13 @@ function VolunteerRequestFormView({ onSent }: { onSent: () => void }) {
       </Section>
       <Section title="Datos personales">
         <Stack>
-          <Field
+          <DateTimeField
             label="Fecha de nacimiento *"
-            {...form.field("fecha_nacimiento")}
-            placeholder="DD/MM/AAAA"
-            keyboardType="numbers-and-punctuation"
-            maxLength={10}
-            accessibilityHint="Debes tener al menos 18 años."
+            value={values.fecha_nacimiento}
+            onChange={(value) => form.setValue("fecha_nacimiento", value)}
+            error={errors.fecha_nacimiento}
+            maxDate={latestBirthDate}
+            hint="Debes tener al menos 18 años."
           />
           <Copy weight="medium" style={{ fontSize: 12 }}>
             ¿Cómo te registras?

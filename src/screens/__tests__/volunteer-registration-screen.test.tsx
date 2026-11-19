@@ -119,12 +119,42 @@ const press = (name: string) =>
 const type = (label: string, text: string) =>
   act(async () => fireEvent.changeText(screen.getByLabelText(label), text));
 
+const MONTHS = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
+/** Picks `DD/MM/AAAA` in the calendar picker: the year from its list, then month by month. */
+async function pickDate(label: string, date: string) {
+  const [, month, year] = date.split("/").map(Number);
+  const title = () => screen.getByRole("button", { name: /^Elegir año, / });
+  await press(`${label}: Seleccionar`);
+  await act(async () => fireEvent.press(title()));
+  await press(String(year));
+  // The calendar keeps the month it showed (the real today's), so walk to the target one.
+  for (let step = 0; step < 12 && !screen.queryByRole("button", { name: date }); step++) {
+    const shown = MONTHS.indexOf(String(title().props.accessibilityLabel).split(" ")[2]) + 1;
+    await press(shown > month ? "Mes anterior" : "Mes siguiente");
+  }
+  await press(date);
+}
+
 async function fillRequired() {
   await act(async () => fireEvent.press(await screen.findByLabelText("Tipo de vehículo *: Selecciona")));
   await act(async () => fireEvent.press(screen.getByText("Camioneta")));
   await type("Placa *", "abc 123");
   await type("Capacidad de carga (kg) *", "800");
-  await type("Fecha de nacimiento *", "12/04/1995");
+  await pickDate("Fecha de nacimiento *", "12/04/1995");
   await act(async () => fireEvent.press(screen.getByRole("radio", { name: "Sí, dispone" })));
   await press("Elegir ubicación");
   await press("Subir Foto del vehículo *");

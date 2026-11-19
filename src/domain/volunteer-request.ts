@@ -3,13 +3,13 @@
  * validated with the API's rules and mapped to its body.
  *
  * Field names match the API body, so field errors from the API (`ApiError.fields`) land on
- * the same fields through `useZodForm`. The birth date is typed as `DD/MM/AAAA`; the age is
+ * the same fields through `useZodForm`. The birth date is picked as `DD/MM/AAAA`; the age is
  * checked against the Bogotá calendar day of an injected `now`.
  */
 import { z } from "zod";
 
 import type { Coordenada } from "@/api/types";
-import { parseDate, todayInBogota, toFechaVencimiento } from "@/domain/mappers/dates";
+import { formatDate, parseDate, todayInBogota, toFechaVencimiento } from "@/domain/mappers/dates";
 import { isInServiceArea } from "@/domain/mappers/geo";
 import type { SolicitudVoluntarioBody } from "@/services/perfil";
 
@@ -103,6 +103,17 @@ const dateKey = ({ year, month, day }: { year: number; month: number; day: numbe
 function isAdult(birth: string, now: number): boolean {
   const born = parseDate(birth);
   return dateKey({ ...born, year: born.year + MIN_AGE }) <= dateKey(parseDate(todayInBogota(now)));
+}
+
+/**
+ * The latest birth date (`DD/MM/AAAA`) of someone at least 18 on the Bogotá day of `now`:
+ * that day 18 years earlier, or 28 February when that year has no 29 February (as `isAdult`
+ * counts it, someone born on 29 February turns 18 on 1 March of a non-leap year).
+ */
+export function latestAdultBirthDate(now: number): string {
+  const today = parseDate(todayInBogota(now));
+  const sameDay = { ...today, year: today.year - MIN_AGE };
+  return isCalendarDate(formatDate(sameDay)) ? formatDate(sameDay) : formatDate({ ...sameDay, day: 28 });
 }
 
 function isCalendarDate(text: string): boolean {
