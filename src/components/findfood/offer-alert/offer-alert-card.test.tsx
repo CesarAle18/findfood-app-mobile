@@ -6,6 +6,8 @@
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 
+import { StyleSheet } from "react-native";
+
 import { api } from "@/api";
 import { ApiError } from "@/api/errors";
 import { pendingOffers, type QueuedOffer } from "@/domain/offer-queue";
@@ -20,7 +22,7 @@ import {
 } from "@/test-utils/fixtures";
 import { createTestQueryClient } from "@/test-utils/query";
 
-import { OfferAlertCard, type OfferAlertCardProps } from "./offer-alert-card";
+import { MIN_CARD_HEIGHT, OfferAlertCard, type OfferAlertCardProps } from "./offer-alert-card";
 
 jest.mock("@/api", () => ({
   api: jest.requireActual<typeof import("@/test-utils/api")>("@/test-utils/api").createApiMock(),
@@ -353,5 +355,23 @@ describe("OfferAlertCard", () => {
     expect(screen.getByText("Ya respondiste a esta oferta.")).toBeOnTheScreen();
     expect(screen.queryByText("¿Por qué la rechazas?")).toBeNull();
     expect(screen.getByRole("button", { name: "Cerrar" })).toBeEnabled();
+  });
+
+  it("keeps a usable height when the keyboard takes most of the window", async () => {
+    const keyboard = jest.requireMock<typeof import("react-native-keyboard-controller")>(
+      "react-native-keyboard-controller",
+    );
+    const state = jest
+      .spyOn(keyboard, "useKeyboardState")
+      .mockImplementation((selector) =>
+        (selector as (s: { height: number }) => unknown)({ height: 10_000 }) as never,
+      );
+    try {
+      await renderCard();
+      const style = StyleSheet.flatten(screen.getByLabelText(/^Nueva recogida/).props.style);
+      expect(style.maxHeight).toBeGreaterThanOrEqual(MIN_CARD_HEIGHT);
+    } finally {
+      state.mockRestore();
+    }
   });
 });

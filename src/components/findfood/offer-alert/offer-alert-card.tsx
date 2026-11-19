@@ -78,6 +78,8 @@ export interface OfferAlertCardProps {
  * so the reject panel's comment field never slides under the top of the screen.
  */
 const KEYBOARD_ROOM = 96;
+/** The least height the card keeps, so the reject panel stays reachable behind a tall keyboard. */
+export const MIN_CARD_HEIGHT = 220;
 
 /** Whether this platform draws a real blur behind the card (see the file comment). */
 const PLATFORM_BLURS = Platform.OS === "ios" || Platform.OS === "web";
@@ -289,7 +291,9 @@ export function OfferAlertCard({
 
   // Capped at 70% of the window, and below the top of the screen while the keyboard is open
   // (the host's KeyboardStickyView lifts the card above it).
-  const maxHeight = Math.round(Math.min(height * 0.7, height - keyboardHeight - KEYBOARD_ROOM));
+  const maxHeight = Math.round(
+    Math.max(MIN_CARD_HEIGHT, Math.min(height * 0.7, height - keyboardHeight - KEYBOARD_ROOM)),
+  );
 
   return (
     <View
